@@ -30,8 +30,12 @@ from synthetic import house_like, iris_like, lending_club_like  # noqa: E402
 
 APP = str(ROOT / "app.py")
 RNG = np.random.default_rng(5)
-# veraltete scikit-learn-Aufrufe (z. B. SVC(probability=True), LogisticRegression(penalty=…)) wären Fehler
-pytestmark = pytest.mark.filterwarnings("error::FutureWarning", "error::DeprecationWarning")
+# veraltete scikit-learn-Aufrufe (z. B. SVC(probability=True), LogisticRegression(penalty=…)) wären Fehler.
+# Ausnahme (letzter Filter = Vorrang): Streamlits eigenes st.line_chart ruft intern df.reset_index(inplace=True) auf –
+# in pandas 3.1 veraltet (PDEP-8). Das ist Streamlit-Code, nicht die App; gilt nur für Warnungen aus dem Modul streamlit.
+pytestmark = pytest.mark.filterwarnings(
+    "error::FutureWarning", "error::DeprecationWarning",
+    "ignore:The inplace keyword in DataFrame.reset_index is deprecated:DeprecationWarning:streamlit")
 
 CONFIGS = {  # Name → Einstellungen aus Schritt 6 (klein und schnell)
     "forest": pl.ModelConfig(model=pl.MODEL_TREES, n_estimators=30),
