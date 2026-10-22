@@ -4,7 +4,6 @@
 ![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-app-FF4B4B?logo=streamlit&logoColor=white)
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-1.4%2B-F7931E?logo=scikitlearn&logoColor=white)
-![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
 **ML Hub** to lokalny launcher dla czterech aplikacji Streamlit, które prowadzą plik CSV przez cały proces uczenia
 maszynowego: wczytanie i czyszczenie danych, eksplorację, trening modelu, ewaluację, zapis modelu i jego użycie na
@@ -155,7 +154,3 @@ Komentarze w kodzie źródłowym są po niemiecku – w oryginalnym języku kodu
 ## Technologie
 
 Python · Streamlit · pandas · NumPy · scikit-learn · SciPy · skops · matplotlib · seaborn · TensorFlow / Keras · pytest
-
-## Licencja
-
-[MIT](LICENSE)
