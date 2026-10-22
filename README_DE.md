@@ -92,13 +92,18 @@ an, die Aufbereitung und Modell wie in den Kursprojekten einstellt.
 
 ## Materialien
 
-Neben den Apps enthält der Launcher kurze Lernmaterialien (EN · PL · DE) und drei PDF-Dateien zum Herunterladen:
+Neben den Apps enthält der Launcher kurze Lernmaterialien und drei Dokumente zum Herunterladen – jeweils auf
+Englisch, Polnisch und Deutsch. Der Launcher bietet die Fassung in der gewählten Sprache an, die übrigen stehen unter
+*Andere Sprachen*. Alle Dateien liegen in [`materials/`](materials):
 
-| Datei | Inhalt | Sprache |
-|---|---|---|
-| [`FAQ.pdf`](FAQ.pdf) | kleine Datensätze und neuronale Netze – wann ein Netz sinnvoll ist, Einstellungen für Early Stopping | PL |
-| [`ML_w_predykcjach_wersja_poprawiona.pdf`](ML_w_predykcjach_wersja_poprawiona.pdf) | Machine Learning in Finanz-, Börsen- und Politikprognosen | PL |
-| [`Interpretacja_ML_PL-DE.pdf`](Interpretacja_ML_PL-DE.pdf) | Ergebnisse von 8 ML-Kurs-Notebooks richtig lesen (Daten, Training, Testergebnisse) | PL + DE |
+| Dokument | Inhalt | EN | PL | DE |
+|---|---|---|---|---|
+| FAQ | kleine Datensätze und neuronale Netze – wann ein Netz sinnvoll ist, Einstellungen für Early Stopping | [PDF](materials/FAQ_EN.pdf) | [PDF](materials/FAQ_PL.pdf) | [PDF](materials/FAQ_DE.pdf) |
+| ML in Prognosen | Machine Learning in Finanz-, Börsen- und Politikprognosen | [PDF](materials/ML_in_predictions_EN.pdf) | [PDF](materials/ML_in_predictions_PL.pdf) | [PDF](materials/ML_in_predictions_DE.pdf) |
+| Ergebnisse interpretieren | Ergebnisse von 8 ML-Kurs-Notebooks richtig lesen (Daten, Training, Testergebnisse) | [PDF](materials/Reading_ML_results_EN.pdf) | [PDF (PL + DE)](materials/Reading_ML_results_PL-DE.pdf) | [PDF (PL + DE)](materials/Reading_ML_results_PL-DE.pdf) |
+
+Die polnische und die deutsche Fassung des dritten Dokuments sind eine gemeinsame zweisprachige Datei (zuerst der
+polnische, dann der deutsche Teil).
 
 ## Tests
 
@@ -127,7 +132,7 @@ Fehler, ihre Korrektur und die Regressionstests, die sie abdecken.
 ├── app.py               Launcher (ML Hub)
 ├── mlhub_compat.py      Kompatibilitäts-Fix für Streamlit < 1.56
 ├── requirements.txt
-├── *.pdf                Materialien im Launcher
+├── materials/           PDF-Dokumente (EN · PL · DE) im Launcher
 ├── docs/screenshots/
 └── apps/
     ├── Supervised/      📊 scikit-learn – fünf Modelle des überwachten Lernens

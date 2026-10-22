@@ -41,7 +41,7 @@ st.set_page_config(page_title="ML Hub", page_icon="🤖", layout="wide", initial
 # ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent
 APPS_DIR = BASE_DIR / "apps"
-PDF_DIR = BASE_DIR
+PDF_DIR = BASE_DIR / "materials"
 RUNNER = BASE_DIR / "mlhub_compat.py"
 STATE_DIR = BASE_DIR / ".mlhub"
 REGISTRY = STATE_DIR / "processes.json"  # PID-y aplikacji uruchomionych przez launcher (dla „Zatrzymaj”)
@@ -122,12 +122,12 @@ TEXTS = {
         "materials": "📚 Materials",
         "tabs": ["Small datasets – recommendations", "ML in financial and political predictions",
                  "How to read ML model results", "PDF files"],
-        "pdf_title": "Original PDF files",
-        "pdf_intro": "Download the full documents (in their original language):",
+        "pdf_title": "PDF files",
+        "pdf_intro": "Download the full documents:",
         "pdf_missing": "File missing: {f}",
-        "pdf_labels": {"FAQ.pdf": "FAQ.pdf (small data & neural networks)",
-                       "ML_w_predykcjach_wersja_poprawiona.pdf": "ML in predictions.pdf",
-                       "Interpretacja_ML_PL-DE.pdf": "Reading the results (PL-DE).pdf"},
+        "pdf_other": "Other languages",
+        "pdf_labels": {"faq": "FAQ – small datasets", "predictions": "ML in predictions",
+                       "results": "How to read the results"},
         "footer": "ML Hub · apps run locally on ports 8502–8505 · materials based on the attached PDFs "
                   "(as of 16.10.2026)",
     },
@@ -187,12 +187,12 @@ TEXTS = {
         "materials": "📚 Materiały informacyjne",
         "tabs": ["Zalecenia dla małych zbiorów danych", "ML w predykcjach finansowych i politycznych",
                  "Jak czytać wyniki modeli ML", "Pliki PDF do pobrania"],
-        "pdf_title": "Oryginalne pliki PDF",
+        "pdf_title": "Pliki PDF",
         "pdf_intro": "Pobierz pełne dokumenty:",
         "pdf_missing": "Brak pliku: {f}",
-        "pdf_labels": {"FAQ.pdf": "FAQ.pdf (małe dane i sieci)",
-                       "ML_w_predykcjach_wersja_poprawiona.pdf": "ML w predykcjach.pdf",
-                       "Interpretacja_ML_PL-DE.pdf": "Interpretacja wyników (PL-DE).pdf"},
+        "pdf_other": "Inne języki",
+        "pdf_labels": {"faq": "FAQ – małe zbiory danych", "predictions": "ML w predykcjach",
+                       "results": "Interpretacja wyników"},
         "footer": "ML Hub · aplikacje uruchamiane lokalnie na portach 8502–8505 · materiały na podstawie "
                   "załączonych PDF (stan 16.10.2026)",
     },
@@ -253,12 +253,12 @@ TEXTS = {
         "materials": "📚 Lernmaterialien",
         "tabs": ["Empfehlungen für kleine Datensätze", "ML in Finanz- und Politikprognosen",
                  "Ergebnisse von ML-Modellen lesen", "PDF-Dateien"],
-        "pdf_title": "Original-PDF-Dateien",
-        "pdf_intro": "Vollständige Dokumente herunterladen (in Originalsprache):",
+        "pdf_title": "PDF-Dateien",
+        "pdf_intro": "Vollständige Dokumente herunterladen:",
         "pdf_missing": "Datei fehlt: {f}",
-        "pdf_labels": {"FAQ.pdf": "FAQ.pdf (kleine Daten & neuronale Netze)",
-                       "ML_w_predykcjach_wersja_poprawiona.pdf": "ML in Prognosen.pdf",
-                       "Interpretacja_ML_PL-DE.pdf": "Ergebnisse interpretieren (PL-DE).pdf"},
+        "pdf_other": "Andere Sprachen",
+        "pdf_labels": {"faq": "FAQ – kleine Datensätze", "predictions": "ML in Prognosen",
+                       "results": "Ergebnisse interpretieren"},
         "footer": "ML Hub · Apps laufen lokal auf den Ports 8502–8505 · Materialien auf Basis der beigefügten PDFs "
                   "(Stand 16.10.2026)",
     },
@@ -714,7 +714,7 @@ Each chapter has the same structure: key facts → "In short" (Data / Training /
 - **Do the features separate the classes?** pairplot, histograms with `hue=label`, `corr()` with the target – overlapping distributions = weak model.
 - **Data leakage?** A feature known only "after the fact"; scaler / vectorizer / imputation fitted before the split.
 
-The full bilingual version (PL + DE) can be downloaded in the next tab. It contains detailed interpretations of each notebook's results, a comparison of the models and the key lessons.
+The full document (in English, and as a bilingual PL + DE version) can be downloaded in the next tab. It contains detailed interpretations of each notebook's results, a comparison of the models and the key lessons.
 """,
             "pl": """
 Dokument interpretuje wyniki 8 notebooków z kursu (wersje z 16.10.2026). Dla każdego notebooka odpowiada na dwa pytania:
@@ -733,7 +733,7 @@ Każdy rozdział ma budowę: metryczka → „W skrócie” (Dane / Trening / Wy
 - **Czy cechy rozdzielają klasy?** pairplot, histogramy z `hue=etykieta`, `corr()` z targetem – pokrywające się rozkłady = słaby model.
 - **Przeciek danych?** Cecha znana dopiero „po fakcie”; scaler / vectorizer / imputacja dopasowane przed podziałem.
 
-Pełna wersja dwujęzyczna (PL + DE) jest dostępna do pobrania w zakładce obok. Zawiera szczegółowe interpretacje wyników każdego notebooka, porównanie modeli i najważniejsze lekcje.
+Pełny dokument (w wersji dwujęzycznej PL + DE oraz po angielsku) jest dostępny do pobrania w zakładce obok. Zawiera szczegółowe interpretacje wyników każdego notebooka, porównanie modeli i najważniejsze lekcje.
 """,
             "de": """
 Das Dokument interpretiert die Ergebnisse von 8 Kurs-Notebooks (Stand 16.10.2026). Für jedes Notebook beantwortet es zwei Fragen:
@@ -752,12 +752,19 @@ Jedes Kapitel ist gleich aufgebaut: Steckbrief → „Kurz gesagt“ (Daten / Tr
 - **Trennen die Merkmale die Klassen?** Pairplot, Histogramme mit `hue=label`, `corr()` mit dem Ziel – überlappende Verteilungen = schwaches Modell.
 - **Datenleck?** Ein Merkmal, das erst „hinterher“ bekannt ist; Scaler / Vectorizer / Imputation vor dem Split angepasst.
 
-Die vollständige zweisprachige Fassung (PL + DE) steht im nächsten Tab zum Download. Sie enthält ausführliche Interpretationen der Ergebnisse jedes Notebooks, einen Modellvergleich und die wichtigsten Lehren.
+Das vollständige Dokument (zweisprachig PL + DE sowie auf Englisch) steht im nächsten Tab zum Download. Es enthält ausführliche Interpretationen der Ergebnisse jedes Notebooks, einen Modellvergleich und die wichtigsten Lehren.
 """,
         },
     },
 }
-PDFS = ["FAQ.pdf", "ML_w_predykcjach_wersja_poprawiona.pdf", "Interpretacja_ML_PL-DE.pdf"]
+# Materiały PDF w folderze materials/: dokument → plik w każdym języku (interpretacja PL i DE jest w jednym pliku)
+PDFS = {
+    "faq": {"en": "FAQ_EN.pdf", "pl": "FAQ_PL.pdf", "de": "FAQ_DE.pdf"},
+    "predictions": {"en": "ML_in_predictions_EN.pdf", "pl": "ML_in_predictions_PL.pdf",
+                    "de": "ML_in_predictions_DE.pdf"},
+    "results": {"en": "Reading_ML_results_EN.pdf", "pl": "Reading_ML_results_PL-DE.pdf",
+                "de": "Reading_ML_results_PL-DE.pdf"},
+}
 
 # ---------------------------------------------------------------------------
 # Język: domyślnie angielski; ?lang=… w adresie zachowuje wybór przy odświeżeniu strony
@@ -1201,17 +1208,30 @@ with tab3:
     st.subheader(MATERIALS["results"]["title"][LANG])
     st.markdown(MATERIALS["results"]["body"][LANG])
 
+
+def pdf_button(doc: str, fname: str, key: str) -> None:
+    """Przycisk pobierania PDF z językiem pliku w etykiecie, np. „ML in predictions (EN)” lub „… (PL + DE)”."""
+    path = PDF_DIR / fname
+    if not path.exists():
+        st.warning(T("pdf_missing", f=fname))
+        return
+    langs = Path(fname).stem.rsplit("_", 1)[-1].replace("-", " + ")
+    st.download_button(f"{TX['pdf_labels'][doc]} ({langs})", path.read_bytes(), file_name=fname,
+                       mime="application/pdf", key=key, icon=":material/download:")
+
+
 with tab4:
     st.subheader(T("pdf_title"))
     st.markdown(T("pdf_intro"))
-    for col, fname in zip(st.columns(len(PDFS)), PDFS, strict=True):
-        path = PDF_DIR / fname
+    for col, (doc, files) in zip(st.columns(len(PDFS)), PDFS.items(), strict=True):
         with col:
-            if path.exists():
-                st.download_button(TX["pdf_labels"][fname], path.read_bytes(), file_name=fname,
-                                   mime="application/pdf", key=f"pdf_{fname}")
-            else:
-                st.warning(T("pdf_missing", f=fname))
+            pdf_button(doc, files[LANG], key=f"pdf_{doc}")
+    with st.expander(T("pdf_other")):
+        for col, (doc, files) in zip(st.columns(len(PDFS)), PDFS.items(), strict=True):
+            with col:
+                for fname in dict.fromkeys(files.values()):  # kolejność EN, PL, DE; plik PL-DE tylko raz
+                    if fname != files[LANG]:
+                        pdf_button(doc, fname, key=f"pdf_other_{fname}")
 
 st.divider()
 st.caption(T("footer"))

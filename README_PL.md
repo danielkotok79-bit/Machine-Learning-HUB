@@ -90,13 +90,17 @@ ustawia przygotowanie danych i model jak w projektach z kursu.
 
 ## Materiały
 
-Oprócz aplikacji launcher zawiera krótkie materiały do czytania (EN · PL · DE) i trzy pliki PDF do pobrania:
+Oprócz aplikacji launcher zawiera krótkie materiały do czytania i trzy dokumenty do pobrania – każdy po angielsku,
+po polsku i po niemiecku. Launcher proponuje wersję w wybranym języku, pozostałe są w sekcji *Inne języki*. Wszystkie
+pliki są w folderze [`materials/`](materials):
 
-| Plik | Treść | Język |
-|---|---|---|
-| [`FAQ.pdf`](FAQ.pdf) | małe zbiory danych i sieci neuronowe – kiedy sieć ma sens, ustawienia early stopping | PL |
-| [`ML_w_predykcjach_wersja_poprawiona.pdf`](ML_w_predykcjach_wersja_poprawiona.pdf) | uczenie maszynowe w predykcjach finansowych, giełdowych i politycznych | PL |
-| [`Interpretacja_ML_PL-DE.pdf`](Interpretacja_ML_PL-DE.pdf) | jak czytać wyniki 8 notebooków ML z kursu (dane, trening, wyniki na danych testowych) | PL + DE |
+| Dokument | Treść | EN | PL | DE |
+|---|---|---|---|---|
+| FAQ | małe zbiory danych i sieci neuronowe – kiedy sieć ma sens, ustawienia early stopping | [PDF](materials/FAQ_EN.pdf) | [PDF](materials/FAQ_PL.pdf) | [PDF](materials/FAQ_DE.pdf) |
+| ML w predykcjach | uczenie maszynowe w predykcjach finansowych, giełdowych i politycznych | [PDF](materials/ML_in_predictions_EN.pdf) | [PDF](materials/ML_in_predictions_PL.pdf) | [PDF](materials/ML_in_predictions_DE.pdf) |
+| Interpretacja wyników | jak czytać wyniki 8 notebooków ML z kursu (dane, trening, wyniki na danych testowych) | [PDF](materials/Reading_ML_results_EN.pdf) | [PDF (PL + DE)](materials/Reading_ML_results_PL-DE.pdf) | [PDF (PL + DE)](materials/Reading_ML_results_PL-DE.pdf) |
+
+Wersja polska i niemiecka trzeciego dokumentu to jeden dwujęzyczny plik (najpierw część polska, potem niemiecka).
 
 ## Testy
 
@@ -126,7 +130,7 @@ ich poprawienia i testy regresyjne, które je pokrywają.
 ├── app.py               launcher (ML Hub)
 ├── mlhub_compat.py      poprawka zgodności dla Streamlit < 1.56
 ├── requirements.txt
-├── *.pdf                materiały dostępne w launcherze
+├── materials/           dokumenty PDF (EN · PL · DE) dostępne w launcherze
 ├── docs/screenshots/
 └── apps/
     ├── Supervised/      📊 scikit-learn – pięć modeli uczenia nadzorowanego

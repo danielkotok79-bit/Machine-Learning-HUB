@@ -91,13 +91,17 @@ sets up the preparation and the model as in the course projects.
 
 ## Materials
 
-Besides the apps, the launcher contains short reading material (EN · PL · DE) and three PDF files to download:
+Besides the apps, the launcher contains short reading material and three documents to download – each in English,
+Polish and German. The launcher offers the version in the selected language; the others are under *Other
+languages*. All files are in [`materials/`](materials):
 
-| File | Content | Language |
-|---|---|---|
-| [`FAQ.pdf`](FAQ.pdf) | small datasets and neural networks – when a network makes sense, settings for early stopping | PL |
-| [`ML_w_predykcjach_wersja_poprawiona.pdf`](ML_w_predykcjach_wersja_poprawiona.pdf) | machine learning in financial, stock-market and political predictions | PL |
-| [`Interpretacja_ML_PL-DE.pdf`](Interpretacja_ML_PL-DE.pdf) | how to read the results of 8 ML course notebooks (data, training, test results) | PL + DE |
+| Document | Content | EN | PL | DE |
+|---|---|---|---|---|
+| FAQ | small datasets and neural networks – when a network makes sense, settings for early stopping | [PDF](materials/FAQ_EN.pdf) | [PDF](materials/FAQ_PL.pdf) | [PDF](materials/FAQ_DE.pdf) |
+| ML in predictions | machine learning in financial, stock-market and political predictions | [PDF](materials/ML_in_predictions_EN.pdf) | [PDF](materials/ML_in_predictions_PL.pdf) | [PDF](materials/ML_in_predictions_DE.pdf) |
+| How to read the results | how to read the results of 8 ML course notebooks (data, training, test results) | [PDF](materials/Reading_ML_results_EN.pdf) | [PDF (PL + DE)](materials/Reading_ML_results_PL-DE.pdf) | [PDF (PL + DE)](materials/Reading_ML_results_PL-DE.pdf) |
+
+The Polish and German versions of the third document are one bilingual file (Polish part first, then German).
 
 ## Tests
 
@@ -126,7 +130,7 @@ they were fixed and the regression tests that cover them.
 ├── app.py               launcher (ML Hub)
 ├── mlhub_compat.py      compatibility fix for Streamlit < 1.56
 ├── requirements.txt
-├── *.pdf                materials offered in the launcher
+├── materials/           PDF documents (EN · PL · DE) offered in the launcher
 ├── docs/screenshots/
 └── apps/
     ├── Supervised/      📊 scikit-learn – five supervised models

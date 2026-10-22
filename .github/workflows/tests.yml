@@ -56,5 +56,8 @@ jobs:
               at.query_params["lang"] = lang
               at.run()
               assert not at.exception, (lang, at.exception)
+              # PDF tab: 3 documents in the selected language + 5 under "Other languages" (fewer = file missing)
+              labels = [b.proto.label for b in at.get("download_button")]
+              assert len(labels) == 8, (lang, labels)
               print(lang, "OK")
           EOF
