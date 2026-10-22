@@ -30,7 +30,7 @@ texts change – the calculations are identical in all three languages (German i
 | address in the browser | `http://localhost:8501/?lang=en` |
 | environment variable | `DL_TEMPLATE_LANG=en` (Windows: `set DL_TEMPLATE_LANG=en`) |
 
-Without any of these the app starts in German. A language chosen in the sidebar is then also written to the
+Without any of these the app starts in English. A language chosen in the sidebar is then also written to the
 address (`?lang=…`), so it stays when the page is reloaded.
 
 **Translated:** all texts of the interface (pages, buttons, help texts, messages, warnings), chart titles and

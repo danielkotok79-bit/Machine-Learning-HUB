@@ -30,7 +30,7 @@ tylko teksty – obliczenia są identyczne we wszystkich trzech językach (orygi
 | adres w przeglądarce | `http://localhost:8501/?lang=pl` |
 | zmienna środowiskowa | `DL_TEMPLATE_LANG=pl` (Windows: `set DL_TEMPLATE_LANG=pl`) |
 
-Bez tych ustawień aplikacja startuje po niemiecku. Język wybrany w pasku bocznym trafia też do adresu
+Bez tych ustawień aplikacja startuje po angielsku. Język wybrany w pasku bocznym trafia też do adresu
 (`?lang=…`), więc zostaje po odświeżeniu strony.
 
 **Tłumaczone są:** wszystkie teksty interfejsu (strony, przyciski, podpowiedzi, komunikaty, ostrzeżenia), tytuły

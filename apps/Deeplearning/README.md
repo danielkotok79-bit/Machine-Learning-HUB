@@ -30,7 +30,7 @@ sich nur die Texte – die Berechnungen sind in allen drei Sprachen identisch (D
 | Adresse im Browser | `http://localhost:8501/?lang=pl` |
 | Umgebungsvariable | `DL_TEMPLATE_LANG=en` (Windows: `set DL_TEMPLATE_LANG=en`) |
 
-Ohne Angabe startet die App auf Deutsch. Eine in der Seitenleiste gewählte Sprache steht danach auch in der
+Ohne Angabe startet die App auf Englisch. Eine in der Seitenleiste gewählte Sprache steht danach auch in der
 Adresse (`?lang=…`), so bleibt sie beim Neuladen der Seite erhalten.
 
 Übersetzt werden alle Texte der Oberfläche, Diagrammtitel und Achsen, Tabellenköpfe, die Kommentare und

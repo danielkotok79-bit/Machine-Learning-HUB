@@ -46,7 +46,7 @@ i18n.set_lang(st.session_state.get("w_lang") or i18n.start_lang(st.query_params.
 if st.query_params.get("lang") != i18n.get_lang() and (i18n.get_lang() != "de" or "lang" in st.query_params):
     st.query_params["lang"] = i18n.get_lang()
 
-with st.spinner(tx("Loading libraries (pandas, scikit-learn, TensorFlow) …")):
+with st.spinner(tx("Lade Bibliotheken (pandas, scikit-learn, TensorFlow) …")):
     import matplotlib.pyplot as plt
     import tensorflow as tf
 
