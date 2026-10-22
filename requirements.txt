@@ -1,10 +1,13 @@
-# Python 3.10 oder neuer
-streamlit>=1.50
+# ML Hub – launcher + Supervised, Clustering and NLP apps · Python 3.10 or newer
+streamlit>=1.50       # 1.56+ recommended; older versions work through the launcher (mlhub_compat.py)
 pandas>=2.1
 numpy>=1.26
 scikit-learn>=1.4
-skops>=0.10           # sicheres Speichern/Laden der Modelle (.skops)
-joblib>=1.3           # kommt mit scikit-learn; Format .joblib
+scipy>=1.10           # comes with scikit-learn; sparse matrices for the NLP app
+skops>=0.10           # safe saving/loading of models (.skops)
+joblib>=1.3           # comes with scikit-learn; .joblib format
 matplotlib>=3.8
 seaborn>=0.13
-# nur für die Tests:  pip install pytest
+
+# Deep Learning app (TensorFlow, Python 3.10–3.13):  pip install -r apps/Deeplearning/requirements.txt
+# Tests:                                             pip install pytest

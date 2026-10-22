@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Launcher state (PIDs and logs of the started apps)
+.mlhub/
+
+# Created by the apps at runtime
+apps/*/models/
+apps/*/exports/
+
+# Data stays out of the repository (datasets can be large or licensed).
+# To add a small sample file anyway: git add -f path/to/file.csv
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.parquet
+demo_*_synthetisch.*
+data/
+
+# Saved models
+*.skops
+*.joblib
+*.keras
+*.h5
+*.pkl
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
