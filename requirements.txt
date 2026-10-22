@@ -1,0 +1,10 @@
+# Python 3.10 oder neuer
+streamlit>=1.50
+pandas>=2.1
+numpy>=1.26
+scikit-learn>=1.4
+skops>=0.10           # sicheres Speichern/Laden der Modelle (.skops)
+joblib>=1.3           # kommt mit scikit-learn; Format .joblib
+matplotlib>=3.8
+seaborn>=0.13
+# nur für die Tests:  pip install pytest

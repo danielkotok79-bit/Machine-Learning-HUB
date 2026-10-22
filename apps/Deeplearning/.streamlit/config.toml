@@ -1,0 +1,13 @@
+[server]
+# Upload-Limit in MB (Standard 200). Große CSVs besser über "Pfad auf diesem Rechner" laden.
+maxUploadSize = 1000
+
+[client]
+# blendet Entwickler-Optionen (z. B. "Deploy") aus
+toolbarMode = "viewer"
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"

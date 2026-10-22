@@ -1,0 +1,9 @@
+# Python 3.10 – 3.13 empfohlen (TensorFlow-Wheels)
+streamlit>=1.50
+pandas>=2.1
+numpy>=1.26
+scikit-learn>=1.4
+matplotlib>=3.8
+seaborn>=0.13
+tensorflow>=2.16      # bringt Keras 3 mit
+# nur für die Tests:  pip install pytest

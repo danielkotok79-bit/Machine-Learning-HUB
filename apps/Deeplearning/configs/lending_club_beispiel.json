@@ -1,0 +1,276 @@
+{
+  "template_config": 1,
+  "beschreibung": "Beispiel-Konfiguration für den LendingClub-Datensatz (lending_club_loan_two.csv): Schritt 2 (Spalten umwandeln), Schritt 4 (mort_acc per Gruppen-Mittelwert über total_acc, revol_util/pub_rec_bankruptcies: Zeilen entfernen) und Schritt 6 (78 → 39 → 19, Dropout 0.2, 25 Epochen, batch_size 256).",
+  "source": "lending_club_loan_two.csv",
+  "step2": [
+    {
+      "Spalte": "loan_amnt",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "term",
+      "Aktion": "Zahl extrahieren",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "int_rate",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "installment",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "grade",
+      "Aktion": "entfernen",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "sub_grade",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "emp_title",
+      "Aktion": "entfernen",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "emp_length",
+      "Aktion": "entfernen",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "home_ownership",
+      "Aktion": "Werte ersetzen",
+      "Parameter": "NONE,ANY=OTHER",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "annual_inc",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "verification_status",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "issue_d",
+      "Aktion": "entfernen",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "loan_status",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "purpose",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "title",
+      "Aktion": "entfernen",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "dti",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "earliest_cr_line",
+      "Aktion": "Datum → Jahr",
+      "Parameter": "%b-%Y",
+      "Neuer Name": "earliest_cr_year"
+    },
+    {
+      "Spalte": "open_acc",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "pub_rec",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "revol_bal",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "revol_util",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "total_acc",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "initial_list_status",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "application_type",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "mort_acc",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "pub_rec_bankruptcies",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    },
+    {
+      "Spalte": "address",
+      "Aktion": "Text: letzte N Zeichen",
+      "Parameter": "5",
+      "Neuer Name": "zip_code"
+    }
+  ],
+  "missing": [
+    {
+      "Spalte": "revol_util",
+      "Strategie": "Zeilen entfernen",
+      "Parameter": ""
+    },
+    {
+      "Spalte": "mort_acc",
+      "Strategie": "Gruppen-Mittelwert",
+      "Parameter": "total_acc"
+    },
+    {
+      "Spalte": "pub_rec_bankruptcies",
+      "Strategie": "Zeilen entfernen",
+      "Parameter": ""
+    }
+  ],
+  "layers": [
+    {
+      "Neuronen": 78,
+      "Aktivierung": "relu",
+      "Dropout": 0.2
+    },
+    {
+      "Neuronen": 39,
+      "Aktivierung": "relu",
+      "Dropout": 0.2
+    },
+    {
+      "Neuronen": 19,
+      "Aktivierung": "relu",
+      "Dropout": 0.2
+    }
+  ],
+  "widgets": {
+    "w_viz_cols": [
+      "loan_amnt",
+      "term",
+      "int_rate",
+      "installment",
+      "sub_grade",
+      "home_ownership",
+      "annual_inc",
+      "verification_status",
+      "loan_status",
+      "purpose",
+      "dti",
+      "earliest_cr_year",
+      "open_acc",
+      "pub_rec",
+      "revol_bal",
+      "revol_util",
+      "total_acc",
+      "initial_list_status",
+      "application_type",
+      "mort_acc",
+      "pub_rec_bankruptcies",
+      "zip_code"
+    ],
+    "w_label": "loan_status",
+    "w_task": "binary",
+    "w_pos": "Fully Paid",
+    "w_features": [
+      "loan_amnt",
+      "term",
+      "int_rate",
+      "installment",
+      "sub_grade",
+      "home_ownership",
+      "annual_inc",
+      "verification_status",
+      "purpose",
+      "dti",
+      "earliest_cr_year",
+      "open_acc",
+      "pub_rec",
+      "revol_bal",
+      "revol_util",
+      "total_acc",
+      "initial_list_status",
+      "application_type",
+      "mort_acc",
+      "pub_rec_bankruptcies",
+      "zip_code"
+    ],
+    "w_test_size": 0.2,
+    "w_split_seed": 101,
+    "w_stratify": false,
+    "w_scaler": "MinMaxScaler",
+    "w_drop_first": true,
+    "w_preset": "Beispiel LendingClub (78 → 39 → 19, Dropout 0.2)",
+    "w_out_act": "sigmoid",
+    "w_loss": "binary_crossentropy",
+    "w_opt": "adam",
+    "w_lr": 0.001,
+    "w_epochs": 25,
+    "w_batch": 256,
+    "w_es": false,
+    "w_patience": 25,
+    "w_restore": true,
+    "w_val": "test",
+    "w_val_split": 0.2,
+    "w_cw": false,
+    "w_seed": 101,
+    "w_maxnorm": 0.0,
+    "w_tb": false
+  }
+}

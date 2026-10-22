@@ -1,0 +1,48 @@
+{
+  "template_config": 1,
+  "engine": "scikit-learn",
+  "app": "nlp",
+  "source": "yelp.csv (NLP-Projekt des Kurses)",
+  "step2": [
+    {"Spalte": "business_id", "Aktion": "entfernen", "Parameter": "", "Neuer Name": ""},
+    {"Spalte": "date", "Aktion": "entfernen", "Parameter": "", "Neuer Name": ""},
+    {"Spalte": "review_id", "Aktion": "entfernen", "Parameter": "", "Neuer Name": ""},
+    {"Spalte": "stars", "Aktion": "behalten", "Parameter": "", "Neuer Name": ""},
+    {"Spalte": "text", "Aktion": "behalten", "Parameter": "", "Neuer Name": ""},
+    {"Spalte": "type", "Aktion": "entfernen", "Parameter": "", "Neuer Name": ""},
+    {"Spalte": "user_id", "Aktion": "entfernen", "Parameter": "", "Neuer Name": ""},
+    {"Spalte": "cool", "Aktion": "behalten", "Parameter": "", "Neuer Name": ""},
+    {"Spalte": "useful", "Aktion": "behalten", "Parameter": "", "Neuer Name": ""},
+    {"Spalte": "funny", "Aktion": "behalten", "Parameter": "", "Neuer Name": ""}
+  ],
+  "new_columns": [
+    {"name": "text length", "kind": "Kopie + Aktion", "source": "text", "definition": "",
+     "action": "Text → Länge (Zeichen)", "param": ""}
+  ],
+  "widgets": {
+    "w_text": "text",
+    "w_label": "stars",
+    "w_classes": ["1", "5"],
+    "w_pos": "5",
+    "w_missing_text": "drop",
+    "w_test_size": 0.3,
+    "w_split_seed": 101,
+    "w_stratify": false,
+    "w_vec": "count",
+    "w_lower": true,
+    "w_stop": "",
+    "w_ngram": 1,
+    "w_min_df": 1,
+    "w_max_df": 1.0,
+    "w_max_feat": 0,
+    "w_binary": false,
+    "w_sublinear": false,
+    "w_accents": false,
+    "w_model": "nb",
+    "w_alpha": 1.0,
+    "w_fit_prior": true,
+    "w_curve": true,
+    "w_val": "test",
+    "w_seed": 101
+  }
+}

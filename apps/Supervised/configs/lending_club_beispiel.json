@@ -1,0 +1,46 @@
+{
+  "template_config": 1,
+  "engine": "scikit-learn",
+  "source": "lending_club_loan_two.csv",
+  "step2": [
+    {"Spalte": "term", "Aktion": "Zahl extrahieren", "Parameter": "", "Neuer Name": ""},
+    {"Spalte": "grade", "Aktion": "entfernen", "Parameter": "", "Neuer Name": ""},
+    {"Spalte": "emp_title", "Aktion": "entfernen", "Parameter": "", "Neuer Name": ""},
+    {"Spalte": "emp_length", "Aktion": "entfernen", "Parameter": "", "Neuer Name": ""},
+    {"Spalte": "home_ownership", "Aktion": "Werte ersetzen", "Parameter": "NONE,ANY=OTHER", "Neuer Name": ""},
+    {"Spalte": "issue_d", "Aktion": "entfernen", "Parameter": "", "Neuer Name": ""},
+    {"Spalte": "title", "Aktion": "entfernen", "Parameter": "", "Neuer Name": ""},
+    {"Spalte": "earliest_cr_line", "Aktion": "Datum → Jahr", "Parameter": "%b-%Y", "Neuer Name": "earliest_cr_year"},
+    {"Spalte": "address", "Aktion": "Text: letzte N Zeichen", "Parameter": "5", "Neuer Name": "zip_code"}
+  ],
+  "missing": [
+    {"Spalte": "revol_util", "Strategie": "Zeilen entfernen", "Parameter": ""},
+    {"Spalte": "pub_rec_bankruptcies", "Strategie": "Zeilen entfernen", "Parameter": ""},
+    {"Spalte": "mort_acc", "Strategie": "Gruppen-Mittelwert", "Parameter": "total_acc"}
+  ],
+  "new_columns": [],
+  "widgets": {
+    "w_label": "loan_status",
+    "w_task": "binary",
+    "w_pos": "Fully Paid",
+    "w_features": ["loan_amnt", "term", "int_rate", "installment", "sub_grade", "home_ownership", "annual_inc",
+                   "verification_status", "purpose", "dti", "earliest_cr_year", "open_acc", "pub_rec", "revol_bal",
+                   "revol_util", "total_acc", "initial_list_status", "application_type", "mort_acc",
+                   "pub_rec_bankruptcies", "zip_code"],
+    "w_test_size": 0.2,
+    "w_split_seed": 101,
+    "w_stratify": true,
+    "w_scaler": "MinMaxScaler",
+    "w_drop_first": true,
+    "w_model": "trees",
+    "w_rf_variant": "forest",
+    "w_rf_trees": 100,
+    "w_rf_depth": 12,
+    "w_rf_leaf": 50,
+    "w_rf_features": "sqrt",
+    "w_curve": true,
+    "w_val": "test",
+    "w_cw": false,
+    "w_seed": 101
+  }
+}

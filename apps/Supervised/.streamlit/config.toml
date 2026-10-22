@@ -1,0 +1,6 @@
+[server]
+# große CSV-Dateien hochladen (MB)
+maxUploadSize = 1024
+
+[theme]
+base = "light"

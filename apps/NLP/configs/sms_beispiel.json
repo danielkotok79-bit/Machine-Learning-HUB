@@ -1,0 +1,40 @@
+{
+  "template_config": 1,
+  "engine": "scikit-learn",
+  "app": "nlp",
+  "source": "SMSSpamCollection (Kurs: Tab, ohne Kopfzeile)",
+  "step2": [
+    {"Spalte": "Spalte_1", "Aktion": "behalten", "Parameter": "", "Neuer Name": "label"},
+    {"Spalte": "Spalte_2", "Aktion": "behalten", "Parameter": "", "Neuer Name": "message"}
+  ],
+  "new_columns": [
+    {"name": "length", "kind": "Kopie + Aktion", "source": "message", "definition": "",
+     "action": "Text → Länge (Zeichen)", "param": ""}
+  ],
+  "widgets": {
+    "w_text": "message",
+    "w_label": "label",
+    "w_classes": [],
+    "w_pos": "spam",
+    "w_missing_text": "drop",
+    "w_test_size": 0.2,
+    "w_split_seed": 101,
+    "w_stratify": true,
+    "w_vec": "tfidf",
+    "w_lower": true,
+    "w_stop": "english",
+    "w_ngram": 1,
+    "w_min_df": 1,
+    "w_max_df": 1.0,
+    "w_max_feat": 0,
+    "w_binary": false,
+    "w_sublinear": false,
+    "w_accents": false,
+    "w_model": "nb",
+    "w_alpha": 1.0,
+    "w_fit_prior": true,
+    "w_curve": true,
+    "w_val": "test",
+    "w_seed": 101
+  }
+}

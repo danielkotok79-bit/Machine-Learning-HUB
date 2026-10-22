@@ -1,0 +1,55 @@
+{
+  "template_config": 1,
+  "engine": "scikit-learn",
+  "app": "clustering",
+  "source": "College_Data (K-Means-Kurs)",
+  "step2": [
+    {
+      "Spalte": "Unnamed: 0",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": "College"
+    },
+    {
+      "Spalte": "Grad.Rate",
+      "Aktion": "Werte begrenzen (min, max)",
+      "Parameter": ",100",
+      "Neuer Name": ""
+    }
+  ],
+  "missing": [],
+  "new_columns": [],
+  "widgets": {
+    "w_group": "Private",
+    "w_name_col": "College",
+    "w_features": [
+      "Apps",
+      "Accept",
+      "Enroll",
+      "Top10perc",
+      "Top25perc",
+      "F.Undergrad",
+      "P.Undergrad",
+      "Outstate",
+      "Room.Board",
+      "Books",
+      "Personal",
+      "PhD",
+      "Terminal",
+      "S.F.Ratio",
+      "perc.alumni",
+      "Expend",
+      "Grad.Rate"
+    ],
+    "w_scaler": "StandardScaler",
+    "w_drop_first": false,
+    "w_k": 2,
+    "w_init": "k-means++",
+    "w_n_init": 10,
+    "w_max_iter": 300,
+    "w_algorithm": "lloyd",
+    "w_seed": 101,
+    "w_curve": true,
+    "w_k_max": 10
+  }
+}
