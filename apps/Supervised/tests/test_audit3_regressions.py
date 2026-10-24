@@ -171,6 +171,7 @@ def test_language_switch_tables_export_and_step10(tmp_path, monkeypatch):
     go("4 · Aufbereitung 2 – ML-Daten")
     button(i18n.tx("Daten für ML vorbereiten")).click().run()
     go("6 · Modell & Training")
+    at.radio(key="w_model").set_value("trees").run()
     at.number_input(key="w_rf_trees").set_value(10).run()
     button(i18n.tx("Training starten")).click().run()
     go("9 · Modell speichern & laden")

@@ -2,10 +2,15 @@
 
 Aplikacja Streamlit do danych tabelarycznych CSV: wczytanie, przygotowanie, wizualizacja, wybór i trening modelu
 supervised learning (scikit-learn), ewaluacja i zastosowanie do nowych danych – dla dowolnych zbiorów
-(klasyfikacja binarna, wieloklasowa, regresja). Do wyboru jest pięć modeli w kolejności rankingu:
-**Decision Trees + Random Forests, Support Vector Machines, Logistic Regression, K-Nearest Neighbors, Linear
-Regression** – zob. [Pięć modeli](#pięć-modeli-krok-6). Do każdego kroku aplikacja pokazuje odpowiedni kod w
-Pythonie.
+(klasyfikacja binarna, wieloklasowa, regresja). Do wyboru jest sześć modeli w kolejności rankingu:
+**Gradient Boosting (HistGradientBoosting), Decision Trees + Random Forests, Support Vector Machines, Logistic
+Regression, K-Nearest Neighbors, Linear Regression** – zob. [Sześć modeli](#sześć-modeli-krok-6). Do każdego kroku
+aplikacja pokazuje odpowiedni kod w Pythonie.
+
+Dla danych z kolejnością (mecze, kursy, serie pomiarów) jest **podział czasowy** (test = najnowsze wiersze), a krok 8
+może porównać model z **prawdopodobieństwem z danych** – np. z szansą na wygraną według Elo z narzędzia z danymi
+sportowymi. Zob. [Dane sportowe: podział czasowy i porównanie z
+Elo](#dane-sportowe-podział-czasowy-i-porównanie-z-elo).
 
 Aplikacja powstała z wersji deep learning (Keras): kroki 1–5 i 10, przygotowanie danych, recepta
 (`preprocessing.json`), konfiguracje i języki pozostały bez zmian; nowe są modele w kroku 6, krzywe walidacji w
@@ -81,8 +86,8 @@ kolumnie, wybierz drugi format.
 1. **Krok 1:** prześlij plik CSV albo wpisz ścieżkę → *Wczytaj dane*
 2. **Krok 2:** sprawdź akcje dla kolumn → *Zastosuj*; w razie potrzeby utwórz nowe kolumny
 3. **Krok 3:** wybierz kolumny do wykresów i obejrzyj dane
-4. **Krok 4:** wybierz etykietę i cechy → *Przygotuj dane do ML*
-5. **Krok 6:** wybierz model → *Rozpocznij trening* → potem 7, 8, 9, 10
+4. **Krok 4:** wybierz etykietę i cechy, podział losowy albo czasowy → *Przygotuj dane do ML*
+5. **Krok 6:** wybierz model (miejsce 1: Gradient Boosting) → *Rozpocznij trening* → potem 7, 8, 9, 10
 
 Dla publicznego zbioru LendingClub (`lending_club_loan_two.csv`) w kroku 2 jest **przykładowa konfiguracja**
 (kroki 2, 4 i 6 gotowo ustawione: Random Forest ze 100 drzewami, `max_depth=12`). Na wolnym komputerze włącz w
@@ -95,11 +100,11 @@ pasku bocznym **próbkę** (`df.sample(frac=0.1)`).
 | 1 · Dane i biblioteki | wczytanie CSV (przesłanie albo ścieżka; separator `;` i przecinek dziesiętny są rozpoznawane automatycznie), przegląd, wersje bibliotek, opcjonalnie opisy kolumn |
 | 2 · Przygotowanie 1 – kolumny | jedna akcja na kolumnę (Zachowaj, Usuń, Wyodrębnij liczbę, Data → rok / miesiąc / **rok + miesiąc**, pierwsze/ostatnie N znaków, Zamień wartości, Zachowaj top N …) · **nowe kolumny**: Przypisz wartości, Formuła, Warunek → 0/1, Kopia + akcja |
 | 3 · Analiza i wizualizacja | **wybór kolumn** · Przegląd, Wykres liczności, Histogram, Wykres pudełkowy, Wykres punktowy, Korelacja (heatmapa), Korelacja z jedną kolumną, Pairplot, Udział według kategorii, Statystyki grup, **Jointplot** (scatter/kde/hex/reg), **Gęstość 2D (KDE)** z filtrem na jedną grupę, **Regresja (lmplot)** z kolorem (hue) i podwykresami (col), **Histogram według grup** (nałożone) |
-| 4 · Przygotowanie 2 – dane ML | etykieta + typ problemu, cechy, brakujące wartości dla każdej kolumny (z pomocą korelacji przy średniej grupowej); **najpierw** `train_test_split`, potem wartości uzupełniające, kolumny dummy (przegląd nowych kolumn 0/1) i skalowanie – uczone tylko na danych treningowych |
+| 4 · Przygotowanie 2 – dane ML | etykieta + typ problemu, cechy, brakujące wartości dla każdej kolumny (z pomocą korelacji przy średniej grupowej); **najpierw** podział – losowy (`train_test_split`) albo **czasowy** według kolumny z datą/sezonem (test = najnowsze wiersze) –, potem wartości uzupełniające, kolumny dummy (przegląd nowych kolumn 0/1) i skalowanie – uczone tylko na danych treningowych · opcjonalnie **kolumna porównawcza** dla kroku 8 (np. `pre_elo_prob_home`) |
 | 5 · Zapis danych | dane po kroku 2 albo gotowe do ML po kroku 4 (z kolumną `split`) jako CSV – międzynarodowy albo dla Excela w języku aplikacji; istniejący plik jest nadpisywany dopiero po potwierdzeniu |
-| 6 · Model i trening | jeden z **pięciu modeli** w kolejności rankingu (z „Dlaczego?” i „Do czego najlepiej”) oraz jego najważniejsze parametry jak w kursie; walidacja, `class_weight='balanced'`, seed – odpowiedni kod scikit-learn jest pokazywany na bieżąco |
-| 7 · Trening a walidacja | krzywa walidacji najważniejszego parametru (błąd na danych treningowych i walidacyjnych, naiwna prognoza jako linia) + interpretacja (przeuczenie, niedouczenie, brak sygnału); *Przejmij najlepszą wartość do kroku 6*; SVM z GridSearchCV: mapa ciepła C × gamma |
-| 8 · Ewaluacja | classification_report, confusion_matrix, ROC-AUC, próg, pojedynczy przypadek, ważność cech (permutacyjna) · regresja: MAE, RMSE, R² · **szczegóły modelu**: ważność cech w drzewach (+ rysunek drzewa przy pojedynczym drzewie), współczynniki Linear Regression (w oryginalnych jednostkach jak `lm.coef_` w kursie) i Logistic Regression (z ilorazem szans), dane SVM (wektory nośne) i KNN |
+| 6 · Model i trening | jeden z **sześciu modeli** w kolejności rankingu (z „Dlaczego?” i „Do czego najlepiej”) oraz jego najważniejsze parametry jak w kursie; walidacja, `class_weight='balanced'`, seed – odpowiedni kod scikit-learn jest pokazywany na bieżąco |
+| 7 · Trening a walidacja | krzywa walidacji najważniejszego parametru (błąd na danych treningowych i walidacyjnych, naiwna prognoza jako linia) + interpretacja (przeuczenie, niedouczenie, brak sygnału); *Przejmij najlepszą wartość do kroku 6* (także najlepszą liczbę rund przy Gradient Boosting); SVM z GridSearchCV: mapa ciepła C × gamma |
+| 8 · Ewaluacja | classification_report, confusion_matrix, ROC-AUC, **log loss**, próg, pojedynczy przypadek, ważność cech (permutacyjna) · regresja: MAE, RMSE, R² · **porównanie z prawdopodobieństwem z danych** (np. Elo): accuracy, log loss, Brier, ROC-AUC, różnica ± błąd standardowy, wykres kalibracji · **szczegóły modelu**: ważność cech w drzewach (+ rysunek drzewa przy pojedynczym drzewie), współczynniki Linear Regression (w oryginalnych jednostkach jak `lm.coef_` w kursie) i Logistic Regression (z ilorazem szans), dane Gradient Boosting, SVM (wektory nośne) i KNN |
 | 9 · Zapis i odczyt modelu | `models/<nazwa>/model.skops` (bezpieczny, domyślny) albo `model.joblib` + `preprocessing.json`, pobieranie ZIP, cały pipeline jako skrypt Pythona; opcjonalnie sumy kontrolne wierszy treningowych |
 | 10 · Prognoza dla nowych danych | nowy CSV albo formularz → to samo przygotowanie → prognoza, interpretacja, pobranie CSV i **podsumowanie** (jakość danych, co mówi wynik, zalecenie) |
 
@@ -118,20 +123,22 @@ epoki …) są po cichu pomijane.
   wykonałby je jako formułę (CSV injection). W formacie międzynarodowym dane pozostają bez zmian.
 * Jeśli jakaś cecha sama nazywa się `split`, kolumna train/test nazywa się `split_train_test`.
 
-## Pięć modeli (krok 6)
+## Sześć modeli (krok 6)
 
 Kolejność w kroku 6 to ranking – miejsce 1 jest zwykle najmocniejsze:
 
 | Miejsce | Algorytm | Dlaczego? | Do czego najlepiej |
 |---|---|---|---|
-| 1 | Decision Trees + Random Forests | Najlepszy z tej listy. Radzi sobie z nieliniowościami, interakcjami cech, szumem. Random Forest mocno ogranicza overfitting pojedynczego drzewa. | Predykcja kierunku (klasyfikacja) i zwrotów |
-| 2 | Support Vector Machines | Dobry, szczególnie z kernelem RBF. Potrafi dobrze oddzielać klasy, ale jest wrażliwy na skalowanie danych i dobór hiperparametrów. | Klasyfikacja kierunku (buy/sell) |
-| 3 | Logistic Regression | Solidny baseline. Szybki, interpretowalny, stabilny. Często przegrywa z drzewami przy złożonych zależnościach. | Prosta klasyfikacja kierunku |
-| 4 | K-Nearest Neighbors | Prosty, ale zwykle słabszy. Źle znosi szum, nieistotne cechy i wysoką wymiarowość (typową dla danych giełdowych). | Raczej eksperymenty / baseline |
-| 5 | Linear Regression | Najsłabszy do realnych predykcji. Zakłada liniową zależność, a rynki są mocno nieliniowe i zaszumione. | Tylko jako bardzo prosty punkt odniesienia |
+| 1 | Gradient Boosting (HistGradientBoosting) | Najlepszy z tej listy dla danych tabelarycznych. Buduje drzewa po kolei – każde poprawia błędy poprzednich. Zwykle dokładniejszy niż Random Forest i szybki także przy wielu wierszach; potrzebuje jednak odpowiedniej liczby rund (max_iter), inaczej uczy się też szumu – najlepszą pokazuje krok 7. | Pierwszy wybór dla tabel: kierunek, wygrana/przegrana (klasyfikacja) i liczby (regresja) |
+| 2 | Decision Trees + Random Forests | Bardzo solidny i trudny do zepsucia. Radzi sobie z nieliniowościami, interakcjami cech, szumem. Random Forest mocno ogranicza overfitting pojedynczego drzewa. | Predykcja kierunku (klasyfikacja) i zwrotów |
+| 3 | Support Vector Machines | Dobry, szczególnie z kernelem RBF. Potrafi dobrze oddzielać klasy, ale jest wrażliwy na skalowanie danych i dobór hiperparametrów. | Klasyfikacja kierunku (buy/sell) |
+| 4 | Logistic Regression | Solidny baseline. Szybki, interpretowalny, stabilny. Często przegrywa z drzewami przy złożonych zależnościach. | Prosta klasyfikacja kierunku |
+| 5 | K-Nearest Neighbors | Prosty, ale zwykle słabszy. Źle znosi szum, nieistotne cechy i wysoką wymiarowość (typową dla danych giełdowych). | Raczej eksperymenty / baseline |
+| 6 | Linear Regression | Najsłabszy do realnych predykcji. Zakłada liniową zależność, a rynki są mocno nieliniowe i zaszumione. | Tylko jako bardzo prosty punkt odniesienia |
 
 | Model | scikit-learn | Parametry w kroku 6 | Krzywa w kroku 7 |
 |---|---|---|---|
+| Gradient Boosting | `HistGradientBoostingClassifier/Regressor` (`early_stopping=False`) | `max_iter` (rundy), `learning_rate`, `max_leaf_nodes`, `max_depth` (0 = bez limitu), `min_samples_leaf` – wartości domyślne jak w scikit-learn | błąd według liczby rund z **jednego** treningu (`staged_predict`), z najlepszą wartością i *przejęciem* |
 | Decision Trees + Random Forests | `RandomForestClassifier/Regressor` albo `DecisionTreeClassifier/Regressor` | wariant (las / jedno drzewo), `n_estimators`, `max_depth` (0 = bez limitu), `min_samples_leaf`, `max_features` | błąd według liczby drzew (las rośnie krok po kroku) albo według `max_depth` |
 | Support Vector Machines | `SVC` / `SVR` | `kernel`, `C`, `gamma`, `epsilon` (SVR); **GridSearchCV** po C = 0.1 … 100 i gamma = 1 … 0.001 jak w kursie | błąd według C; z GridSearchCV dodatkowo mapa ciepła wszystkich kombinacji |
 | Logistic Regression | `LogisticRegression` | `C`, `max_iter` | błąd według C |
@@ -140,13 +147,19 @@ Kolejność w kroku 6 to ranking – miejsce 1 jest zwykle najmocniejsze:
 
 * **Czy model pasuje do typu problemu?** Logistic Regression przewiduje tylko klasy (binarnie, wiele klas),
   Linear Regression tylko liczby (regresja). Przy niepasującym modelu krok 6 wyjaśnia powód, a *Rozpocznij
-  trening* pozostaje zablokowane. Pozostałe trzy modele potrafią jedno i drugie.
+  trening* pozostaje zablokowane. Pozostałe cztery modele potrafią jedno i drugie.
+* **Gradient Boosting:** inaczej niż przy Random Forest więcej rund może szkodzić – od pewnego momentu model uczy
+  się szumu i błąd walidacji rośnie. Dlatego `early_stopping` jest wyłączone (od 10 000 wierszy scikit-learn sam
+  odkładałby losowo 10 % danych treningowych); najlepszą liczbę rund pokazuje krzywa w kroku 7.
+  `HistGradientBoosting` nie ma `feature_importances_` – ważność pokazuje permutation importance w kroku 8.
+  Skalowanie nie jest potrzebne.
 * **Błąd w kroku 7:** klasyfikacja = odsetek błędów (1 − accuracy, jak `np.mean(pred != y_test)` w kursie),
   regresja = MAE w oryginalnych jednostkach. Linia przerywana to naiwna prognoza (najczęstsza klasa albo średnia)
   – model poniżej niej czegoś się nauczył.
 * **Walidacja:** „Dane testowe” liczy krzywą jak w kursie na `X_test`; „Część danych treningowych (czyściej)”
-  bierze osobną część danych treningowych, żeby zbiór testowy pozostał nietknięty aż do kroku 8. Bez krzywej
-  walidacji krok 7 porównuje tylko trening i test.
+  bierze osobną część danych treningowych, żeby zbiór testowy pozostał nietknięty aż do kroku 8 – przy podziale
+  czasowym **najnowszą** część (`train_test_split(..., shuffle=False)`); GridSearchCV używa wtedy
+  `TimeSeriesSplit`. Bez krzywej walidacji krok 7 porównuje tylko trening i test.
 * **Przejęcie najlepszej wartości:** krok 7 proponuje wartość, jeśli obniża błąd bardziej niż przypadkiem, i po
   kliknięciu wpisuje ją w kroku 6 – dla wytrenowanego modelu; przy SVM z GridSearchCV wyszukiwanie zostaje w tym
   celu wyłączone (inaczej znów zastąpiłoby C). Potem trenuj ponownie.
@@ -156,6 +169,36 @@ Kolejność w kroku 6 to ranking – miejsce 1 jest zwykle najmocniejsze:
 * **Duże dane:** SVM i KNN przy bardzo wielu wierszach działają wolno – krok 6 o tym informuje (wskazówka: próbka
   w pasku bocznym), a także o braku skalowania przy SVM i KNN (liczą odległości). Błędy krzywych walidacji są
   mierzone na co najwyżej 5000 wierszy z każdego zbioru (KNN: 2000), trening używa wszystkich wierszy.
+
+## Dane sportowe: podział czasowy i porównanie z Elo
+
+Aplikacja rozpoznaje pliki CSV w formacie narzędzia z danymi sportowymi (Datasety NBA i tenis) po kolumnach `pre_*`
+i `post_*`/`inplay_*` i w kroku 4 proponuje pasujące ustawienia:
+
+| Propozycja | Dlaczego |
+|---|---|
+| cechy: tylko `pre_*` i `lineup_*` | znane przed meczem. `inplay_*` (w trakcie) i `post_*` (po meczu) byłyby wyciekiem danych – jeśli mimo to je wybierzesz, krok 4 ostrzega |
+| etykieta `home_win` (NBA) albo `p1_win` (tenis) | cel prognozy |
+| podział czasowy według `date` (tenis: `match_date_est`) | trening = starsze mecze, test = najnowsze. Mecze z tego samego dnia nigdy nie trafiają do obu części. Dlatego kolumna z datą zostaje w kroku 2 bez zmian (inaczej proponowana byłaby „Data → rok”) |
+| kolumna porównawcza `pre_elo_prob_home` (tenis: `pre_elo_prob_p1`) | szansa na wygraną według Elo przed meczem – narzędzie liczy Elo mecz po meczu tylko z wcześniejszych meczów |
+
+**Porównanie w kroku 8.** Na tych samych wierszach testowych obok siebie stoją model, kolumna porównawcza i prognoza
+naiwna (zawsze udział klasy pozytywnej w treningu): accuracy (próg 0.5), log loss, Brier i ROC-AUC. Decyduje
+**log loss** – mierzy, jak dobrze zgadzają się prawdopodobieństwa. Aplikacja liczy średnią różnicę na mecz z błędem
+standardowym (parami, te same mecze) i mówi, czy model pokonuje kolumnę porównawczą bardziej niż przypadkiem. Wykres
+kalibracji pokazuje, czy np. przewidywane 70 % zdarza się też w ok. 70 % przypadków – dopiero wtedy
+prawdopodobieństwa nadają się do porównania z kursami bukmacherskimi.
+
+Przykład z danymi NBA z narzędzia (stan na 22.10.2026, 28 382 mecze od sezonu 2004-05, test = 20 % najnowszych meczów
+od marca 2022, Gradient Boosting na wszystkich `pre_*`/`lineup_*`, 300 rund, `learning_rate=0.05`): log loss 0.621
+wobec 0.620 dla samego Elo – **brak wyraźnej różnicy**. Zgadza się to z samym narzędziem: w NBA wartości `pre_*`
+wnoszą niewiele ponad Elo; więcej daje skład (kto gra). W tenisie natomiast modele z formą, serwisem i returnem są
+wyraźnie lepsze od Elo.
+
+Podział czasowy działa z każdą kolumną z datą albo liczbą (rok, sezon), kolumna porównawcza – z każdą kolumną z
+prawdopodobieństwami od 0 do 1 dla klasy pozytywnej (np. z kursów bukmacherskich) – także poza danymi sportowymi.
+Wiersze bez wartości czasu są usuwane; wiersze o tej samej wartości czasu zostają razem (udział testu może więc nieco
+odbiegać od `test_size`, np. przy całych sezonach).
 
 ## Nowe kolumny (krok 2)
 
@@ -230,7 +273,8 @@ Starsze poradniki i notatniki często zawierają linie, które z aktualnymi wers
 | `plt.figure(figsize=(11, 7))` przed `sns.lmplot(...)` | nic nie zmienia – lmplot tworzy własną figurę (w notatniku: „Figure … with 0 Axes”) | `sns.lmplot(..., height=4, aspect=1.15)` |
 | uzupełnianie braków, **potem** `train_test_split` | wartości uzupełniające zawierają informację z danych testowych (wyciek danych) | najpierw podział; wartości uzupełniające, kategorie i skaler tylko z danych treningowych |
 
-Dodatkowe opcje (każdą można wyłączyć): `stratify=y`, regulowany próg + ROC-AUC, `class_weight='balanced'`,
+Dodatkowe opcje (każdą można wyłączyć): podział czasowy, kolumna porównawcza (np. Elo), `stratify=y`, regulowany
+próg + ROC-AUC, `class_weight='balanced'`,
 walidacja na części danych treningowych zamiast na danych testowych, GridSearchCV, skalowanie etykiety przy
 regresji, ostrzeżenie o wycieku danych, permutation importance.
 
@@ -269,14 +313,14 @@ Rozbudowa:
 
 ```bash
 pip install pytest
-pytest -q                                  # 266 testów, ok. 5 minut
+pytest -q                                  # 293 testy, ok. 5 minut
 python tests/synthetic.py --rows 20000     # syntetyczny przykładowy CSV (bez prawdziwych danych)
 ```
 
 | Plik | sprawdza |
 |---|---|
 | `tests/test_pipeline.py` | przykładowy pipeline, zapis/odczyt (.skops/.joblib), nowe dane, regresja, wiele klas, eksportowany skrypt |
-| `tests/test_models.py` | pięć modeli: każdy model × typ problemu (trening, krzywa walidacji, ocena, szczegóły modelu, zapis/odczyt), pokazywany kod scikit-learn (model i krzywa) liczy **dokładnie** to samo co aplikacja, metoda łokcia = `predict()` dla każdego K, współczynniki w oryginalnych jednostkach, bezpieczne wczytywanie (.skops/.joblib), test klikania regresji (Linear Regression, KNN, SVM + GridSearchCV) |
+| `tests/test_models.py` | sześć modeli: każdy model × typ problemu (trening, krzywa walidacji, ocena, szczegóły modelu, zapis/odczyt), pokazywany kod scikit-learn (model i krzywa) liczy **dokładnie** to samo co aplikacja, metoda łokcia = `predict()` dla każdego K, współczynniki w oryginalnych jednostkach, bezpieczne wczytywanie (.skops/.joblib), test klikania regresji (Linear Regression, KNN, SVM + GridSearchCV) |
 | `tests/test_codegen_parity.py` | pokazywany kod Pythona liczy **dokładnie** to samo co aplikacja (X_train, X_test, y) – także w przypadkach brzegowych i z nowymi kolumnami |
 | `tests/test_new_features.py` | rok + miesiąc, nowe kolumny (łącznie z ochroną przed dowolnym kodem w formułach), zapis danych, podsumowanie |
 | `tests/test_audit_regressions.py` | po jednym teście na każdy błąd z pierwszego audytu (zob. `AUDIT.md`) |
@@ -285,6 +329,7 @@ python tests/synthetic.py --rows 20000     # syntetyczny przykładowy CSV (bez p
 | `tests/test_audit3_regressions.py` | trzeci audyt: żaden kod z nazw kolumn/wartości w pokazywanym kodzie Pythona, krok 10 z kolumnami o tej samej nazwie, tytuły wykresów (notatnik, `$`), zmiana języka (tabele, eksport, adres) |
 | `tests/test_audit4_regressions.py` | czwarty audyt (scikit-learn): „przejmij najlepszą wartość” dla wytrenowanego modelu i z GridSearchCV, dokładne liczby w pokazywanym kodzie, GridSearchCV przy małej liczbie wierszy w foldzie, pytanie przed pickle, nazwy z plików nie jako Markdown, bezpieczny kod wczytywania `.skops`, zapis bez utraty poprzedniego modelu, limit rozmiaru `.skops`, uwaga o `drop_first`, opisy osi w bieżącym języku |
 | `tests/test_charts.py` | nowe wykresy w kroku 3 (jointplot, gęstość 2D, lmplot, histogram według grup): nietypowe dane, pokazywany kod działa, test klikania |
+| `tests/test_sports_timesplit.py` | rozpoznawanie formatu danych sportowych (propozycje, kolumna z datą zostaje), podział czasowy (trening przed testem, te same dni razem, liczba/data, komunikaty błędów), pokazywany kod = aplikacja także przy podziale czasowym, Gradient Boosting (krzywa z jednego treningu, najlepsza wartość, uwaga „więcej rund”), GridSearchCV z `TimeSeriesSplit`, porównanie z prawdopodobieństwem (ocena, błąd standardowy, wiersze bez wartości), cały skrypt, test klikania z danymi sportowymi (kroki 1–10) |
 | `tests/test_i18n.py` | języki: każdy tekst ma tłumaczenie angielskie i polskie z tymi samymi symbolami zastępczymi, niemiecki bez zmian, CSV dla Excela zależnie od języka, wygenerowany kod liczy to samo w każdym języku, cała aplikacja po angielsku i po polsku bez niemieckich pozostałości |
 
 ## Uwagi
@@ -292,7 +337,7 @@ python tests/synthetic.py --rows 20000     # syntetyczny przykładowy CSV (bez p
 * Bardzo duże pliki CSV lepiej wczytywać przez „Ścieżka na tym komputerze” niż przesyłać.
 * W trakcie treningu niczego nie klikaj – każda zmiana uruchamia skrypt od nowa i przerywa trening.
 * scikit-learn liczy na CPU (GPU nie jest potrzebne). Random Forest, KNN i GridSearchCV używają wszystkich rdzeni
-  (`n_jobs=-1`); krok 1 pokazuje liczbę rdzeni CPU.
+  (`n_jobs=-1`), Gradient Boosting także (OpenMP); krok 1 pokazuje liczbę rdzeni CPU.
 * **Używaj tylko lokalnie.** Pole ścieżki odczytuje każdy plik, do którego zalogowany użytkownik ma dostęp, a
   `models/` jest wspólny dla wszystkich użytkowników aplikacji. Dlatego nie udostępniaj aplikacji w sieci bez
   logowania. Modele wczytuj tylko z zaufanych źródeł (ZIP po rozpakowaniu może mieć maksymalnie 2 GB; formuły w

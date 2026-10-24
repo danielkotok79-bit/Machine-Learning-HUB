@@ -83,4 +83,16 @@ T = {
     "Entscheidungsbaum – die obersten {d} Ebenen": (
         "Decision tree – the top {d} levels",
         "Drzewo decyzyjne – górne poziomy: {d}"),
+    "vorhergesagte Wahrscheinlichkeit (Mittel je Gruppe)": (
+        "predicted probability (mean per group)",
+        "przewidywane prawdopodobieństwo (średnia w grupie)"),
+    "tatsächlicher Anteil '{v}'": (
+        "actual share of '{v}'",
+        "rzeczywisty udział '{v}'"),
+    "Kalibrierung: vorhergesagt gegen tatsächlich": (
+        "Calibration: predicted vs. actual",
+        "Kalibracja: przewidywane a rzeczywiste"),
+    "perfekt kalibriert": (
+        "perfectly calibrated",
+        "idealna kalibracja"),
 }

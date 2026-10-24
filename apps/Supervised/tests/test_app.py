@@ -121,9 +121,10 @@ def test_full_workflow(data):
     ok(at, "Export in Ordner")
     assert list((data / "exports").glob("*_ml_daten.csv"))
 
-    # 6) trainieren (kurz) – Beispiel-Konfiguration: Random Forest, Platz 1 der Rangliste
+    # 6) trainieren (kurz) – Beispiel-Konfiguration: Random Forest, Platz 2 der Rangliste (Platz 1: Gradient Boosting)
     go(at, 5)
-    assert at.radio(key="w_model").options[0].startswith("1 · Decision Trees + Random Forests")
+    assert at.radio(key="w_model").options[0].startswith("1 · Gradient Boosting")
+    assert at.radio(key="w_model").options[1].startswith("2 · Decision Trees + Random Forests")
     assert at.session_state["w_model"] == "trees" and at.session_state["w_rf_depth"] == 12
     at.number_input(key="w_rf_trees").set_value(25).run()
     button(at, "Training starten").click().run()
@@ -206,6 +207,7 @@ def test_bool_label_semicolon_csv_and_overwrite_guard(tmp_path, monkeypatch):
 
     def train():
         go(at, 5)
+        at.radio(key="w_model").set_value("trees").run()  # Platz 2 – Platz 1 (Gradient Boosting) ist vorausgewählt
         at.number_input(key="w_rf_trees").set_value(10).run()
         button(at, "Training starten").click().run()
         ok(at, "Training")
@@ -316,6 +318,7 @@ def test_guards_from_second_audit(tmp_path, monkeypatch):
 
     # 5) Modell ohne Prüfsummen der Trainingszeilen speichern
     go(at, 5)
+    at.radio(key="w_model").set_value("trees").run()
     at.number_input(key="w_rf_trees").set_value(5).run()
     button(at, "Training starten").click().run()
     ok(at, "Training")

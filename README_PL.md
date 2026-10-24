@@ -18,7 +18,7 @@ nowych danych. Na każdym kroku aplikacje pokazują też odpowiedni kod w Python
 
 | Aplikacja | Rodzaj uczenia | Modele | Przykładowe dane |
 |---|---|---|---|
-| 📊 [**Uczenie nadzorowane**](apps/Supervised) | nadzorowane – klasyfikacja i regresja | drzewo decyzyjne + Random Forest, SVM, regresja logistyczna, KNN, regresja liniowa | LendingClub |
+| 📊 [**Uczenie nadzorowane**](apps/Supervised) | nadzorowane – klasyfikacja i regresja | Gradient Boosting, drzewo decyzyjne + Random Forest, SVM, regresja logistyczna, KNN, regresja liniowa; podział losowy albo czasowy, porównanie z Elo | LendingClub, NBA/tenis |
 | 🔵 [**Klastrowanie**](apps/Clustering) | nienadzorowane | K-Means (metoda łokcia, silhouette, profile klastrów, mapa PCA) | dane uczelni (College) |
 | 📝 [**NLP – klasyfikacja tekstu**](apps/NLP) | nadzorowane, tekst | Bag of Words / TF-IDF + Naive Bayes, regresja logistyczna, liniowy SVM | recenzje Yelp, SMS spam |
 | 🧠 [**Deep Learning**](apps/Deeplearning) | nadzorowane – klasyfikacja i regresja | Keras Sequential (Dense) na TensorFlow, EarlyStopping | LendingClub |
@@ -133,7 +133,7 @@ ich poprawienia i testy regresyjne, które je pokrywają.
 ├── materials/           dokumenty PDF (EN · PL · DE) dostępne w launcherze
 ├── docs/screenshots/
 └── apps/
-    ├── Supervised/      📊 scikit-learn – pięć modeli uczenia nadzorowanego
+    ├── Supervised/      📊 scikit-learn – sześć modeli uczenia nadzorowanego
     ├── Clustering/      🔵 K-Means
     ├── NLP/             📝 klasyfikacja tekstu
     └── Deeplearning/    🧠 Keras / TensorFlow

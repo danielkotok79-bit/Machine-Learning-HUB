@@ -278,19 +278,25 @@ APPS = {
         "name": {"en": "Supervised Learning", "pl": "Uczenie nadzorowane", "de": "Überwachtes Lernen"},
         "desc": {
             "en": "Tabular CSV data: preparation, visualisation, training and evaluation of supervised-learning "
-                  "models (Decision Tree + Random Forest, SVM, Logistic Regression, KNN, Linear Regression). "
-                  "Classification and regression. Languages: EN / PL / DE.",
+                  "models (Gradient Boosting, Decision Tree + Random Forest, SVM, Logistic Regression, KNN, Linear "
+                  "Regression). Classification and regression, random or time-based split, comparison with e.g. "
+                  "Elo. Languages: EN / PL / DE.",
             "pl": "Dane tabelaryczne CSV: przygotowanie, wizualizacja, trening i ewaluacja modeli uczenia "
-                  "nadzorowanego (Decision Tree + Random Forest, SVM, Regresja logistyczna, KNN, Regresja liniowa). "
-                  "Klasyfikacja i regresja. Języki: EN / PL / DE.",
+                  "nadzorowanego (Gradient Boosting, Decision Tree + Random Forest, SVM, Regresja logistyczna, KNN, "
+                  "Regresja liniowa). Klasyfikacja i regresja, podział losowy albo czasowy, porównanie np. z Elo. "
+                  "Języki: EN / PL / DE.",
             "de": "Tabellarische CSV-Daten: Aufbereitung, Visualisierung, Training und Evaluation von Modellen des "
-                  "überwachten Lernens (Decision Tree + Random Forest, SVM, Logistische Regression, KNN, Lineare "
-                  "Regression). Klassifikation und Regression. Sprachen: EN / PL / DE.",
+                  "überwachten Lernens (Gradient Boosting, Decision Tree + Random Forest, SVM, Logistische "
+                  "Regression, KNN, Lineare Regression). Klassifikation und Regression, Split zufällig oder zeitlich, "
+                  "Vergleich z. B. mit Elo. Sprachen: EN / PL / DE.",
         },
-        "models": "Decision Trees + Random Forests · SVM · Logistic Regression · KNN · Linear Regression",
+        "models": "Gradient Boosting · Decision Trees + Random Forests · SVM · Logistic Regression · KNN · "
+                  "Linear Regression",
         "keywords": ["nadzorowane", "supervised", "überwacht", "klasyfikacja", "classification", "klassifikation",
                      "regresja", "regression", "random forest", "drzewo", "tree", "baum", "svm", "knn",
-                     "logistyczna", "logistic", "logistische", "liniowa", "linear", "lineare", "scikit-learn", "rf"],
+                     "logistyczna", "logistic", "logistische", "liniowa", "linear", "lineare", "scikit-learn", "rf",
+                     "gradient boosting", "boosting", "histgradientboosting", "elo", "nba", "tenis", "tennis",
+                     "sport"],
         "packages": SKLEARN_STACK,
     },
     "clustering": {

@@ -153,4 +153,43 @@ T = {
     "7) Training vs. Validierung": (
         "7) Training vs. validation",
         "7) Trening a walidacja"),
+    "Güte der Wahrscheinlichkeiten – kleiner = besser": (
+        "quality of the probabilities – smaller = better",
+        "jakość prawdopodobieństw – mniej = lepiej"),
+    "Zeitspalte → Zeitpunkte": (
+        "time column → points in time",
+        "kolumna czasu → punkty w czasie"),
+    "Zeitspalte als Zahl (z. B. Jahr oder Saison)": (
+        "time column as a number (e.g. year or season)",
+        "kolumna czasu jako liczba (np. rok albo sezon)"),
+    "Zeilen ohne Zeitwert entfernen": (
+        "remove rows without a time value",
+        "usuń wiersze bez wartości czasu"),
+    "nach der Zeit sortieren – stabil: gleiche Zeit behält die ursprüngliche Reihenfolge": (
+        "sort by time – stable: equal times keep the original order",
+        "sortuj według czasu – stabilnie: ten sam czas zachowuje pierwotną kolejność"),
+    "Zeitpunkt der ersten Testzeile": (
+        "time of the first test row",
+        "czas pierwszego wiersza testowego"),
+    "Test = die jüngsten Zeilen, Training = alles davor (kein Blick in die Zukunft)": (
+        "test = the most recent rows, training = everything before (no look into the future)",
+        "test = najnowsze wiersze, trening = wszystko wcześniej (bez zaglądania w przyszłość)"),
+    "Validierung = der jüngste Teil der Trainingsdaten": (
+        "validation = the most recent part of the training data",
+        "walidacja = najnowsza część danych treningowych"),
+    "EIN Training – staged_predict liefert die Vorhersage nach jeder Runde": (
+        "ONE training run – staged_predict gives the prediction after every round",
+        "JEDEN trening – staged_predict zwraca prognozę po każdej rundzie"),
+    "HistGradientBoosting hat kein feature_importances_": (
+        "HistGradientBoosting has no feature_importances_",
+        "HistGradientBoosting nie ma feature_importances_"),
+    "nur Zeilen mit Wert": (
+        "only rows with a value",
+        "tylko wiersze z wartością"),
+    "zeitlicher Split: jeder Fold validiert auf späteren Zeilen": (
+        "time-based split: every fold validates on later rows",
+        "podział czasowy: każdy fold waliduje na późniejszych wierszach"),
+    "Vergleich: Wahrscheinlichkeit aus den Daten (z. B. Elo)": (
+        "comparison: probability from the data (e.g. Elo)",
+        "porównanie: prawdopodobieństwo z danych (np. Elo)"),
 }

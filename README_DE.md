@@ -19,7 +19,7 @@ zum Lernen.
 
 | App | Art des Lernens | Modelle | Beispieldaten |
 |---|---|---|---|
-| 📊 [**Überwachtes Lernen**](apps/Supervised) | überwacht – Klassifikation und Regression | Decision Tree + Random Forest, SVM, logistische Regression, KNN, lineare Regression | LendingClub |
+| 📊 [**Überwachtes Lernen**](apps/Supervised) | überwacht – Klassifikation und Regression | Gradient Boosting, Decision Tree + Random Forest, SVM, logistische Regression, KNN, lineare Regression; Split zufällig oder zeitlich, Vergleich mit Elo | LendingClub, NBA/Tennis |
 | 🔵 [**Clustering**](apps/Clustering) | unüberwacht | K-Means (Ellbogen, Silhouette, Cluster-Profile, PCA-Karte) | College-Daten |
 | 📝 [**NLP – Textklassifikation**](apps/NLP) | überwacht, Text | Bag of Words / TF-IDF + Naive Bayes, logistische Regression, lineare SVM | Yelp-Bewertungen, SMS-Spam |
 | 🧠 [**Deep Learning**](apps/Deeplearning) | überwacht – Klassifikation und Regression | Keras Sequential (Dense) mit TensorFlow, EarlyStopping | LendingClub |
@@ -135,7 +135,7 @@ Fehler, ihre Korrektur und die Regressionstests, die sie abdecken.
 ├── materials/           PDF-Dokumente (EN · PL · DE) im Launcher
 ├── docs/screenshots/
 └── apps/
-    ├── Supervised/      📊 scikit-learn – fünf Modelle des überwachten Lernens
+    ├── Supervised/      📊 scikit-learn – sechs Modelle des überwachten Lernens
     ├── Clustering/      🔵 K-Means
     ├── NLP/             📝 Textklassifikation
     └── Deeplearning/    🧠 Keras / TensorFlow

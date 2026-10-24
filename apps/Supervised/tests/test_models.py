@@ -1,5 +1,5 @@
 """
-Tests der Modelle (Schritt 6–9): die fünf Modelle der Rangliste für Klassifikation und Regression, Validierungskurve
+Tests der Modelle (Schritt 6–9): die sechs Modelle der Rangliste für Klassifikation und Regression, Validierungskurve
 und Einordnung (Schritt 7), Modell-Details (Schritt 8), Speichern/Laden als .skops oder .joblib (Schritt 9) und der
 angezeigte scikit-learn-Code – er rechnet dasselbe wie die App.
 
@@ -38,6 +38,9 @@ pytestmark = pytest.mark.filterwarnings(
     "ignore:The inplace keyword in DataFrame.reset_index is deprecated:DeprecationWarning:streamlit")
 
 CONFIGS = {  # Name → Einstellungen aus Schritt 6 (klein und schnell)
+    "gb": pl.ModelConfig(model=pl.MODEL_GB, gb_iter=40),
+    "gb_split": pl.ModelConfig(model=pl.MODEL_GB, gb_iter=30, gb_lr=0.2, gb_leaves=15, gb_depth=4, gb_leaf=10,
+                               class_weight=True, validation="split"),
     "forest": pl.ModelConfig(model=pl.MODEL_TREES, n_estimators=30),
     "tree": pl.ModelConfig(model=pl.MODEL_TREES, tree_variant=pl.TREE_SINGLE, max_depth=6),
     "svm": pl.ModelConfig(model=pl.MODEL_SVM),
@@ -75,19 +78,22 @@ def data():
 
 # --- Rangliste ------------------------------------------------------------------------------------------------------
 def test_ranking_order_and_descriptions():
-    assert pl.MODELS == [pl.MODEL_TREES, pl.MODEL_SVM, pl.MODEL_LOGREG, pl.MODEL_KNN, pl.MODEL_LINREG]
+    assert pl.MODELS == [pl.MODEL_GB, pl.MODEL_TREES, pl.MODEL_SVM, pl.MODEL_LOGREG, pl.MODEL_KNN, pl.MODEL_LINREG]
     i18n.set_lang("pl")
     try:
-        assert [pl.model_name(m) for m in pl.MODELS] == ["Decision Trees + Random Forests", "Support Vector Machines",
+        assert [pl.model_name(m) for m in pl.MODELS] == ["Gradient Boosting (HistGradientBoosting)",
+                                                         "Decision Trees + Random Forests", "Support Vector Machines",
                                                          "Logistic Regression", "K-Nearest Neighbors",
                                                          "Linear Regression"]
-        assert i18n.tx(pl.MODEL_WHY[pl.MODEL_TREES]).startswith("Najlepszy z tej listy.")
+        assert i18n.tx(pl.MODEL_WHY[pl.MODEL_GB]).startswith("Najlepszy z tej listy dla danych tabelarycznych.")
+        assert i18n.tx(pl.MODEL_WHY[pl.MODEL_TREES]).startswith("Bardzo solidny")
         assert i18n.tx(pl.MODEL_BEST[pl.MODEL_SVM]) == "Klasyfikacja kierunku (buy/sell)"
         assert i18n.tx(pl.MODEL_BEST[pl.MODEL_LINREG]) == "Tylko jako bardzo prosty punkt odniesienia"
     finally:
         i18n.set_lang("de")
     assert pl.MODEL_TASKS[pl.MODEL_LOGREG] == (pl.T_BIN, pl.T_MULTI)
     assert pl.MODEL_TASKS[pl.MODEL_LINREG] == (pl.T_REG,)
+    assert pl.MODEL_TASKS[pl.MODEL_GB] == (pl.T_BIN, pl.T_MULTI, pl.T_REG)
 
 
 # --- jedes Modell für jeden passenden Problemtyp -------------------------------------------------------------------
@@ -176,7 +182,7 @@ def test_svm_grid_search_like_the_course(data):
     assert len(hist_lin["grid"]["rows"]) == len(pl.GRID_C)  # linearer Kernel: nur C
 
 
-@pytest.mark.parametrize("name", ["svm", "logreg", "knn", "tree", "forest", "linreg"])
+@pytest.mark.parametrize("name", ["gb", "svm", "logreg", "knn", "tree", "forest", "linreg"])
 def test_curve_figures_have_readable_axes(data, name):
     """Browser-Test: bei C (logarithmische Achse) stand '$\\mathdefault{10^{-2}}$' unter der Achse – wegen
     text.parse_math=False (Audit 3). Jetzt Zahlen wie 0.01 … 100; alle Diagramme der Schritte 7 und 8 zeichnen."""
@@ -330,8 +336,9 @@ def test_models_of_the_deep_learning_version_are_not_offered(tmp_path):
 
 
 # --- angezeigter Code = App ------------------------------------------------------------------------------------------
-PARITY = [("forest", pl.T_BIN), ("tree", pl.T_MULTI), ("svm", pl.T_BIN), ("svm", pl.T_REG), ("logreg", pl.T_MULTI),
-          ("knn", pl.T_BIN), ("knn", pl.T_REG), ("linreg", pl.T_REG)]
+PARITY = [("gb", pl.T_BIN), ("gb", pl.T_REG), ("gb_split", pl.T_MULTI), ("forest", pl.T_BIN), ("tree", pl.T_MULTI),
+          ("svm", pl.T_BIN), ("svm", pl.T_REG), ("logreg", pl.T_MULTI), ("knn", pl.T_BIN), ("knn", pl.T_REG),
+          ("linreg", pl.T_REG)]
 
 
 def _parity_data(tmp_path, task):
@@ -373,7 +380,7 @@ def test_model_and_curve_code_compute_the_same_as_the_app(tmp_path, name, task):
 
 def test_eval_and_save_code_run(tmp_path):
     prep, ns = _parity_data(tmp_path, pl.T_BIN)
-    for name in ("forest", "svm", "logreg"):
+    for name in ("gb", "forest", "svm", "logreg"):
         cfg = CONFIGS[name]
         exec(cg.model_code(cfg, pl.T_BIN), ns)  # noqa: S102
         exec(cg.eval_code(pl.T_BIN, 0.4, False, cfg), ns)  # noqa: S102

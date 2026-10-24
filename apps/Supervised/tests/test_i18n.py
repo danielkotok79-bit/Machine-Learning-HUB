@@ -243,11 +243,13 @@ def test_app_runs_in_english_and_polish(tmp_path, monkeypatch, ui_lang):
     head = at.session_state["_export"][1][:2000].decode("utf-8-sig").splitlines()[0]
     assert head.count(";" if ui_lang == "pl" else ",") > 5  # Excel: pl Semikolon · en Komma
 
-    for model in ("knn", "svm", "logreg", "trees"):  # jedes Modell für Klassen einmal: Schritt 6, 7 und 8
+    for model in ("knn", "svm", "logreg", "gb", "trees"):  # jedes Modell für Klassen einmal: Schritt 6, 7 und 8
         go(5)
         at.radio(key="w_model").set_value(model).run()
         if model == "trees":
             at.number_input(key="w_rf_trees").set_value(10).run()
+        if model == "gb":
+            at.number_input(key="w_gb_iter").set_value(20).run()
         button(at, t("Training starten")).click().run()
         ok(f"Training {model}")
         go(6)

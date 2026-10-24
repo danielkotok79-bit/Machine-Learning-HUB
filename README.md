@@ -18,7 +18,7 @@ new data. Every step also shows the matching Python code, so the apps work as a 
 
 | App | Type of learning | Models | Example data |
 |---|---|---|---|
-| 📊 [**Supervised Learning**](apps/Supervised) | supervised – classification and regression | Decision Tree + Random Forest, SVM, Logistic Regression, KNN, Linear Regression | LendingClub |
+| 📊 [**Supervised Learning**](apps/Supervised) | supervised – classification and regression | Gradient Boosting, Decision Tree + Random Forest, SVM, Logistic Regression, KNN, Linear Regression; random or time-based split, comparison with Elo | LendingClub, NBA/tennis |
 | 🔵 [**Clustering**](apps/Clustering) | unsupervised | K-Means (elbow, silhouette, cluster profiles, PCA map) | College data |
 | 📝 [**NLP – text classification**](apps/NLP) | supervised, text | Bag of Words / TF-IDF + Naive Bayes, Logistic Regression, Linear SVM | Yelp reviews, SMS spam |
 | 🧠 [**Deep Learning**](apps/Deeplearning) | supervised – classification and regression | Keras Sequential (Dense) on TensorFlow, EarlyStopping | LendingClub |
@@ -133,7 +133,7 @@ they were fixed and the regression tests that cover them.
 ├── materials/           PDF documents (EN · PL · DE) offered in the launcher
 ├── docs/screenshots/
 └── apps/
-    ├── Supervised/      📊 scikit-learn – five supervised models
+    ├── Supervised/      📊 scikit-learn – six supervised models
     ├── Clustering/      🔵 K-Means
     ├── NLP/             📝 text classification
     └── Deeplearning/    🧠 Keras / TensorFlow

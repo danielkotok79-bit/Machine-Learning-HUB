@@ -12,16 +12,17 @@ Modul lässt sich genauso im Jupyter Notebook verwenden:
 Schritte
     1) Bibliotheken ............ Import-Block direkt unten
     2) Aufbereitung 1 .......... suggest_action(), apply_column_actions(), apply_new_columns()
-    4) Aufbereitung 2 .......... suggest_missing(), prepare_ml_data()
+    4) Aufbereitung 2 .......... suggest_missing(), prepare_ml_data()  (Split zufällig oder zeitlich)
     5) Daten speichern ......... ml_ready_frame(), to_csv_bytes()
     6) Modell & Training ....... MODELS, ModelConfig, make_model(), train_model()
     7) Training vs. Validierung  validation_curve(), grid_search(), curve_assessment()
-    8) Evaluation .............. predict_scores(), evaluate(), permutation_importance(), model_details()
+    8) Evaluation .............. predict_scores(), evaluate(), compare_probabilities(), permutation_importance(),
+                                 model_details()
     9) Speichern & Laden ....... save_bundle(), load_bundle()  (model.skops oder model.joblib)
    10) Neue Daten .............. predict_new(), assess_prediction()
 
-Modelle (Reihenfolge = Rangliste): 1 Decision Trees + Random Forests · 2 Support Vector Machines ·
-3 Logistische Regression · 4 K-Nearest Neighbors · 5 Lineare Regression
+Modelle (Reihenfolge = Rangliste): 1 Gradient Boosting (HistGradientBoosting) · 2 Decision Trees + Random Forests ·
+3 Support Vector Machines · 4 Logistische Regression · 5 K-Nearest Neighbors · 6 Lineare Regression
 
 Kernidee für Schritt 10: Alles, was in Schritt 2 und 4 aus den Trainingsdaten
 gelernt wird (Füllwerte, Kategorien bzw. Dummy-Spalten, Skalierung,
@@ -40,10 +41,11 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt  # noqa: F401
 import seaborn as sns
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split, GridSearchCV, TimeSeriesSplit
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 from sklearn.svm import SVC, SVR
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.linear_model import LogisticRegression, LinearRegression
@@ -66,8 +68,10 @@ import joblib
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.metrics import (
     accuracy_score,
+    brier_score_loss,
     explained_variance_score,
     f1_score,
+    log_loss,
     mean_absolute_error,
     mean_squared_error,
     r2_score,
@@ -343,13 +347,16 @@ SETTING_TYPES = {
     "w_svm_c": (float, 1e-4, 1e6), "w_svm_eps": (float, 0.0, 1e6), "w_log_c": (float, 1e-4, 1e6),
     "w_split_seed": (int, 0, 1_000_000), "w_seed": (int, 0, 1_000_000),
     "w_rf_trees": (int, 1, 5000), "w_rf_depth": (int, 0, 1000), "w_rf_leaf": (int, 1, 100_000),
+    "w_gb_iter": (int, 1, 5000), "w_gb_lr": (float, 0.001, 1.0), "w_gb_leaves": (int, 2, 1000),
+    "w_gb_depth": (int, 0, 1000), "w_gb_leaf": (int, 1, 100_000),
     "w_svm_cv": (int, 2, 10), "w_log_iter": (int, 10, 100_000), "w_knn_k": (int, 1, 1000), "w_knn_p": (int, 1, 2),
     "w_stratify": (bool, None, None), "w_drop_first": (bool, None, None), "w_scale_y": (bool, None, None),
     "w_cw": (bool, None, None), "w_curve": (bool, None, None), "w_svm_grid": (bool, None, None),
     "w_lin_intercept": (bool, None, None),
     "w_viz_cols": (list, None, None), "w_features": (list, None, None),
     **{k: (str, None, None) for k in ("w_label", "w_task", "w_pos", "w_scaler", "w_val", "w_model", "w_rf_variant",
-                                      "w_rf_features", "w_svm_kernel", "w_svm_gamma", "w_knn_weights")},
+                                      "w_rf_features", "w_svm_kernel", "w_svm_gamma", "w_knn_weights",
+                                      "w_split_mode", "w_time_col", "w_base_col")},
 }
 
 
@@ -585,12 +592,16 @@ def suggest_action(s: pd.Series, name: str = "") -> tuple[str, str]:
 
 
 def column_profile(df: pd.DataFrame, info: dict | None = None) -> pd.DataFrame:
-    """Tabelle für Schritt 2: Typ, Eindeutige, Fehlend %, Beispiel + vorgeschlagene Aktion."""
+    """Tabelle für Schritt 2: Typ, Eindeutige, Fehlend %, Beispiel + vorgeschlagene Aktion.
+    Datensatz des Sportdaten-Tools (match_data_layout): die Datumsspalte bleibt unverändert – Schritt 4 braucht sie
+    für den zeitlichen Split (aus 'Datum → Jahr' würde nur das Jahr)."""
     rows = []
+    layout = match_data_layout(df.columns)
+    keep = {layout["time"]} if layout and layout["time"] else set()
     for c in df.columns:
         s = df[c]
         nn = s.dropna()
-        act, param = suggest_action(s, c)
+        act, param = (A_KEEP, "") if c in keep else suggest_action(s, c)
         example = _fmt_value(nn.iloc[0]) if len(nn) else ""
         example = example.replace("\n", " ⏎ ")[:40]
         row = {
@@ -1069,6 +1080,90 @@ def apply_new_columns(df: pd.DataFrame, specs: list[dict] | None, fit: bool = Tr
 # ---------------------------------------------------------------------------
 # 4) Datenaufbereitung 2 – fehlende Werte, Label, Features, Split, Skalierung
 # ---------------------------------------------------------------------------
+SPLIT_RANDOM, SPLIT_TIME = "random", "time"
+SPLIT_MODES = {SPLIT_RANDOM: N_("zufällig (train_test_split)"),
+               SPLIT_TIME: N_("zeitlich – Test = die jüngsten Zeilen")}
+TIME_NAMES = ("date", "datum", "match_date_est", "tourney_date", "game_date", "season", "saison", "year", "jahr")
+
+
+def suggest_time_column(columns) -> str | None:
+    """Spalte, nach der ein zeitlicher Split naheliegt (date, season, year …) – sonst None."""
+    names = {str(c).lower(): c for c in columns}
+    for n in TIME_NAMES:
+        if n in names:
+            return names[n]
+    return next((c for c in columns if re.search(r"date|datum|time|zeit", str(c), re.I)), None)
+
+
+def time_key(s: pd.Series) -> tuple[pd.Series, str, str | None]:
+    """Zeitspalte → sortierbare Werte: Zahl (Jahr, Saison, 20141013) oder Datum (Format wird erkannt).
+    Rückgabe: (Werte, Art 'number' oder 'date', Datumsformat oder None)."""
+    if is_numeric(s) and not pd.api.types.is_bool_dtype(s):
+        return s.astype("float64").replace([np.inf, -np.inf], np.nan), "number", None
+    fmt = guess_date_format(s) if not pd.api.types.is_bool_dtype(s) else ""
+    if not fmt:
+        raise ValueError(tx("Zeitspalte '{col}': weder eine Zahl (z. B. Jahr, Saison) noch ein erkennbares Datum "
+                            "(z. B. 2024-01-31).", col=s.name))
+    return _parse_dates(s, fmt), "date", fmt
+
+
+def time_text(v) -> str:
+    """Zeitwert lesbar: Datum als 2024-01-31 (mit Uhrzeit nur, wenn es eine gibt), Zahl ohne '.0'."""
+    if isinstance(v, (np.datetime64, pd.Timestamp)):
+        ts = pd.Timestamp(v)
+        return ts.strftime("%Y-%m-%d" if ts == ts.normalize() else "%Y-%m-%d %H:%M")
+    return _fmt_value(v)
+
+
+def time_split(values: np.ndarray, test_size: float) -> tuple[np.ndarray, np.ndarray]:
+    """Zeitlicher Split: Test = die jüngsten ceil(test_size · n) Zeilen. Zeilen mit demselben Zeitwert wie die erste
+    Testzeile kommen alle in den Test – das Training liegt damit vollständig vor dem Test (kein Blick in die Zukunft).
+    Rückgabe: Positionen (Training, Test), jeweils nach der Zeit sortiert (gleiche Zeit: ursprüngliche Reihenfolge)."""
+    n = len(values)
+    n_test = int(np.ceil(test_size * n))
+    order = np.argsort(values, kind="stable")
+    ordered = values[order]
+    first = ordered[n - n_test]
+    pos_tr, pos_te = order[ordered < first], order[ordered >= first]
+    if not len(pos_tr):
+        raise ValueError(tx("Zeitlicher Split nicht möglich: Die jüngsten Zeilen haben alle denselben Zeitwert wie die "
+                            "ältesten – die Spalte trennt keine Zeiträume (andere Zeitspalte oder kleineres test_size)."))
+    return pos_tr, pos_te
+
+
+def match_data_layout(columns) -> dict | None:
+    """Datensatz im Format des Sportdaten-Tools (Spalten pre_*, lineup_*, inplay_*, post_*)? Dann Vorschläge für
+    Schritt 4: als Features nur Werte, die vor dem Spiel bekannt sind; post_* (nach dem Spiel) und inplay_* (während
+    des Spiels) wären ein Datenleck. Rückgabe: {"features", "leaky", "label", "time", "baseline"} oder None."""
+    cols = [str(c) for c in columns]
+    pre = [c for c in cols if c.startswith(("pre_", "lineup_"))]
+    leaky = [c for c in cols if c.startswith(("post_", "inplay_"))]
+    if not pre or not leaky:
+        return None
+
+    def pick(names):
+        return next((n for n in names if n in cols), None)
+
+    return {"features": pre, "leaky": leaky, "label": pick(("home_win", "p1_win")),
+            "time": pick(("date", "match_date_est", "tourney_date", "season", "year")),
+            "baseline": next((c for c in pre if "elo_prob" in c), None)}
+
+
+def probability_columns(df: pd.DataFrame, exclude=()) -> list[str]:
+    """Zahlenspalten mit Werten zwischen 0 und 1 und mehr als zwei verschiedenen Werten (keine 0/1-Flags) – mögliche
+    Vergleichs-Wahrscheinlichkeiten für Schritt 8, z. B. die Siegchance nach Elo."""
+    out = []
+    for c in df.columns:
+        s = df[c]
+        if c in exclude or not is_numeric(s) or pd.api.types.is_bool_dtype(s):
+            continue
+        v = s.to_numpy(dtype="float64")
+        v = v[np.isfinite(v)]
+        if len(v) and v.min() >= 0 and v.max() <= 1 and len(np.unique(v[:5000])) > 2:
+            out.append(c)
+    return out
+
+
 def _n_label_values(nn: pd.Series) -> int:
     """Anzahl verschiedener Label-Werte – Text ohne Leerzeichen am Rand ('yes ' = 'yes', wie bei der Kodierung)."""
     return int(_cat(nn).nunique()) if not is_numeric(nn) else int(nn.nunique())
@@ -1275,6 +1370,7 @@ class PrepResult:
     warnings: list = field(default_factory=list)
     y_train_fit: np.ndarray | None = None  # skaliertes Label (nur Regression mit Label-Skalierung)
     y_test_fit: np.ndarray | None = None
+    base_test: np.ndarray | None = None  # Vergleichs-Wahrscheinlichkeit aus den Daten (z. B. Elo) je Testzeile
 
     def fit_targets(self):
         """Label so, wie das Modell es beim Training sieht (ggf. skaliert)."""
@@ -1300,14 +1396,29 @@ def prepare_ml_data(
     meta: dict | None = None,
     scale_label: bool = False,
     new_columns: list | None = None,
+    split_mode: str = SPLIT_RANDOM,
+    time_column: str | None = None,
+    baseline_column: str | None = None,
 ) -> PrepResult:
-    """4) Label kodieren → train_test_split → Füllwerte, Kategorien/Dummies, Skalierung.
+    """4) Label kodieren → Split (zufällig wie train_test_split oder zeitlich: Test = die jüngsten Zeilen) →
+    Füllwerte, Kategorien/Dummies, Skalierung.
 
     Alles, was aus Daten gelernt wird (Füllwerte, Kategorien, Scaler), stammt nur aus den Trainingszeilen;
     die Testzeilen laufen durch dasselbe Rezept wie später neue Daten (transform_features).
+    baseline_column (nur binär): Spalte mit einer Wahrscheinlichkeit für die positive Klasse aus den Daten (z. B. die
+    Siegchance nach Elo) – Schritt 8 vergleicht das Modell damit auf denselben Testzeilen.
     """
     if label not in df.columns:
         raise ValueError(tx("Label '{label}' ist nicht in den Daten.", label=label))
+    if split_mode not in SPLIT_MODES:
+        raise ValueError(tx("Unbekannte Art des Splits: {v}", v=split_mode))
+    if split_mode == SPLIT_TIME:
+        if not time_column or time_column not in df.columns:
+            raise ValueError(tx("Zeitlicher Split: bitte eine Zeitspalte wählen (z. B. date oder season)."))
+        if time_column == label:
+            raise ValueError(tx("Die Zeitspalte darf nicht das Label sein."))
+    if baseline_column is not None and baseline_column not in df.columns:
+        raise ValueError(tx("Vergleichsspalte '{col}' ist nicht in den Daten.", col=baseline_column))
     features = [f for f in dict.fromkeys(features) if f != label]
     unknown = [f for f in features if f not in df.columns]
     if unknown:
@@ -1372,6 +1483,17 @@ def prepare_ml_data(
                       v=n1 - len(d), dropna_cols=dropna_cols))
     if len(d) < 20:
         raise ValueError(tx("Nur noch {n} Zeilen übrig – zu wenig für Training und Test.", n=len(d)))
+    tkey = time_kind = time_fmt = None
+    time_removed = 0
+    if split_mode == SPLIT_TIME:  # Zeitwerte der verbleibenden Zeilen; Zeilen ohne Zeitwert lassen sich nicht einordnen
+        tkey, time_kind, time_fmt = time_key(df.loc[d.index, time_column])
+        known = tkey.notna().to_numpy()
+        time_removed = int((~known).sum())
+        if time_removed:
+            d, tkey = d[known], tkey[known]
+            log.append(tx("{n} Zeilen ohne Wert in der Zeitspalte '{col}' entfernt", n=time_removed, col=time_column))
+            if len(d) < 20:
+                raise ValueError(tx("Nur noch {n} Zeilen übrig – zu wenig für Training und Test.", n=len(d)))
 
     numeric = [c for c in features if is_numeric(d[c])]
     categorical = [c for c in features if c not in numeric]
@@ -1394,23 +1516,43 @@ def prepare_ml_data(
         counts = np.bincount(y.astype(int), minlength=len(classes))
         log.append(tx("Klassen: ") + ", ".join(f"{cl} → {i} ({n})" for i, (cl, n) in enumerate(zip(classes, counts))))
 
-    # d) train_test_split ZUERST – Füllwerte, Kategorien und Scaler werden danach nur aus den
+    # d) Split ZUERST – Füllwerte, Kategorien und Scaler werden danach nur aus den
     #    Trainingszeilen gelernt; die Testzeilen werden damit nur transformiert (wie später neue Daten).
     strat_y = None
-    if task != T_REG and stratify:
-        k = len(classes)
-        n_test = int(np.ceil(test_size * len(y)))
-        if np.bincount(y.astype(int)).min() < 2:
-            warn.append(tx("Stratify nicht möglich (eine Klasse hat < 2 Zeilen) – Split ohne stratify."))
-        elif n_test < k or len(y) - n_test < k:
-            warn.append(tx("Stratify nicht möglich: Testmenge ({n_test} Zeilen) kleiner als Anzahl Klassen ({k}) – "
-                           "Split ohne stratify. Tipp: test_size erhöhen.",
-                           n_test=n_test, k=k))
-        else:
-            strat_y = y
-    # gleiche Aufteilung wie train_test_split(X, y, …): sie hängt nur von Zeilenzahl, Seed und y ab
-    pos_tr, pos_te = train_test_split(np.arange(len(d)), test_size=test_size, random_state=random_state,
-                                      stratify=strat_y)
+    split_info = {}
+    if split_mode == SPLIT_TIME:
+        # Test = die jüngsten Zeilen, Training = alles davor – wie später im Einsatz: Das Modell kennt nur die
+        # Vergangenheit. Ein zufälliger Split würde Spiele/Kurse aus der Zukunft ins Training mischen.
+        values = tkey.to_numpy()
+        pos_tr, pos_te = time_split(values, test_size)
+        t_tr, t_te = values[pos_tr], values[pos_te]
+        split_info = {"time_column": time_column, "time_kind": time_kind, "time_format": time_fmt,
+                      "time_removed": time_removed, "train_from": time_text(t_tr[0]), "train_until": time_text(t_tr[-1]),
+                      "test_from": time_text(t_te[0]), "test_until": time_text(t_te[-1]),
+                      "test_share": float(len(pos_te) / len(values))}
+        log.append(tx("Zeitlicher Split nach '{col}': Training {n} Zeilen ({a} … {b}), Test {n2} Zeilen ({c} … {d}) – "
+                      "das Modell lernt nur aus der Vergangenheit",
+                      col=time_column, n=_n(len(pos_tr)), a=split_info["train_from"], b=split_info["train_until"],
+                      n2=_n(len(pos_te)), c=split_info["test_from"], d=split_info["test_until"]))
+        if abs(split_info["test_share"] - test_size) > 0.05:
+            warn.append(tx("Testanteil {pct} statt {pct2}: Zeilen mit demselben Zeitwert ('{col}') bleiben zusammen – "
+                           "eine Saison oder ein Tag wird nicht zwischen Training und Test geteilt.",
+                           pct=_pct(split_info["test_share"]), pct2=_pct(test_size), col=time_column))
+    else:
+        if task != T_REG and stratify:
+            k = len(classes)
+            n_test = int(np.ceil(test_size * len(y)))
+            if np.bincount(y.astype(int)).min() < 2:
+                warn.append(tx("Stratify nicht möglich (eine Klasse hat < 2 Zeilen) – Split ohne stratify."))
+            elif n_test < k or len(y) - n_test < k:
+                warn.append(tx("Stratify nicht möglich: Testmenge ({n_test} Zeilen) kleiner als Anzahl Klassen ({k}) – "
+                               "Split ohne stratify. Tipp: test_size erhöhen.",
+                               n_test=n_test, k=k))
+            else:
+                strat_y = y
+        # gleiche Aufteilung wie train_test_split(X, y, …): sie hängt nur von Zeilenzahl, Seed und y ab
+        pos_tr, pos_te = train_test_split(np.arange(len(d)), test_size=test_size, random_state=random_state,
+                                          stratify=strat_y)
     d_tr = d.iloc[pos_tr]
     log.append(tx("Split zuerst: Füllwerte, Kategorien und Scaler nur aus den {n} Trainingszeilen gelernt – die "
                   "{n2} Testzeilen werden damit nur umgewandelt (kein Datenleck)",
@@ -1524,8 +1666,9 @@ def prepare_ml_data(
         "fills": fills,
         "fallback_fill": fallback,
         "drop_first": bool(drop_first),
-        "split": {"test_size": float(test_size), "random_state": int(random_state), "stratify": bool(stratify),
-                  "stratify_used": strat_y is not None},
+        "split": {"mode": split_mode, "test_size": float(test_size), "random_state": int(random_state),
+                  "stratify": bool(stratify) and split_mode == SPLIT_RANDOM, "stratify_used": strat_y is not None,
+                  **split_info},
         "threshold": 0.5,
         "label_scaler": None,
         "train_fingerprints": sorted(int(h) for h in np.unique(fingerprints)),
@@ -1556,6 +1699,26 @@ def prepare_ml_data(
     y_tr, y_te = y[pos_tr], y[pos_te]
     index = d.index.to_numpy()
     i_tr, i_te = index[pos_tr], index[pos_te]
+
+    # Vergleichs-Wahrscheinlichkeit aus den Daten (z. B. Elo) – nur gelesen, nie gelernt; gilt für die positive Klasse
+    base_te = None
+    recipe["baseline_column"] = None
+    if baseline_column is not None:
+        if task != T_BIN:
+            warn.append(tx("Vergleichsspalte '{col}' wird ignoriert – den Vergleich gibt es nur bei binären Labels.",
+                           col=baseline_column))
+        else:
+            b = df.loc[i_te, baseline_column]
+            b = (b if is_numeric(b) else parse_numbers(b)).to_numpy(dtype="float64")
+            ok = b[np.isfinite(b)]
+            if not len(ok) or ok.min() < 0 or ok.max() > 1:
+                raise ValueError(tx("Vergleichsspalte '{col}' muss Wahrscheinlichkeiten zwischen 0 und 1 enthalten.",
+                                    col=baseline_column))
+            base_te = b
+            recipe["baseline_column"] = baseline_column
+            if len(ok) < len(b):
+                log.append(tx("Vergleichsspalte '{col}': {n} Testzeilen ohne Wert – der Vergleich nutzt nur Zeilen mit "
+                              "Wert", col=baseline_column, n=_n(len(b) - len(ok))))
 
     # i) Datenleck-Check (Trainingszeilen): Feature korreliert fast perfekt mit dem Label?
     if task in (T_BIN, T_REG) and np.std(y_tr) > 0:
@@ -1614,15 +1777,17 @@ def prepare_ml_data(
         warnings=warn,
         y_train_fit=y_tr_fit,
         y_test_fit=y_te_fit,
+        base_test=base_te,
     )
 
 
 # ---------------------------------------------------------------------------
 # 6) Modell & Training – Supervised Learning mit scikit-learn
 # ---------------------------------------------------------------------------
-MODEL_TREES, MODEL_SVM, MODEL_LOGREG, MODEL_KNN, MODEL_LINREG = "trees", "svm", "logreg", "knn", "linreg"
-MODELS = [MODEL_TREES, MODEL_SVM, MODEL_LOGREG, MODEL_KNN, MODEL_LINREG]  # Reihenfolge = Rangliste (Platz 1 … 5)
+MODEL_GB, MODEL_TREES, MODEL_SVM, MODEL_LOGREG, MODEL_KNN, MODEL_LINREG = "gb", "trees", "svm", "logreg", "knn", "linreg"
+MODELS = [MODEL_GB, MODEL_TREES, MODEL_SVM, MODEL_LOGREG, MODEL_KNN, MODEL_LINREG]  # Reihenfolge = Rangliste (Platz 1 … 6)
 MODEL_NAMES = {
+    MODEL_GB: N_("Gradient Boosting (HistGradientBoosting)"),
     MODEL_TREES: N_("Decision Trees + Random Forests"),
     MODEL_SVM: N_("Support Vector Machines"),
     MODEL_LOGREG: N_("Logistische Regression"),
@@ -1630,8 +1795,11 @@ MODEL_NAMES = {
     MODEL_LINREG: N_("Lineare Regression"),
 }
 MODEL_WHY = {  # Rangliste – Spalte „Warum?“
-    MODEL_TREES: N_("Der beste dieser Liste. Kommt mit Nichtlinearitäten, Wechselwirkungen zwischen Features und "
-                    "Rauschen zurecht. Random Forest begrenzt das Overfitting eines einzelnen Baums stark."),
+    MODEL_GB: N_("Der beste dieser Liste für Tabellen. Baut Bäume nacheinander – jeder korrigiert die Fehler der "
+                 "vorigen. Meist genauer als Random Forest und auch bei vielen Zeilen schnell; braucht aber eine "
+                 "passende Anzahl Runden (max_iter), sonst lernt er Rauschen mit – Schritt 7 zeigt die beste."),
+    MODEL_TREES: N_("Sehr robust und kaum zu verderben. Kommt mit Nichtlinearitäten, Wechselwirkungen zwischen Features "
+                    "und Rauschen zurecht. Random Forest begrenzt das Overfitting eines einzelnen Baums stark."),
     MODEL_SVM: N_("Gut, besonders mit RBF-Kernel. Trennt Klassen gut, ist aber empfindlich gegenüber der Skalierung "
                   "der Daten und der Wahl der Hyperparameter."),
     MODEL_LOGREG: N_("Solide Baseline. Schnell, interpretierbar, stabil. Verliert bei komplexen Zusammenhängen oft "
@@ -1642,14 +1810,17 @@ MODEL_WHY = {  # Rangliste – Spalte „Warum?“
                      "stark nichtlinear und verrauscht."),
 }
 MODEL_BEST = {  # Rangliste – Spalte „Am besten für“
+    MODEL_GB: N_("Erste Wahl für Tabellen: Richtung, Sieg/Niederlage (Klassifikation) und Zahlen (Regression)"),
     MODEL_TREES: N_("Vorhersage der Richtung (Klassifikation) und der Renditen"),
     MODEL_SVM: N_("Klassifikation der Richtung (buy/sell)"),
     MODEL_LOGREG: N_("Einfache Klassifikation der Richtung"),
     MODEL_KNN: N_("Eher Experimente / Baseline"),
     MODEL_LINREG: N_("Nur als sehr einfacher Referenzpunkt"),
 }
-MODEL_TASKS = {MODEL_TREES: (T_BIN, T_MULTI, T_REG), MODEL_SVM: (T_BIN, T_MULTI, T_REG),
-               MODEL_LOGREG: (T_BIN, T_MULTI), MODEL_KNN: (T_BIN, T_MULTI, T_REG), MODEL_LINREG: (T_REG,)}
+MODEL_TASKS = {MODEL_GB: (T_BIN, T_MULTI, T_REG), MODEL_TREES: (T_BIN, T_MULTI, T_REG),
+               MODEL_SVM: (T_BIN, T_MULTI, T_REG), MODEL_LOGREG: (T_BIN, T_MULTI), MODEL_KNN: (T_BIN, T_MULTI, T_REG),
+               MODEL_LINREG: (T_REG,)}
+GB_DEFAULTS = {"gb_iter": 100, "gb_lr": 0.1, "gb_leaves": 31, "gb_depth": 0, "gb_leaf": 20}  # wie in scikit-learn
 TREE_FOREST, TREE_SINGLE = "forest", "tree"
 TREE_VARIANTS = {TREE_FOREST: N_("Random Forest (viele Bäume)"), TREE_SINGLE: N_("Decision Tree (ein Baum)")}
 MAX_FEATURES = ["sqrt", "log2", "1.0"]  # Random Forest: Features je Split – 1.0 = alle
@@ -1666,27 +1837,33 @@ MAX_TREES = 5000
 @dataclass
 class ModelConfig:
     model: str = MODEL_TREES
-    # 1 · Decision Trees + Random Forests
+    # 1 · Gradient Boosting (HistGradientBoosting) – Standardwerte wie in scikit-learn, ohne early_stopping
+    gb_iter: int = GB_DEFAULTS["gb_iter"]  # max_iter: Anzahl Boosting-Runden (Bäume nacheinander)
+    gb_lr: float = GB_DEFAULTS["gb_lr"]  # learning_rate: wie stark jeder Baum korrigiert
+    gb_leaves: int = GB_DEFAULTS["gb_leaves"]  # max_leaf_nodes: Größe jedes Baums
+    gb_depth: int = GB_DEFAULTS["gb_depth"]  # max_depth – 0 = unbegrenzt (None)
+    gb_leaf: int = GB_DEFAULTS["gb_leaf"]  # min_samples_leaf
+    # 2 · Decision Trees + Random Forests
     tree_variant: str = TREE_FOREST
     n_estimators: int = 100
     max_depth: int = 0  # 0 = unbegrenzt (None)
     min_samples_leaf: int = 1
     max_features: str = "sqrt"
-    # 2 · Support Vector Machines
+    # 3 · Support Vector Machines
     kernel: str = "rbf"
     svm_c: float = 1.0
     gamma: str = "scale"
     epsilon: float = 0.1  # nur SVR (Regression)
     grid_search: bool = False
     cv: int = 5
-    # 3 · Logistische Regression
+    # 4 · Logistische Regression
     logreg_c: float = 1.0
     max_iter: int = 1000
-    # 4 · K-Nearest Neighbors
+    # 5 · K-Nearest Neighbors
     n_neighbors: int = 5
     weights: str = "uniform"
     p: int = 2  # 2 = euklidisch, 1 = Manhattan
-    # 5 · Lineare Regression
+    # 6 · Lineare Regression
     fit_intercept: bool = True
     # allgemein
     class_weight: bool = False
@@ -1702,8 +1879,8 @@ def model_name(key: str) -> str:
 
 
 def supports_class_weight(cfg: ModelConfig, task: str) -> bool:
-    """class_weight='balanced' gibt es für Bäume, SVM und Logistische Regression (nicht für KNN)."""
-    return task != T_REG and cfg.model in (MODEL_TREES, MODEL_SVM, MODEL_LOGREG)
+    """class_weight='balanced' gibt es für Boosting, Bäume, SVM und Logistische Regression (nicht für KNN)."""
+    return task != T_REG and cfg.model in (MODEL_GB, MODEL_TREES, MODEL_SVM, MODEL_LOGREG)
 
 
 def model_problem(cfg: ModelConfig, task: str) -> str | None:
@@ -1714,10 +1891,10 @@ def model_problem(cfg: ModelConfig, task: str) -> str | None:
         return None
     if cfg.model == MODEL_LOGREG:
         return tx("Logistische Regression sagt Klassen vorher. Für eine Zahl als Label (Regression) z. B. "
-                  "Random Forest (Platz 1) oder Lineare Regression (Platz 5) wählen – oder in Schritt 4 den "
+                  "Gradient Boosting (Platz 1) oder Lineare Regression (Platz 6) wählen – oder in Schritt 4 den "
                   "Problemtyp ändern.")
-    return tx("Lineare Regression sagt eine Zahl vorher. Für Klassen z. B. Random Forest (Platz 1) oder "
-              "Logistische Regression (Platz 3) wählen – oder in Schritt 4 den Problemtyp Regression wählen.")
+    return tx("Lineare Regression sagt eine Zahl vorher. Für Klassen z. B. Gradient Boosting (Platz 1) oder "
+              "Logistische Regression (Platz 4) wählen – oder in Schritt 4 den Problemtyp Regression wählen.")
 
 
 def _depth(v) -> int | None:
@@ -1765,6 +1942,15 @@ def make_model(cfg: ModelConfig, task: str, probability: bool = True, calib_cv: 
     clf = task != T_REG
     seed = int(cfg.seed)
     cw = "balanced" if cfg.class_weight and supports_class_weight(cfg, task) else None
+    if cfg.model == MODEL_GB:
+        # early_stopping=False: genau max_iter Runden – die passende Zahl zeigt die Validierungskurve in Schritt 7
+        # (scikit-learn würde sonst ab 10 000 Zeilen selbst zufällig 10 % der Trainingsdaten zur Validierung abzweigen)
+        kw = dict(max_iter=min(max(int(cfg.gb_iter), 1), MAX_TREES), learning_rate=float(cfg.gb_lr),
+                  max_leaf_nodes=max(int(cfg.gb_leaves), 2), max_depth=_depth(cfg.gb_depth),
+                  min_samples_leaf=max(int(cfg.gb_leaf), 1), early_stopping=False, random_state=seed)
+        if clf:
+            kw["class_weight"] = cw
+        return (HistGradientBoostingClassifier if clf else HistGradientBoostingRegressor)(**kw)
     if cfg.model == MODEL_TREES:
         kw = dict(max_depth=_depth(cfg.max_depth), min_samples_leaf=max(int(cfg.min_samples_leaf), 1),
                   random_state=seed)
@@ -1798,6 +1984,7 @@ def base_estimator(model):
 
 
 MODEL_PARAMS = {  # Parameter je Modell – für Anzeige und Rezept
+    MODEL_GB: ("gb_iter", "gb_lr", "gb_leaves", "gb_depth", "gb_leaf"),
     MODEL_TREES: ("tree_variant", "n_estimators", "max_depth", "min_samples_leaf", "max_features"),
     MODEL_SVM: ("kernel", "svm_c", "gamma", "epsilon", "grid_search", "cv"),
     MODEL_LOGREG: ("logreg_c", "max_iter"),
@@ -1818,7 +2005,7 @@ def model_params(training: dict, task: str | None = None) -> dict:
             keys.remove("epsilon")
         if not t.get("grid_search"):
             keys.remove("cv")
-    if task != T_REG and m in (MODEL_TREES, MODEL_SVM, MODEL_LOGREG):
+    if task != T_REG and m in (MODEL_GB, MODEL_TREES, MODEL_SVM, MODEL_LOGREG):
         keys.append("class_weight")
     out = {"model": m}
     out.update({k: t[k] for k in keys if k in t})
@@ -1874,9 +2061,18 @@ def _sample_rows(n: int, cap: int, seed: int) -> np.ndarray:
     return np.sort(np.random.default_rng(seed).choice(n, cap, replace=False))
 
 
-def _holdout(y_codes, task: str, share: float, seed: int):
-    """Validierungsanteil aus den Trainingsdaten (Zeilennummern) – bei Klassen möglichst stratifiziert."""
+def is_time_split(recipe: dict | None) -> bool:
+    """Wurde in Schritt 4 zeitlich gesplittet? (Ältere Rezepte: immer zufällig.)"""
+    return ((recipe or {}).get("split") or {}).get("mode") == SPLIT_TIME
+
+
+def _holdout(y_codes, task: str, share: float, seed: int, time_order: bool = False):
+    """Validierungsanteil aus den Trainingsdaten (Zeilennummern) – bei Klassen möglichst stratifiziert.
+    time_order=True (zeitlicher Split): die Trainingszeilen sind nach der Zeit sortiert → Validierung = der jüngste
+    Anteil, wie train_test_split(…, shuffle=False)."""
     n = len(y_codes)
+    if time_order:
+        return train_test_split(np.arange(n), test_size=share, shuffle=False)
     strat = None
     if task != T_REG:
         counts = np.bincount(np.asarray(y_codes).astype(int))
@@ -1888,7 +2084,8 @@ def _holdout(y_codes, task: str, share: float, seed: int):
 
 
 def forest_steps(n: int) -> list[int]:
-    """Anzahl Bäume für die Kurve (Random Forest wächst mit warm_start Baum für Baum – wie Epochen)."""
+    """Anzahl Bäume für die Kurve (Random Forest wächst mit warm_start Baum für Baum – wie Epochen; Gradient Boosting
+    liefert mit staged_predict die Vorhersage nach jeder Runde)."""
     base = [1, 5, 10, 25, 50, 75, 100, 150, 200, 300, 400, 500, 600, 800, 1000, 1500, 2000, 3000, 4000]
     n = min(max(int(n), 1), MAX_TREES)
     return [v for v in base if v < n] + [n]
@@ -1944,10 +2141,11 @@ def curve_value_text(curve: dict, v) -> str:
 
 def validation_curve(cfg: ModelConfig, prep: "PrepResult", progress=None):
     """Schritt 7: Fehler auf Trainings- und Validierungsdaten in Abhängigkeit vom wichtigsten Parameter – Anzahl
-    Bäume (Random Forest), max_depth (Einzelbaum), C (SVM, Logistische Regression), K (KNN, Elbow-Methode wie im
-    Kurs) bzw. Anzahl Trainingszeilen (Lernkurve der Linearen Regression).
+    Runden (Gradient Boosting), Anzahl Bäume (Random Forest), max_depth (Einzelbaum), C (SVM, Logistische
+    Regression), K (KNN, Elbow-Methode wie im Kurs) bzw. Anzahl Trainingszeilen (Lernkurve der Linearen Regression).
 
-    cfg.validation: "test" → Validierung mit X_test (wie im Kurs) · "split" → Anteil aus den Trainingsdaten.
+    cfg.validation: "test" → Validierung mit X_test (wie im Kurs) · "split" → Anteil aus den Trainingsdaten (beim
+    zeitlichen Split der jüngste Anteil).
     Rückgabe: (kurve, modell) – modell nur, wenn es bereits das fertige Modell auf allen Trainingsdaten ist."""
     r = prep.recipe
     task = r["task"]
@@ -1955,7 +2153,7 @@ def validation_curve(cfg: ModelConfig, prep: "PrepResult", progress=None):
     y_fit_all, _ = prep.fit_targets()
     yf_all = _target(y_fit_all, task)
     if cfg.validation == "split":
-        tr, va = _holdout(yf_all, task, float(cfg.validation_split), int(cfg.seed))
+        tr, va = _holdout(yf_all, task, float(cfg.validation_split), int(cfg.seed), is_time_split(r))
         X_fit, yf, yo_fit = prep.X_train[tr], yf_all[tr], prep.y_train[tr]
         X_val, yo_val = prep.X_train[va], prep.y_train[va]
     else:
@@ -1985,7 +2183,23 @@ def validation_curve(cfg: ModelConfig, prep: "PrepResult", progress=None):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ConvergenceWarning)
         warnings.filterwarnings("ignore", message=".*warm_start.*")  # class_weight + warm_start, gleiche Daten
-        if cfg.model == MODEL_TREES and cfg.tree_variant != TREE_SINGLE:
+        if cfg.model == MODEL_GB:
+            # EIN Training; staged_predict liefert die Vorhersage nach jeder Runde – mehr Runden können hier (anders
+            # als beim Random Forest) schaden: Ab einem Punkt lernt das Modell Rauschen, der Validierungsfehler steigt.
+            values = forest_steps(cfg.gb_iter)
+            curve.update(param="max_iter", label=N_("Anzahl Runden (max_iter)"), values=values, x=values,
+                         chosen=values[-1])
+            report(0.05, tx("Gradient Boosting: {n} Runden trainieren …", n=values[-1]), None)
+            model = make_model(cfg, task).fit(X_fit, yf)
+            want = {v: i for i, v in enumerate(values)}
+            stages = zip(model.staged_predict(X_fit[ev_fit]), model.staged_predict(X_val[ev_val]))
+            for k, (p_fit, p_val) in enumerate(stages, start=1):
+                if k in want:
+                    add(want[k], (_error(task, yo_fit[ev_fit], _to_original(p_fit, task, r)),
+                                  _error(task, yo_val[ev_val], _to_original(p_val, task, r))))
+            if cfg.validation != "split":
+                finished = model  # schon das fertige Modell: alle Trainingsdaten, gleiche Einstellungen
+        elif cfg.model == MODEL_TREES and cfg.tree_variant != TREE_SINGLE:
             values = forest_steps(cfg.n_estimators)
             curve.update(param="n_estimators", label=N_("Anzahl Bäume (n_estimators)"), values=values, x=values,
                          chosen=values[-1])
@@ -2071,14 +2285,17 @@ def grid_cv(cfg: ModelConfig, task: str, y_train=None, recipe: dict | None = Non
     return max(2, cv)
 
 
-def grid_search(cfg: ModelConfig, task: str, X: np.ndarray, y: np.ndarray) -> dict:
-    """GridSearchCV wie im Kurs: C × gamma (beim linearen Kernel nur C), Kreuzvalidierung auf den Trainingsdaten."""
+def grid_search(cfg: ModelConfig, task: str, X: np.ndarray, y: np.ndarray, time_order: bool = False) -> dict:
+    """GridSearchCV wie im Kurs: C × gamma (beim linearen Kernel nur C), Kreuzvalidierung auf den Trainingsdaten.
+    time_order=True (zeitlicher Split): TimeSeriesSplit – jeder Fold validiert auf Zeilen, die nach seinen
+    Trainingszeilen liegen."""
     clf = task != T_REG
     cw = "balanced" if cfg.class_weight and clf else None
     est = SVC(kernel=cfg.kernel, class_weight=cw) if clf else SVR(kernel=cfg.kernel, epsilon=float(cfg.epsilon))
     grid = {"C": list(GRID_C)} if cfg.kernel == "linear" else {"C": list(GRID_C), "gamma": list(GRID_GAMMA)}
     cv = grid_cv(cfg, task, y)
-    gs = GridSearchCV(est, grid, cv=cv, refit=False, return_train_score=True, n_jobs=-1)
+    gs = GridSearchCV(est, grid, cv=TimeSeriesSplit(n_splits=cv) if time_order else cv, refit=False,
+                      return_train_score=True, n_jobs=-1)
     gs.fit(X, y)
     if not np.isfinite(gs.best_score_):
         raise ValueError(tx("GridSearchCV: keine gültige Bewertung (zu wenige Zeilen je Fold) – cv verkleinern oder "
@@ -2087,7 +2304,8 @@ def grid_search(cfg: ModelConfig, task: str, X: np.ndarray, y: np.ndarray) -> di
     rows = [{"C": float(p["C"]), "gamma": _py(p.get("gamma")), "val": float(v), "train": float(t)}
             for p, v, t in zip(res["params"], res["mean_test_score"], res["mean_train_score"])]
     return {"rows": rows, "best": {k: _py(v) for k, v in gs.best_params_.items()}, "best_score": float(gs.best_score_),
-            "cv": int(cv), "scoring": "R²" if task == T_REG else "Accuracy", "grid": grid, "kernel": cfg.kernel}
+            "cv": int(cv), "scoring": "R²" if task == T_REG else "Accuracy", "grid": grid, "kernel": cfg.kernel,
+            "time_order": bool(time_order)}
 
 
 def _check_training(cfg: ModelConfig, task: str, y: np.ndarray) -> None:
@@ -2122,7 +2340,7 @@ def train_model(cfg: ModelConfig, prep: "PrepResult", progress=None):
     if cfg.model == MODEL_SVM and cfg.grid_search:
         n_comb = len(GRID_C) * (1 if cfg.kernel == "linear" else len(GRID_GAMMA))
         report(0.02, tx("GridSearchCV: {n} Kombinationen × {cv} Folds …", n=n_comb, cv=grid_cv(cfg, task, y)), None)
-        hist["grid"] = grid_search(cfg, task, prep.X_train, y)
+        hist["grid"] = grid_search(cfg, task, prep.X_train, y, is_time_split(r))
         best = hist["grid"]["best"]
         used = replace(cfg, svm_c=float(best["C"]), gamma=str(best.get("gamma", cfg.gamma)))
     model = None
@@ -2161,6 +2379,8 @@ def train_model(cfg: ModelConfig, prep: "PrepResult", progress=None):
 
 # --- Schritt 7: Einordnung Training vs. Validierung ------------------------------------------------------------
 REMEDY_OVER = {
+    MODEL_GB: N_("max_iter senken (bester Wert: Validierungskurve), learning_rate verkleinern oder min_samples_leaf "
+                 "erhöhen"),
     TREE_FOREST: N_("max_depth begrenzen oder min_samples_leaf erhöhen"),
     TREE_SINGLE: N_("max_depth begrenzen, min_samples_leaf erhöhen oder Random Forest wählen"),
     MODEL_SVM: N_("C oder gamma verkleinern"),
@@ -2169,6 +2389,7 @@ REMEDY_OVER = {
     MODEL_LINREG: N_("weniger Features oder mehr Trainingsdaten"),
 }
 REMEDY_UNDER = {
+    MODEL_GB: N_("max_iter oder learning_rate erhöhen, größere Bäume (max_leaf_nodes)"),
     TREE_FOREST: N_("max_depth erhöhen (0 = unbegrenzt) oder mehr Features je Split (max_features)"),
     TREE_SINGLE: N_("max_depth erhöhen oder Random Forest wählen"),
     MODEL_SVM: N_("C oder gamma vergrößern, RBF-Kernel versuchen"),
@@ -2176,7 +2397,7 @@ REMEDY_UNDER = {
     MODEL_KNN: N_("K verkleinern"),
     MODEL_LINREG: N_("ein nichtlineares Modell wählen (Random Forest) oder bessere Features bilden"),
 }
-TUNABLE = {"n_estimators", "max_depth", "C", "n_neighbors"}  # Parameter, die Schritt 7 nach Schritt 6 übernehmen kann
+TUNABLE = {"max_iter", "n_estimators", "max_depth", "C", "n_neighbors"}  # Schritt 7 → Schritt 6 übernehmen
 
 
 def _remedy_key(cfg: ModelConfig) -> str:
@@ -2276,6 +2497,10 @@ def curve_assessment(curve: dict | None, info: dict, cfg: ModelConfig, task: str
             notes.append(tx("Der eingestellte Wert {param} = {chosen} liegt am Minimum der Validierungskurve (oder "
                             "nur knapp daneben).",
                             param=curve["param"], chosen=curve_value_text(curve, curve["chosen"])))
+        v = curve["val"]
+        if curve["param"] == "max_iter" and len(v) >= 3 and j == len(v) - 1 and v[-1] < v[-3] - tol:
+            notes.append(tx("Der Validierungsfehler sinkt bis zur letzten Runde – mehr Runden (max_iter) oder eine "
+                            "größere learning_rate könnten noch helfen."))
     return {"train": e_tr, "val": e_va, "baseline": base, "verdict": verdict, "notes": notes, "suggest": suggest}
 
 
@@ -2351,6 +2576,12 @@ def model_details(model, recipe: dict) -> dict:
         out["facts"] = {"K (n_neighbors)": int(est.n_neighbors), "weights": est.weights,
                         tx("Abstand"): tx("euklidisch (p=2)") if int(est.p) == 2 else tx("Manhattan (p=1)") if int(est.p) == 1
                         else f"p={est.p}", tx("gespeicherte Trainingszeilen"): int(est.n_samples_fit_)}
+    elif isinstance(est, (HistGradientBoostingClassifier, HistGradientBoostingRegressor)):
+        # kein feature_importances_ – die Wichtigkeit zeigt die Permutation Importance in Schritt 8
+        out["facts"] = {tx("Runden (n_iter_)"): int(est.n_iter_),
+                        tx("Bäume"): int(est.n_iter_) * int(est.n_trees_per_iteration_),
+                        "learning_rate": f"{est.learning_rate:g}", "max_leaf_nodes": str(est.max_leaf_nodes),
+                        "max_depth": str(est.max_depth), "min_samples_leaf": int(est.min_samples_leaf)}
     return out
 
 
@@ -2416,6 +2647,14 @@ def evaluate(y_true: np.ndarray, scores: np.ndarray, task: str, classes: list | 
         res["auc"] = float(auc) if np.isfinite(auc) else None
     except ValueError:
         pass  # z. B. nur eine Klasse vorhanden
+    # Güte der Wahrscheinlichkeiten (kleiner = besser) – entscheidend, wenn man mit ihnen rechnet (z. B. Quoten)
+    res["log_loss"] = res["brier"] = None
+    try:
+        res["log_loss"] = float(log_loss(y_true, scores, labels=labels))
+        if task == T_BIN:
+            res["brier"] = float(brier_score_loss(y_true, scores, pos_label=1))
+    except ValueError:
+        pass
     return res
 
 
@@ -2426,7 +2665,46 @@ def metrics_summary(ev: dict) -> dict:
     out = {"accuracy": round(ev["accuracy"], 4), "f1_macro": round(ev["f1_macro"], 4)}
     if ev.get("auc") is not None:
         out["roc_auc"] = round(ev["auc"], 4)
+    for k in ("log_loss", "brier"):
+        if ev.get(k) is not None:
+            out[k] = round(ev[k], 4)
     return out
+
+
+def _point_log_loss(y: np.ndarray, p: np.ndarray) -> np.ndarray:
+    """Log Loss je Zeile (binär) – mit derselben Begrenzung wie sklearn.metrics.log_loss."""
+    eps = np.finfo(np.float64).eps
+    p = np.clip(np.asarray(p, dtype="float64"), eps, 1 - eps)
+    return -(y * np.log(p) + (1 - y) * np.log(1 - p))
+
+
+def compare_probabilities(y_true: np.ndarray, p_model: np.ndarray, p_base: np.ndarray, prior: float) -> dict:
+    """Schritt 8 (binär): Modell gegen eine Wahrscheinlichkeit aus den Daten (z. B. Elo) und gegen die naive
+    Vorhersage (immer der Anteil der positiven Klasse im Training) – auf denselben Testzeilen (nur Zeilen, in denen die
+    Vergleichsspalte einen Wert hat).
+
+    Rückgabe: {"n", "rows": [{name, accuracy, log_loss, brier, auc}], "delta", "se", "verdict"} – delta = mittlerer
+    Unterschied im Log Loss je Zeile (Modell − Vergleich, negativ = Modell besser), se = sein Standardfehler (gepaart:
+    dieselben Spiele), verdict "better" | "worse" | "same" (Unterschied kleiner als 2 Standardfehler)."""
+    y = np.asarray(y_true).astype(int)
+    pm = np.asarray(p_model, dtype="float64")
+    pb = np.asarray(p_base, dtype="float64")
+    ok = np.isfinite(pb)
+    y, pm, pb = y[ok], pm[ok], pb[ok]
+    rows = []
+    for name, p in ((N_("Modell"), pm), (N_("Vergleich"), pb), (N_("naive Vorhersage"), np.full(len(y), prior))):
+        row = {"name": name, "accuracy": float(np.mean((p > 0.5).astype(int) == y)),
+               "log_loss": float(np.mean(_point_log_loss(y, p))), "brier": float(np.mean((p - y) ** 2)), "auc": None}
+        if len(np.unique(y)) == 2 and len(np.unique(p)) > 1:
+            row["auc"] = float(roc_auc_score(y, p))
+        rows.append(row)
+    diff = _point_log_loss(y, pm) - _point_log_loss(y, pb)
+    delta = float(np.mean(diff)) if len(diff) else float("nan")
+    se = float(np.std(diff, ddof=1) / np.sqrt(len(diff))) if len(diff) > 1 else float("nan")
+    verdict = "same"
+    if np.isfinite(se) and abs(delta) > 2 * se:
+        verdict = "better" if delta < 0 else "worse"
+    return {"n": int(len(y)), "rows": rows, "delta": delta, "se": se, "verdict": verdict}
 
 
 def permutation_importance(model, X: np.ndarray, y: np.ndarray, recipe: dict, n_rows: int = 2000,
@@ -2477,7 +2755,8 @@ MAX_BUNDLE_BYTES = 2 * 10**9  # entpackte Größe eines Modell-ZIPs
 # von sich aus kennt – alles andere (z. B. fremder Code) wird abgelehnt.
 SKOPS_TRUSTED = {"sklearn.tree._tree.Tree", "sklearn.neighbors._kd_tree.KDTree",
                  "sklearn.neighbors._ball_tree.BallTree", "sklearn.calibration._CalibratedClassifier",
-                 "sklearn.calibration._SigmoidCalibration"}
+                 "sklearn.calibration._SigmoidCalibration",
+                 "sklearn.ensemble._hist_gradient_boosting.predictor.TreePredictor"}
 SKOPS_TRUSTED_PREFIX = ("sklearn.metrics._dist_metrics.",)
 
 

@@ -7,6 +7,7 @@ Synthetische Testdaten – nur für Tests und zum Ausprobieren, keine echten Dat
 lending_club_like(): gleiche Spalten/Formate wie der öffentliche LendingClub-Datensatz (lending_club_loan_two.csv)
 house_like():        Regression (Hauspreise, ähnlich kc_house_data)
 iris_like():         Mehrklassen (Iris aus scikit-learn)
+sports_like():       Spiele im Format des Sportdaten-Tools (pre_*/lineup_*/inplay_*/post_*, Elo, Datum)
 """
 from __future__ import annotations
 
@@ -115,6 +116,51 @@ def house_like(n: int = 3000, seed: int = 7) -> pd.DataFrame:
         "grade": grade, "yr_built": yr_built, "zipcode": zipcode,
         "lat": np.round(47.5 + rng.normal(0, 0.14, n), 4), "long": np.round(-122.2 + rng.normal(0, 0.14, n), 4),
     })
+
+
+def sports_like(n_days: int = 300, seed: int = 11) -> pd.DataFrame:
+    """Spiele im Format des Sportdaten-Tools (NBA): id-Spalten, Label home_win, pre_* und lineup_* (vor dem Spiel
+    bekannt), inplay_* und post_* (erst während bzw. nach dem Spiel – als Feature ein Datenleck). Die Elo-Werte werden
+    wie im Tool Spiel für Spiel nur aus früheren Spielen berechnet; das Ergebnis hängt aber von der wahren Stärke ab –
+    pre_home_l10_net und die Ruhetage tragen also Information, die Elo nicht hat."""
+    rng = np.random.default_rng(seed)
+    teams = [f"T{i:02d}" for i in range(12)]
+    strength = rng.normal(0, 1, 12)
+    elo = np.full(12, 1500.0)
+    last = np.full(12, -30)
+    nets = [[] for _ in range(12)]
+    start = pd.Timestamp("2021-10-19")
+    rows = []
+    for day in range(n_days):
+        strength += rng.normal(0, 0.03, 12)  # Form ändert sich langsam
+        date = start + pd.Timedelta(days=day)
+        k = int(rng.integers(1, 4))  # 1–3 Spiele pro Tag
+        for h, a in rng.permutation(12)[: 2 * k].reshape(-1, 2):
+            rest_h, rest_a = min(day - last[h], 7), min(day - last[a], 7)
+            out_h, out_a = int(rng.poisson(0.6)), int(rng.poisson(0.6))
+            logit = 0.9 * (strength[h] - strength[a]) + 0.25 + 0.08 * (rest_h - rest_a) - 0.25 * (out_h - out_a)
+            win = int(rng.random() < 1 / (1 + np.exp(-logit)))
+            p_elo = 1 / (1 + 10 ** (-(elo[h] + 60 - elo[a]) / 400))
+            margin = (1 + abs(rng.normal(7, 6))) * (1 if win else -1)
+            net_h = round(float(np.mean(nets[h][-10:])), 2) if nets[h] else np.nan
+            net_a = round(float(np.mean(nets[a][-10:])), 2) if nets[a] else np.nan
+            rows.append({
+                "game_id": 400_000 + len(rows), "season": date.year + (1 if date.month >= 8 else 0),
+                "date": date.strftime("%Y-%m-%d"), "home_team": teams[h], "away_team": teams[a], "home_win": win,
+                "pre_home_elo": round(elo[h], 1), "pre_away_elo": round(elo[a], 1),
+                "pre_elo_prob_home": round(p_elo, 4), "pre_diff_elo": round(elo[h] - elo[a], 1),
+                "pre_home_rest_days": rest_h, "pre_away_rest_days": rest_a,
+                "pre_home_l10_net": net_h, "pre_away_l10_net": net_a,
+                "lineup_home_out_n": out_h, "lineup_away_out_n": out_a,
+                "inplay_ht_diff": round(margin / 2 + rng.normal(0, 5), 0),
+                "post_margin": round(margin, 0), "post_total": round(rng.normal(220, 15), 0),
+            })
+            elo[h] += 20 * (win - p_elo)
+            elo[a] -= 20 * (win - p_elo)
+            nets[h].append(5 * strength[h] + rng.normal(0, 4))
+            nets[a].append(5 * strength[a] + rng.normal(0, 4))
+            last[h] = last[a] = day
+    return pd.DataFrame(rows)
 
 
 def iris_like() -> pd.DataFrame:

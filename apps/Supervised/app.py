@@ -5,15 +5,15 @@ app.py – DATA-Analysis-SupervisedLearning: Datenanalyse und Supervised Learnin
 Start:   streamlit run app.py
 
 Schritte (Navigation links)
-    1  Daten laden & Bibliotheken          6  Modell & Training (5 Modelle, Rangliste)
+    1  Daten laden & Bibliotheken          6  Modell & Training (6 Modelle, Rangliste)
     2  Aufbereitung 1 – Spalten, neue Sp.  7  Training vs. Validierung
-    3  Analyse & Visualisierung            8  Evaluation
-    4  Aufbereitung 2 – ML-Daten           9  Modell speichern & laden
+    3  Analyse & Visualisierung            8  Evaluation (+ Vergleich mit z. B. Elo)
+    4  Aufbereitung 2 – ML-Daten, Split    9  Modell speichern & laden
     5  Daten speichern (CSV)              10  Vorhersage auf neuen Daten + Fazit
     Stichprobe für langsame Rechner: Option in der Seitenleiste
 
-Modelle: 1 Decision Trees + Random Forests · 2 Support Vector Machines · 3 Logistische Regression ·
-4 K-Nearest Neighbors · 5 Lineare Regression
+Modelle: 1 Gradient Boosting (HistGradientBoosting) · 2 Decision Trees + Random Forests · 3 Support Vector Machines ·
+4 Logistische Regression · 5 K-Nearest Neighbors · 6 Lineare Regression
 
 Die Rechenlogik steckt in pipeline.py, die Diagramme in plots.py, der angezeigte
 Python-Code in codegen.py. Diese Datei enthält nur die Oberfläche.
@@ -317,7 +317,7 @@ def read_source(source):
 def guess_label(df):
     names = {c.lower(): c for c in df.columns}
     for cand in ["label", "target", "y", "class", "klasse", "loan_status", "loan_repaid", "price", "preis",
-                 "species"]:
+                 "species", "home_win", "p1_win"]:
         if cand in names:
             return names[cand]
     return df.columns[-1]
@@ -397,15 +397,16 @@ def load_data(source, name):
             prof[col] = [old.at[c, col] if c in old.index else prof.at[i, col] for i, c in enumerate(prof["Spalte"])]
     else:
         for k in ["w_viz_cols", "w_label", "w_features", "_task_for_label", "_features_for_label", "ed_missing__sig",
-                  "new_cols"]:
+                  "new_cols", "w_split_mode", "w_time_col", "w_base_col"]:
             ss.pop(k, None)
     editor_reset("ed_actions", prof)
     st.rerun()
 
 
 WIDGET_KEYS = [  # Einstellungen, die exportiert/importiert werden
-    "w_viz_cols", "w_label", "w_task", "w_pos", "w_features", "w_test_size", "w_split_seed", "w_stratify",
-    "w_scaler", "w_drop_first", "w_scale_y", "w_model", "w_rf_variant", "w_rf_trees", "w_rf_depth", "w_rf_leaf",
+    "w_viz_cols", "w_label", "w_task", "w_pos", "w_features", "w_split_mode", "w_time_col", "w_test_size",
+    "w_split_seed", "w_stratify", "w_scaler", "w_drop_first", "w_scale_y", "w_base_col", "w_model", "w_gb_iter",
+    "w_gb_lr", "w_gb_leaves", "w_gb_depth", "w_gb_leaf", "w_rf_variant", "w_rf_trees", "w_rf_depth", "w_rf_leaf",
     "w_rf_features", "w_svm_kernel", "w_svm_c", "w_svm_gamma", "w_svm_eps", "w_svm_grid", "w_svm_cv", "w_log_c",
     "w_log_iter", "w_knn_k", "w_knn_weights", "w_knn_p", "w_lin_intercept", "w_curve", "w_val", "w_val_split",
     "w_cw", "w_seed", "w_threshold",
@@ -1188,6 +1189,12 @@ def page_prep2():
     cols = list(df.columns)
     lin = ss.get("lineage", {})
     nun = cached("_nunique", ss.viz_token, df.nunique)
+    layout = pl.match_data_layout(cols)  # Datensatz des Sportdaten-Tools (pre_*/post_*)? → passende Vorschläge
+    if layout:
+        st.info(tx("Datensatz mit Spalten **pre_\\*** und **post_\\*/inplay_\\*** erkannt (Format des Sportdaten-Tools). "
+                   "Vorgeschlagen sind nur Werte, die **vor** dem Spiel bekannt sind (pre_\\*, lineup_\\*), ein zeitlicher "
+                   "Split und – falls vorhanden – der Vergleich mit der Elo-Wahrscheinlichkeit in Schritt 8."),
+                icon=":material/sports_score:")
 
     st.subheader(tx("Label (y) & Problemtyp"))
     c1, c2, c3 = st.columns([2, 3, 2])
@@ -1226,12 +1233,19 @@ def page_prep2():
         else:  # fehlt oder unbrauchbar → Vorschlag verwenden
             ss.pop("w_features", None)
         ss._features_for_label = label
-    features = ms(tx("Features für das Modell"), candidates, "w_features",
-                  default=[c for c in candidates if c not in leak])
+    proposal = [c for c in candidates if c not in leak]
+    if layout:  # Sportdaten: nur Werte, die vor dem Spiel bekannt sind
+        proposal = [c for c in proposal if c in layout["features"]]
+    features = ms(tx("Features für das Modell"), candidates, "w_features", default=proposal)
     if leak:
         st.warning(tx("{leak} stammt aus derselben CSV-Spalte wie das Label → nicht als Feature verwenden "
                       "(Datenleck).",
                       leak=leak))
+    late = [c for c in features if layout and c in layout["leaky"]]
+    if late:
+        st.warning(tx("{n} Features sind erst während oder nach dem Spiel bekannt (inplay_\\*, post_\\*): {cols} – "
+                      "für Vorhersagen vor dem Spiel ist das ein Datenleck (unrealistisch gute Kennzahlen).",
+                      n=len(late), cols=", ".join(late[:6]) + (" …" if len(late) > 6 else "")))
     init("w_drop_first", True)
     rows = []
     for c in cols:
@@ -1299,18 +1313,49 @@ def page_prep2():
         st.success(tx("Keine fehlenden Werte in den gewählten Features."))
 
     st.subheader(tx("Train/Test-Split & Skalierung"))
+    time_options = [c for c in cols if c != label]
+    c1, c2, c3 = st.columns([2.4, 1.6, 2.6])
+    with c1:
+        layout_time = layout["time"] if layout and layout["time"] in time_options else None
+        mode = rd(tx("Aufteilung"), list(pl.SPLIT_MODES), "w_split_mode", horizontal=True,
+                  default=pl.SPLIT_TIME if layout_time else pl.SPLIT_RANDOM, format_func=lambda v: tx(pl.SPLIT_MODES[v]),
+                  help=tx("Zufällig wie im Kurs (train_test_split). Zeitlich für Daten mit Reihenfolge – Spiele, Kurse, "
+                          "Messreihen: Test = die jüngsten Zeilen, Training = alles davor. So sieht das Modell beim "
+                          "Lernen nichts aus der Zukunft; ein zufälliger Split würde spätere Zeilen ins Training mischen "
+                          "und die Kennzahlen schönen."))
+    time_col = None
+    if mode == pl.SPLIT_TIME:
+        with c2:
+            time_col = sb(tx("Zeitspalte"), time_options, "w_time_col",
+                          default=layout_time or pl.suggest_time_column(time_options),
+                          help=tx("Datum (z. B. 2024-01-31) oder Zahl (Jahr, Saison). Die Spalte muss kein Feature sein."))
+        if time_col is not None:
+            def span():
+                key, kind, fmt = pl.time_key(df[time_col])
+                k = key.dropna()
+                return (pl.time_text(k.min()), pl.time_text(k.max()), int(key.isna().sum())) if len(k) else None
+            try:
+                found = cached("_time_span", (ss.viz_token, time_col), span)
+            except ValueError as exc:
+                c3.error(str(exc))
+            else:
+                if found:
+                    c3.caption(tx("Zeitraum in '{col}': {a} … {b}", col=time_col, a=found[0], b=found[1])
+                               + (tx(" · {n} Zeilen ohne Zeitwert werden entfernt", n=fmt_int(found[2])) if found[2]
+                                  else ""))
     init("w_scale_y", True)
     split_cols = st.columns([1.3, 1.1, 1, 1.2, 1.1, 1.1] if task == pl.T_REG else [1.3, 1.1, 1, 1.2, 1.1])
     c1, c2, c3, c4, c5 = split_cols[:5]
     with c1:
         init("w_test_size", 0.33)
-        st.slider("test_size", 0.05, 0.5, step=0.01, key="w_test_size")
+        st.slider("test_size", 0.05, 0.5, step=0.01, key="w_test_size",
+                  help=tx("Zeitlicher Split: Anteil der jüngsten Zeilen im Test.") if mode == pl.SPLIT_TIME else None)
     with c2:
         init("w_split_seed", pl.RANDOM_STATE)
-        st.number_input("random_state", 0, 1_000_000, step=1, key="w_split_seed")
+        st.number_input("random_state", 0, 1_000_000, step=1, key="w_split_seed", disabled=mode == pl.SPLIT_TIME)
     with c3:
         init("w_stratify", True)
-        st.checkbox("stratify=y", key="w_stratify", disabled=task == pl.T_REG,
+        st.checkbox("stratify=y", key="w_stratify", disabled=task == pl.T_REG or mode == pl.SPLIT_TIME,
                     help=tx("Klassenverhältnis in Train und Test gleich halten (empfohlen bei unausgewogenen Klassen)"))
     with c4:
         sb(tx("Skalierung"), pl.SCALERS, "w_scaler", default="MinMaxScaler", format_func=tx,
@@ -1324,6 +1369,20 @@ def page_prep2():
                         help=tx("y wird standardisiert, Vorhersagen automatisch zurückgerechnet. Wichtig für die SVM "
                                 "(epsilon und C beziehen sich auf die Skala von y); Bäume, KNN und die Lineare "
                                 "Regression liefern mit und ohne dieselben Vorhersagen."))
+
+    base_col = None
+    if task == pl.T_BIN and not err:
+        probs = [c for c in cached("_prob_cols", ss.viz_token, lambda: pl.probability_columns(df)) if c != label]
+        if probs:
+            c1, _ = st.columns([2, 1])
+            with c1:
+                default = layout["baseline"] if layout and layout["baseline"] in probs else NONE
+                base_col = opt(sb(tx("Vergleich in Schritt 8 (optional): Wahrscheinlichkeit für '{pos}' aus den Daten",
+                                     pos=pos), [NONE] + probs, "w_base_col", default=default,
+                                  help=tx("Eine fertige Vorhersage aus den Daten, z. B. die Siegchance nach Elo "
+                                          "(pre_elo_prob_home) oder aus Wettquoten. Schritt 8 vergleicht das Modell "
+                                          "damit auf denselben Testzeilen – ein Modell, das sie nicht schlägt, bringt "
+                                          "nichts Neues.")))
 
     if "model" in ss:
         st.warning(tx("Neu vorbereiten verwirft das trainierte Modell – vorher in Schritt 9 speichern."))
@@ -1340,7 +1399,8 @@ def page_prep2():
                     random_state=int(ss.w_split_seed), stratify=bool(ss.w_stratify),
                     column_actions=ss.actions_fitted, lineage=lin, meta=source_meta(),
                     scale_label=bool(ss.get("w_scale_y", True)) and task == pl.T_REG,
-                    new_columns=ss.get("new_cols_fitted", []))
+                    new_columns=ss.get("new_cols_fitted", []), split_mode=mode, time_column=time_col,
+                    baseline_column=base_col)
         except ValueError as exc:
             st.error(str(exc))
         else:
@@ -1353,7 +1413,9 @@ def page_prep2():
     p = ss.prep
     r = p.recipe
     used = set(r["features"]) | set(r["dropped_columns"]) | set(r.get("empty_columns", []))
-    if (r["label"], r["task"]) != (label, task) or used != set(features):
+    split_now = (mode, time_col if mode == pl.SPLIT_TIME else None)
+    split_then = (r["split"].get("mode", pl.SPLIT_RANDOM), r["split"].get("time_column"))
+    if (r["label"], r["task"]) != (label, task) or used != set(features) or split_now != split_then:
         st.info(tx("Die Einstellungen oben wurden seit dem Vorbereiten geändert → erneut **Daten für ML vorbereiten**."))
     st.success(tx("Fertig: X_train {shape} · X_test {shape2} · {n} Features → {n2} Modell-Eingänge",
                   shape=p.X_train.shape, shape2=p.X_test.shape, n=len(r['features']), n2=len(r['feature_columns'])))
@@ -1483,6 +1545,7 @@ def page_export():
 # Seite 6 – Modell & Training
 # ===========================================================================
 CURVE_WHAT = {  # was die Validierungskurve in Schritt 7 zeigt
+    pl.MODEL_GB: N_("Fehler je Anzahl Runden (max_iter) – ein Training, Vorhersage nach jeder Runde; mit bestem Wert"),
     pl.TREE_FOREST: N_("Fehler je Anzahl Bäume – der Wald wächst Schritt für Schritt (wie Epochen)"),
     pl.TREE_SINGLE: N_("Fehler je max_depth – von 1 bis unbegrenzt"),
     pl.MODEL_SVM: N_("Fehler je C (0.01 … 100)"),
@@ -1517,7 +1580,9 @@ def model_config(task) -> pl.ModelConfig:
     """Einstellungen aus den Widgets von Schritt 6 → ModelConfig (nicht angezeigte Widgets = Standardwerte)."""
     d, g = pl.ModelConfig(), ss.get
     return pl.ModelConfig(
-        model=g("w_model", d.model), tree_variant=g("w_rf_variant", d.tree_variant),
+        model=g("w_model", d.model), gb_iter=int(g("w_gb_iter", d.gb_iter)), gb_lr=float(g("w_gb_lr", d.gb_lr)),
+        gb_leaves=int(g("w_gb_leaves", d.gb_leaves)), gb_depth=int(g("w_gb_depth", d.gb_depth)),
+        gb_leaf=int(g("w_gb_leaf", d.gb_leaf)), tree_variant=g("w_rf_variant", d.tree_variant),
         n_estimators=int(g("w_rf_trees", d.n_estimators)), max_depth=int(g("w_rf_depth", d.max_depth)),
         min_samples_leaf=int(g("w_rf_leaf", d.min_samples_leaf)),
         max_features=g("w_rf_features", "sqrt" if task != pl.T_REG else "1.0"),
@@ -1534,7 +1599,35 @@ def model_config(task) -> pl.ModelConfig:
 def model_params_ui(m, task):
     """Parameter des gewählten Modells (Standardwerte wie in scikit-learn, Hinweise aus dem Kurs)."""
     clf = task != pl.T_REG
-    if m == pl.MODEL_TREES:
+    if m == pl.MODEL_GB:
+        d = pl.GB_DEFAULTS
+        c1, c2, c3, c4, c5 = st.columns(5)
+        with c1:
+            init("w_gb_iter", d["gb_iter"])
+            st.number_input("max_iter", 1, pl.MAX_TREES, step=50, key="w_gb_iter",
+                            help=tx("Anzahl Runden = Bäume nacheinander. Zu wenige → Underfitting, zu viele → das Modell "
+                                    "lernt Rauschen. Die beste Zahl zeigt Schritt 7 (Validierungskurve)."))
+        with c2:
+            init("w_gb_lr", d["gb_lr"])
+            st.number_input("learning_rate", 0.001, 1.0, step=0.01, format="%g", key="w_gb_lr",
+                            help=tx("Wie stark jeder Baum die Fehler der vorigen korrigiert. Kleiner = vorsichtiger, "
+                                    "braucht dafür mehr Runden (z. B. 0.05 mit 300 statt 0.1 mit 100)."))
+        with c3:
+            init("w_gb_leaves", d["gb_leaves"])
+            st.number_input("max_leaf_nodes", 2, 1000, step=1, key="w_gb_leaves",
+                            help=tx("Größe jedes Baums (Anzahl Blätter). Kleiner = einfachere Bäume, weniger Overfitting."))
+        with c4:
+            init("w_gb_depth", d["gb_depth"])
+            st.number_input("max_depth", 0, 1000, step=1, key="w_gb_depth",
+                            help=tx("Maximale Tiefe – 0 = unbegrenzt (None); die Größe begrenzt meist max_leaf_nodes."))
+        with c5:
+            init("w_gb_leaf", d["gb_leaf"])
+            st.number_input("min_samples_leaf", 1, 100_000, step=1, key="w_gb_leaf",
+                            help=tx("Mindestanzahl Zeilen je Blatt – größer = glattere Vorhersagen (Standard 20)."))
+        st.caption(tx("HistGradientBoosting teilt jedes Feature in höchstens 255 Stufen ein – dadurch auch bei "
+                      "Hunderttausenden Zeilen schnell. Skalierung (Schritt 4) braucht es nicht. early_stopping ist "
+                      "aus: Es werden genau max_iter Runden trainiert."))
+    elif m == pl.MODEL_TREES:
         c1, c2, c3, c4, c5 = st.columns([2.3, 1.1, 1.1, 1.2, 1.3])
         with c1:
             variant = rd(tx("Variante"), list(pl.TREE_VARIANTS), "w_rf_variant",
@@ -1634,7 +1727,7 @@ def page_train():
 
     st.subheader(tx("Modell wählen"))
     m = rd(tx("Reihenfolge = Rangliste (Platz 1 ist in der Regel am stärksten)"), pl.MODELS, "w_model",
-           default=pl.MODEL_TREES, format_func=model_label, captions=model_captions(task))
+           default=pl.MODEL_GB, format_func=model_label, captions=model_captions(task))
     problem = pl.model_problem(pl.ModelConfig(model=m), task)
     if problem:
         st.warning(problem)
@@ -1662,7 +1755,9 @@ def page_train():
                  help=tx("Testdaten: Die Kurve wird auf X_test berechnet (wie die Elbow-Methode im Kurs) – einfach, "
                          "aber wer danach den besten Wert wählt, hat die Testdaten mitbenutzt. Sauberer: eigener "
                          "Validierungsanteil aus den Trainingsdaten, damit das Testset bis Schritt 8 unberührt "
-                         "bleibt."))
+                         "bleibt.")
+                 + (tx(" Beim zeitlichen Split (Schritt 4) ist der Anteil der jüngste Teil der Trainingsdaten.")
+                    if pl.is_time_split(r) else ""))
     with c3:
         init("w_val_split", 0.2)
         st.slider("validation_split", 0.05, 0.4, step=0.05, key="w_val_split", disabled=not curve_on or val != "split")
@@ -1697,7 +1792,8 @@ def page_train():
     st.subheader(tx("scikit-learn-Code mit diesen Einstellungen"))
     calib = pl.calibration_cv(p.y_train) if m == pl.MODEL_SVM and task != pl.T_REG else 5
     gcv = pl.grid_cv(cfg, task, p.y_train) if m == pl.MODEL_SVM and cfg.grid_search else None
-    st.code(cg.model_code(cfg, task, calib, gcv) if not problem else "# " + cg._cm(problem), language="python")
+    st.code(cg.model_code(cfg, task, calib, gcv, pl.is_time_split(r)) if not problem else "# " + cg._cm(problem),
+            language="python")
 
     if "model" in ss:
         ti = ss.train_info
@@ -1758,7 +1854,9 @@ def on_apply_best(param, value):
         return
     ss.w_model = cfg.model
     note = ""
-    if param == "n_estimators":
+    if param == "max_iter":
+        ss.w_gb_iter = int(value)
+    elif param == "n_estimators":
         ss.w_rf_trees = int(value)
     elif param == "max_depth":
         ss.w_rf_variant = cfg.tree_variant
@@ -1838,12 +1936,14 @@ def page_curve():
         c2.markdown(tx("Beste Kombination: **{best}** · mittlere Validierungsgüte ({s}) **{score:.3f}** mit "
                        "{cv}-facher Kreuzvalidierung auf den Trainingsdaten – damit wurde das Modell trainiert.",
                        best=", ".join(f"{k} = {v}" for k, v in grid["best"].items()), s=grid["scoring"],
-                       score=grid["best_score"], cv=grid["cv"]))
+                       score=grid["best_score"], cv=grid["cv"])
+                    + (tx(" Zeitlicher Split: TimeSeriesSplit – jeder Fold validiert auf Zeilen nach seinen "
+                          "Trainingszeilen.") if grid.get("time_order") else ""))
         with st.expander(tx("Alle Kombinationen")):
             rows = pd.DataFrame(grid["rows"]).sort_values("val", ascending=False)
             st.dataframe(trc(rows.rename(columns={"val": "Validierung", "train": "Training"}).round(4)),
                          hide_index=True)
-    code(cg.curve_code(cfg, task, bool(r.get("label_scaler"))))
+    code(cg.curve_code(cfg, task, bool(r.get("label_scaler")), pl.is_time_split(r)))
 
 
 # ===========================================================================
@@ -1866,11 +1966,14 @@ def metric_row(ev):
         st.caption(tx("MAE = {x:.1%} vom Mittelwert des Labels ({x2})",
                       x=abs(ev['MAE'] / ev['Mittelwert y']), x2=fmt_num(ev['Mittelwert y'])) if ev["Mittelwert y"] else "")
     else:
-        m = st.columns(3)
+        m = st.columns(4)
         m[0].metric(tx("Accuracy"), f"{ev['accuracy']:.3f}")
         m[1].metric("F1 (macro)", f"{ev['f1_macro']:.3f}", help=tx("Mittel über alle Klassen – fair bei Ungleichgewicht"))
         m[2].metric("ROC-AUC", f"{ev['auc']:.3f}" if ev.get("auc") is not None else "–",
                     help=tx("0.5 = Zufall, 1.0 = perfekt; unabhängig von der Schwelle"))
+        m[3].metric("Log Loss", f"{ev['log_loss']:.4f}" if ev.get("log_loss") is not None else "–",
+                    help=tx("Güte der Wahrscheinlichkeiten – kleiner = besser. Bestraft sichere Fehlprognosen stark; "
+                            "wichtig, wenn man mit den Wahrscheinlichkeiten rechnet (z. B. gegen Wettquoten)."))
 
 
 def classification_block(ev, classes):
@@ -1918,6 +2021,8 @@ def page_eval():
                            "unausgewogenen Klassen lohnt es sich, die Schwelle zu verschieben oder in Schritt 6 "
                            "Klassengewichte zu nutzen.",
                            v=r['classes'][1], v2=r['classes'][0]))
+            if p.base_test is not None and r.get("baseline_column"):
+                baseline_section(p, r, scores)
 
     st.subheader(tx("Einzelfall prüfen"))
     st.caption(tx("Zufälligen Datensatz aus den Testdaten ziehen und die Vorhersage mit der Wahrheit vergleichen."))
@@ -1962,7 +2067,47 @@ def page_eval():
             show(plots.fig_importance(ss.importance))
         c2.dataframe(trc(ss.importance.round(5)), hide_index=True, height=450)
     model_details_section(r)
-    code(cg.eval_code(task, thr, bool(r.get("label_scaler")), ss.model_cfg))
+    code(cg.eval_code(task, thr, bool(r.get("label_scaler")), ss.model_cfg, r.get("baseline_column")))
+
+
+VERDICT_TEXT = {
+    "better": N_("**Das Modell schlägt '{col}':** Log Loss im Mittel {d} niedriger (± {se} Standardfehler, {n} "
+                 "Testzeilen) – mehr als Zufall. Die Features enthalten Information, die in '{col}' noch nicht steckt."),
+    "same": N_("**Kein klarer Unterschied zu '{col}':** Unterschied im Log Loss {d} (± {se} Standardfehler, {n} "
+               "Testzeilen) – das liegt im Bereich des Zufalls. Das Modell ist nicht nachweislich besser als diese "
+               "einfache Vorhersage; neue Informationen (andere Features) helfen meist mehr als ein anderes Modell."),
+    "worse": N_("**'{col}' ist besser als das Modell:** Log Loss des Modells im Mittel {d} höher (± {se} "
+                "Standardfehler, {n} Testzeilen). '{col}' als Feature aufnehmen oder das Modell vereinfachen."),
+}
+
+
+def baseline_section(p, r, scores):
+    """Schritt 8 (binär): Modell gegen eine Wahrscheinlichkeit aus den Daten (z. B. Elo) auf denselben Testzeilen."""
+    col, pos = r["baseline_column"], r["classes"][1]
+    prior = float((r.get("label_stats") or {}).get("class_share", {}).get(pos, np.mean(p.y_train)))
+    cmp = pl.compare_probabilities(p.y_test, scores, p.base_test, prior)
+    st.subheader(tx("Vergleich mit '{col}'", col=col))
+    if cmp["n"] < 20:
+        st.info(tx("Zu wenige Testzeilen mit einem Wert in '{col}' für einen Vergleich.", col=col))
+        return
+    st.caption(tx("Dieselben {n} Testzeilen: Das Modell muss eine fertige Vorhersage aus den Daten schlagen – sonst "
+                  "bringt es nichts Neues. Log Loss und Brier messen, wie gut die Wahrscheinlichkeiten stimmen "
+                  "(kleiner = besser); Accuracy hier mit der Schwelle 0.5 für alle.", n=fmt_int(cmp["n"])))
+    names = {"Modell": tx("Modell: {name}", name=pl.model_name(ss.model_cfg.model)), "Vergleich": col,
+             "naive Vorhersage": tx("naive Vorhersage (immer {pct})", pct=f"{prior:.1%}")}
+    table = pd.DataFrame([{"Vorhersage": names[row["name"]], "Accuracy (0.5)": row["accuracy"],
+                           "Log Loss": row["log_loss"], "Brier": row["brier"],
+                           "ROC-AUC": row["auc"] if row["auc"] is not None else np.nan} for row in cmp["rows"]])
+    c1, c2 = st.columns([3, 2])
+    with c1:
+        st.dataframe(trc(table).round(4), hide_index=True)
+        d = f"{cmp['delta']:+.4f}" if cmp["verdict"] == "same" else f"{abs(cmp['delta']):.4f}"
+        st.markdown(tx(VERDICT_TEXT[cmp["verdict"]], col=col, d=d, se=f"{cmp['se']:.4f}", n=fmt_int(cmp["n"])))
+    with c2:
+        show(plots.fig_calibration(p.y_test, {names["Modell"]: scores, col: p.base_test}, pos))
+    st.caption(tx("Kalibrierung: Testzeilen nach der vorhergesagten Wahrscheinlichkeit in 10 gleich große Gruppen – "
+                  "liegt eine Linie auf der Diagonale, stimmen die Wahrscheinlichkeiten (70 % vorhergesagt → in 70 % der "
+                  "Fälle eingetreten). Erst dann lassen sie sich z. B. mit Wettquoten vergleichen."))
 
 
 def model_details_section(r):
@@ -1972,6 +2117,9 @@ def model_details_section(r):
     det = cached("_details", (ss.get("model_token"), i18n.get_lang()), lambda: pl.model_details(ss.model, r))
     if det["facts"]:
         st.markdown(" · ".join(f"**{k}:** {v}" for k, v in det["facts"].items()))
+    if cfg.model == pl.MODEL_GB:
+        st.caption(tx("HistGradientBoosting hat kein feature_importances_ – welche Features wichtig sind, zeigt die "
+                      "Permutation Importance oben."))
     table = det["table"]
     if det["kind"] == "importance":
         st.caption(tx("feature_importances_: wie viel jedes Feature zu den Splits der Bäume beiträgt (Dummies einer "

@@ -626,6 +626,38 @@ def fig_proba(scores: np.ndarray, classes: list, y_true: np.ndarray | None = Non
     return fig
 
 
+def fig_calibration(y_true: np.ndarray, probs: dict, positive: str, bins: int = 10):
+    """Kalibrierung (binär): Zeilen nach der vorhergesagten Wahrscheinlichkeit in gleich große Gruppen teilen und je
+    Gruppe den tatsächlichen Anteil der positiven Klasse zeigen. Auf der Diagonale = die Wahrscheinlichkeiten stimmen
+    (70 % vorhergesagt → in 70 % der Fälle eingetreten). probs: {Name: Wahrscheinlichkeiten}."""
+    from sklearn.calibration import calibration_curve
+
+    y = np.asarray(y_true).astype(int)
+    fig, ax = plt.subplots(figsize=(6.6, 4.6))
+    ax.plot([0, 1], [0, 1], color=MUTED, linewidth=1, linestyle="--", label=tx("perfekt kalibriert"))
+    lo, hi = 1.0, 0.0
+    for i, (name, p) in enumerate(probs.items()):
+        p = np.asarray(p, dtype="float64")
+        ok = np.isfinite(p)
+        if ok.sum() < bins or len(np.unique(y[ok])) < 2:
+            continue
+        true, pred = calibration_curve(y[ok], p[ok], n_bins=bins, strategy="quantile")
+        ax.plot(pred, true, color=SERIES[i % len(SERIES)], marker="o", markersize=4, label=name)
+        lo, hi = min(lo, pred.min(), true.min()), max(hi, pred.max(), true.max())
+    if lo < hi:  # Ausschnitt um die Punkte – sonst kleben sie bei Sportdaten (meist 30–80 %) in der Mitte
+        pad = 0.05
+        ax.set_xlim(max(lo - pad, 0), min(hi + pad, 1))
+        ax.set_ylim(max(lo - pad, 0), min(hi + pad, 1))
+    ax.xaxis.set_major_formatter(PercentFormatter(1.0, decimals=0))
+    ax.yaxis.set_major_formatter(PercentFormatter(1.0, decimals=0))
+    ax.set_xlabel(tx("vorhergesagte Wahrscheinlichkeit (Mittel je Gruppe)"))
+    ax.set_ylabel(tx("tatsächlicher Anteil '{v}'", v=positive))
+    ax.set_title(tx("Kalibrierung: vorhergesagt gegen tatsächlich"))
+    ax.legend(loc="upper left")
+    fig.tight_layout()
+    return fig
+
+
 def fig_regression(y_true: np.ndarray, y_pred: np.ndarray, max_points: int = 5000, seed: int = 101):
     rng = np.random.default_rng(seed)
     idx = rng.choice(len(y_true), max_points, replace=False) if len(y_true) > max_points else slice(None)

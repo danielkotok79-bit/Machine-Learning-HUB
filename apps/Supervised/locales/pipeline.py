@@ -519,12 +519,12 @@ T = {
     "Lineare Regression": (
         "Linear Regression",
         "Linear Regression"),
-    "Der beste dieser Liste. Kommt mit Nichtlinearitäten, Wechselwirkungen zwischen Features und Rauschen "
-    "zurecht. Random Forest begrenzt das Overfitting eines einzelnen Baums stark.": (
-        "The best of this list. Handles non-linearities, feature interactions and noise. Random Forest strongly "
-        "limits the overfitting of a single tree.",
-        "Najlepszy z tej listy. Radzi sobie z nieliniowościami, interakcjami cech, szumem. Random Forest mocno "
-        "ogranicza overfitting pojedynczego drzewa."),
+    "Sehr robust und kaum zu verderben. Kommt mit Nichtlinearitäten, Wechselwirkungen zwischen Features und "
+    "Rauschen zurecht. Random Forest begrenzt das Overfitting eines einzelnen Baums stark.": (
+        "Very robust and hard to get wrong. Handles non-linearities, feature interactions and noise. Random Forest "
+        "strongly limits the overfitting of a single tree.",
+        "Bardzo solidny i trudny do zepsucia. Radzi sobie z nieliniowościami, interakcjami cech, szumem. Random "
+        "Forest mocno ogranicza overfitting pojedynczego drzewa."),
     "Gut, besonders mit RBF-Kernel. Trennt Klassen gut, ist aber empfindlich gegenüber der Skalierung der "
     "Daten und der Wahl der Hyperparameter.": (
         "Good, especially with the RBF kernel. Separates classes well, but is sensitive to data scaling and to "
@@ -571,18 +571,18 @@ T = {
     "Unbekanntes Modell: {m}": (
         "Unknown model: {m}",
         "Nieznany model: {m}"),
-    "Logistische Regression sagt Klassen vorher. Für eine Zahl als Label (Regression) z. B. Random Forest "
-    "(Platz 1) oder Lineare Regression (Platz 5) wählen – oder in Schritt 4 den Problemtyp ändern.": (
-        "Logistic Regression predicts classes. For a number as the label (regression) choose e.g. Random Forest "
-        "(rank 1) or Linear Regression (rank 5) – or change the problem type in step 4.",
-        "Logistic Regression przewiduje klasy. Dla liczby jako etykiety (regresja) wybierz np. Random Forest "
-        "(miejsce 1) albo Linear Regression (miejsce 5) – albo zmień typ problemu w kroku 4."),
-    "Lineare Regression sagt eine Zahl vorher. Für Klassen z. B. Random Forest (Platz 1) oder Logistische "
-    "Regression (Platz 3) wählen – oder in Schritt 4 den Problemtyp Regression wählen.": (
-        "Linear Regression predicts a number. For classes choose e.g. Random Forest (rank 1) or Logistic "
-        "Regression (rank 3) – or choose the problem type regression in step 4.",
-        "Linear Regression przewiduje liczbę. Dla klas wybierz np. Random Forest (miejsce 1) albo Logistic "
-        "Regression (miejsce 3) – albo w kroku 4 wybierz typ problemu regresja."),
+    "Logistische Regression sagt Klassen vorher. Für eine Zahl als Label (Regression) z. B. Gradient Boosting "
+    "(Platz 1) oder Lineare Regression (Platz 6) wählen – oder in Schritt 4 den Problemtyp ändern.": (
+        "Logistic Regression predicts classes. For a number as the label (regression) choose e.g. Gradient "
+        "Boosting (rank 1) or Linear Regression (rank 6) – or change the problem type in step 4.",
+        "Logistic Regression przewiduje klasy. Dla liczby jako etykiety (regresja) wybierz np. Gradient Boosting "
+        "(miejsce 1) albo Linear Regression (miejsce 6) – albo zmień typ problemu w kroku 4."),
+    "Lineare Regression sagt eine Zahl vorher. Für Klassen z. B. Gradient Boosting (Platz 1) oder Logistische "
+    "Regression (Platz 4) wählen – oder in Schritt 4 den Problemtyp Regression wählen.": (
+        "Linear Regression predicts a number. For classes choose e.g. Gradient Boosting (rank 1) or Logistic "
+        "Regression (rank 4) – or choose the problem type regression in step 4.",
+        "Linear Regression przewiduje liczbę. Dla klas wybierz np. Gradient Boosting (miejsce 1) albo Logistic "
+        "Regression (miejsce 4) – albo w kroku 4 wybierz typ problemu regresja."),
     "K = {k} ist größer als die Anzahl der Trainingszeilen ({n}).": (
         "K = {k} is larger than the number of training rows ({n}).",
         "K = {k} jest większe niż liczba wierszy treningowych ({n})."),
@@ -783,4 +783,97 @@ T = {
         "(.keras/.h5) cannot be loaded here.",
         "Nie znaleziono modelu scikit-learn (model.skops albo model.joblib) – modeli z wersji deep learning "
         "(.keras/.h5) nie da się tu wczytać."),
+    # Zeitlicher Split, Vergleichsspalte (Schritt 4)
+    "zufällig (train_test_split)": (
+        "random (train_test_split)",
+        "losowy (train_test_split)"),
+    "zeitlich – Test = die jüngsten Zeilen": (
+        "by time – test = the most recent rows",
+        "czasowy – test = najnowsze wiersze"),
+    "Zeitspalte '{col}': weder eine Zahl (z. B. Jahr, Saison) noch ein erkennbares Datum (z. B. 2024-01-31).": (
+        "Time column '{col}': neither a number (e.g. year, season) nor a recognisable date (e.g. 2024-01-31).",
+        "Kolumna czasu '{col}': ani liczba (np. rok, sezon), ani rozpoznawalna data (np. 2024-01-31)."),
+    "Zeitlicher Split nicht möglich: Die jüngsten Zeilen haben alle denselben Zeitwert wie die ältesten – die "
+    "Spalte trennt keine Zeiträume (andere Zeitspalte oder kleineres test_size).": (
+        "Time-based split not possible: the most recent rows all have the same time value as the oldest – the "
+        "column does not separate periods (choose another time column or a smaller test_size).",
+        "Podział czasowy niemożliwy: najnowsze wiersze mają tę samą wartość czasu co najstarsze – kolumna nie "
+        "rozdziela okresów (inna kolumna czasu albo mniejszy test_size)."),
+    "Unbekannte Art des Splits: {v}": (
+        "Unknown kind of split: {v}",
+        "Nieznany rodzaj podziału: {v}"),
+    "Zeitlicher Split: bitte eine Zeitspalte wählen (z. B. date oder season).": (
+        "Time-based split: please choose a time column (e.g. date or season).",
+        "Podział czasowy: wybierz kolumnę czasu (np. date albo season)."),
+    "Die Zeitspalte darf nicht das Label sein.": (
+        "The time column must not be the label.",
+        "Kolumna czasu nie może być etykietą."),
+    "Vergleichsspalte '{col}' ist nicht in den Daten.": (
+        "Comparison column '{col}' is not in the data.",
+        "Kolumny porównawczej '{col}' nie ma w danych."),
+    "{n} Zeilen ohne Wert in der Zeitspalte '{col}' entfernt": (
+        "{n} rows without a value in the time column '{col}' removed",
+        "Usunięto wiersze bez wartości w kolumnie czasu '{col}': {n}"),
+    "Zeitlicher Split nach '{col}': Training {n} Zeilen ({a} … {b}), Test {n2} Zeilen ({c} … {d}) – das Modell "
+    "lernt nur aus der Vergangenheit": (
+        "Time-based split by '{col}': training {n} rows ({a} … {b}), test {n2} rows ({c} … {d}) – the model only "
+        "learns from the past",
+        "Podział czasowy według '{col}': trening – wiersze: {n} ({a} … {b}), test – wiersze: {n2} ({c} … {d}) – "
+        "model uczy się tylko z przeszłości"),
+    "Testanteil {pct} statt {pct2}: Zeilen mit demselben Zeitwert ('{col}') bleiben zusammen – eine Saison oder "
+    "ein Tag wird nicht zwischen Training und Test geteilt.": (
+        "Test share {pct} instead of {pct2}: rows with the same time value ('{col}') stay together – a season or "
+        "a day is not split between training and test.",
+        "Udział testu {pct} zamiast {pct2}: wiersze o tej samej wartości czasu ('{col}') zostają razem – sezon "
+        "ani dzień nie są dzielone między trening i test."),
+    "Vergleichsspalte '{col}' wird ignoriert – den Vergleich gibt es nur bei binären Labels.": (
+        "Comparison column '{col}' is ignored – the comparison is only available for binary labels.",
+        "Kolumna porównawcza '{col}' jest pomijana – porównanie jest dostępne tylko dla etykiet binarnych."),
+    "Vergleichsspalte '{col}' muss Wahrscheinlichkeiten zwischen 0 und 1 enthalten.": (
+        "Comparison column '{col}' must contain probabilities between 0 and 1.",
+        "Kolumna porównawcza '{col}' musi zawierać prawdopodobieństwa od 0 do 1."),
+    "Vergleichsspalte '{col}': {n} Testzeilen ohne Wert – der Vergleich nutzt nur Zeilen mit Wert": (
+        "Comparison column '{col}': {n} test rows without a value – the comparison only uses rows with a value",
+        "Kolumna porównawcza '{col}': wiersze testowe bez wartości: {n} – porównanie używa tylko wierszy z wartością"),
+    "Vergleich": (
+        "Comparison",
+        "Porównanie"),
+    # Gradient Boosting (Schritt 6–8)
+    "Gradient Boosting (HistGradientBoosting)": (
+        "Gradient Boosting (HistGradientBoosting)",
+        "Gradient Boosting (HistGradientBoosting)"),
+    "Der beste dieser Liste für Tabellen. Baut Bäume nacheinander – jeder korrigiert die Fehler der vorigen. "
+    "Meist genauer als Random Forest und auch bei vielen Zeilen schnell; braucht aber eine passende Anzahl Runden "
+    "(max_iter), sonst lernt er Rauschen mit – Schritt 7 zeigt die beste.": (
+        "The best of this list for tables. Builds trees one after another – each corrects the errors of the "
+        "previous ones. Usually more accurate than Random Forest and fast even with many rows; but it needs a "
+        "suitable number of rounds (max_iter), otherwise it also learns noise – step 7 shows the best one.",
+        "Najlepszy z tej listy dla danych tabelarycznych. Buduje drzewa po kolei – każde poprawia błędy "
+        "poprzednich. Zwykle dokładniejszy niż Random Forest i szybki także przy wielu wierszach; potrzebuje jednak "
+        "odpowiedniej liczby rund (max_iter), inaczej uczy się też szumu – najlepszą pokazuje krok 7."),
+    "Erste Wahl für Tabellen: Richtung, Sieg/Niederlage (Klassifikation) und Zahlen (Regression)": (
+        "First choice for tables: direction, win/loss (classification) and numbers (regression)",
+        "Pierwszy wybór dla tabel: kierunek, wygrana/przegrana (klasyfikacja) i liczby (regresja)"),
+    "max_iter senken (bester Wert: Validierungskurve), learning_rate verkleinern oder min_samples_leaf erhöhen": (
+        "lower max_iter (best value: validation curve), reduce learning_rate or increase min_samples_leaf",
+        "zmniejsz max_iter (najlepsza wartość: krzywa walidacji), zmniejsz learning_rate albo zwiększ "
+        "min_samples_leaf"),
+    "max_iter oder learning_rate erhöhen, größere Bäume (max_leaf_nodes)": (
+        "increase max_iter or learning_rate, larger trees (max_leaf_nodes)",
+        "zwiększ max_iter albo learning_rate, większe drzewa (max_leaf_nodes)"),
+    "Gradient Boosting: {n} Runden trainieren …": (
+        "Gradient Boosting: training {n} rounds …",
+        "Gradient Boosting: trening, rundy: {n} …"),
+    "Anzahl Runden (max_iter)": (
+        "Number of rounds (max_iter)",
+        "Liczba rund (max_iter)"),
+    "Der Validierungsfehler sinkt bis zur letzten Runde – mehr Runden (max_iter) oder eine größere learning_rate "
+    "könnten noch helfen.": (
+        "The validation error keeps falling until the last round – more rounds (max_iter) or a larger "
+        "learning_rate might still help.",
+        "Błąd walidacji spada aż do ostatniej rundy – więcej rund (max_iter) albo większy learning_rate mogą "
+        "jeszcze pomóc."),
+    "Runden (n_iter_)": (
+        "Rounds (n_iter_)",
+        "Rundy (n_iter_)"),
 }

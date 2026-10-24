@@ -16,10 +16,11 @@ IMPORTS = """import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split, GridSearchCV, TimeSeriesSplit
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 from sklearn.svm import SVC, SVR
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.linear_model import LogisticRegression, LinearRegression
@@ -260,6 +261,28 @@ def step2_code(actions: list[dict], numeric_cols: set | None = None, new_columns
 # ---------------------------------------------------------------------------
 # 4) Datenaufbereitung 2
 # ---------------------------------------------------------------------------
+def time_split_lines(sp: dict) -> list[str]:
+    """Zeitlicher Split wie pipeline.time_split: nach der Zeitspalte sortieren (stabil), Test = die jüngsten
+    ceil(test_size · n) Zeilen – Zeilen mit demselben Zeitwert wie die erste Testzeile ebenfalls in den Test."""
+    col = sp["time_column"]
+    inf = ".replace([np.inf, -np.inf], np.nan)" if sp.get("time_removed") else ""
+    if sp.get("time_kind") == "date":
+        L = [f"t = pd.to_datetime(df[{col!r}], format={sp.get('time_format')!r}, errors='coerce')   # "
+             + tx("Zeitspalte → Zeitpunkte")]
+    else:
+        L = [f"t = df[{col!r}].astype(float){inf}   # " + tx("Zeitspalte als Zahl (z. B. Jahr oder Saison)")]
+    if sp.get("time_removed"):
+        L.append("df, t = df[t.notna()], t[t.notna()]   # " + tx("Zeilen ohne Zeitwert entfernen"))
+    return L + [
+        "order = t.sort_values(kind='mergesort').index   # "
+        + tx("nach der Zeit sortieren – stabil: gleiche Zeit behält die ursprüngliche Reihenfolge"),
+        "df, t = df.loc[order], t.loc[order]",
+        f"first_test = t.iloc[-int(np.ceil({sp['test_size']} * len(df)))]   # " + tx("Zeitpunkt der ersten Testzeile"),
+        "train, test = df[t < first_test], df[t >= first_test]   # "
+        + tx("Test = die jüngsten Zeilen, Training = alles davor (kein Blick in die Zukunft)"),
+    ]
+
+
 def step4_code(r: dict) -> str:
     """Code für Schritt 4 in derselben Reihenfolge wie die App: Split zuerst, dann Füllwerte, Kategorien und
     Scaler nur aus den Trainingsdaten lernen und auf Train und Test anwenden."""
@@ -270,8 +293,11 @@ def step4_code(r: dict) -> str:
     if r.get("inf_columns"):
         L.append(f"df[{r['inf_columns']!r}] = df[{r['inf_columns']!r}].replace([np.inf, -np.inf], np.nan)   # "
                  + tx("inf wie fehlend behandeln"))
-    if r.get("dropped_columns"):
-        L.append(f"df = df.drop({r['dropped_columns']!r}, axis=1)   # " + tx("Spalten mit zu vielen Lücken"))
+    sp = r["split"]
+    time_col = sp.get("time_column") if sp.get("mode") == pl.SPLIT_TIME else None
+    dropped = [c for c in r.get("dropped_columns") or [] if c != time_col]  # Zeitspalte wird für den Split gebraucht
+    if dropped:
+        L.append(f"df = df.drop({dropped!r}, axis=1)   # " + tx("Spalten mit zu vielen Lücken"))
     if r.get("dropna_columns"):
         L.append(f"df = df.dropna(subset={r['dropna_columns']!r})")
     cat = r["categorical_features"]
@@ -292,13 +318,16 @@ def step4_code(r: dict) -> str:
         elif r.get("label_kind") == "bool":
             L.append(f"df[{label!r}] = df[{label!r}].astype(int)   # False/True → 0/1")
 
-    sp = r["split"]
-    strat = (f", stratify=df[{label!r}]"
-             if sp.get("stratify_used", sp.get("stratify")) and task != pl.T_REG else "")
     L += ["", f"features = {r['features']!r}", "",
           "# " + tx("Zuerst aufteilen – Füllwerte, Kategorien und Scaler werden danach NUR aus den Trainingsdaten "
-                   "gelernt"),
-          f"train, test = train_test_split(df, test_size={sp['test_size']}, random_state={sp['random_state']}{strat})"]
+                   "gelernt")]
+    if time_col:
+        L += time_split_lines(sp)
+    else:
+        strat = (f", stratify=df[{label!r}]"
+                 if sp.get("stratify_used", sp.get("stratify")) and task != pl.T_REG else "")
+        L.append(f"train, test = train_test_split(df, test_size={sp['test_size']}, random_state={sp['random_state']}"
+                 f"{strat})")
 
     fills = r.get("fills", {})
     if fills:
@@ -407,7 +436,18 @@ def estimator_code(cfg: pl.ModelConfig, task: str, *, plain: bool = False, calib
     clf = task != pl.T_REG
     cw = "'balanced'" if cfg.class_weight and pl.supports_class_weight(cfg, task) else None
     m = cfg.model
-    if m == pl.MODEL_TREES:
+    if m == pl.MODEL_GB:
+        name = "HistGradientBoosting" + ("Classifier" if clf else "Regressor")
+        d = pl.GB_DEFAULTS
+        n_iter = min(max(int(cfg.gb_iter), 1), pl.MAX_TREES)
+        depth = pl._depth(cfg.gb_depth)
+        args = {"max_iter": None if n_iter == d["gb_iter"] else str(n_iter),
+                "learning_rate": None if float(cfg.gb_lr) == d["gb_lr"] else _float(cfg.gb_lr),
+                "max_leaf_nodes": None if max(int(cfg.gb_leaves), 2) == d["gb_leaves"] else str(max(int(cfg.gb_leaves), 2)),
+                "max_depth": str(depth) if depth else None,
+                "min_samples_leaf": None if max(int(cfg.gb_leaf), 1) == d["gb_leaf"] else str(max(int(cfg.gb_leaf), 1)),
+                "early_stopping": "False", "class_weight": cw if clf else None, "random_state": str(int(cfg.seed))}
+    elif m == pl.MODEL_TREES:
         single = cfg.tree_variant == pl.TREE_SINGLE
         name = ("DecisionTree" if single else "RandomForest") + ("Classifier" if clf else "Regressor")
         depth = pl._depth(cfg.max_depth)
@@ -446,15 +486,20 @@ def _grid_param(cfg: pl.ModelConfig) -> dict:
     return {"C": pl.GRID_C} if cfg.kernel == "linear" else {"C": pl.GRID_C, "gamma": pl.GRID_GAMMA}
 
 
-def model_code(cfg: pl.ModelConfig, task: str, calib_cv: int = 5, grid_cv: int | None = None) -> str:
+def model_code(cfg: pl.ModelConfig, task: str, calib_cv: int = 5, grid_cv: int | None = None,
+               time_split: bool = False) -> str:
     """Code für Schritt 6: Modell anlegen und trainieren (optional vorher GridSearchCV wie im Kurs).
-    grid_cv: Folds, die die App tatsächlich nutzt (pipeline.grid_cv – bei seltenen Klassen/wenigen Zeilen weniger)."""
+    grid_cv: Folds, die die App tatsächlich nutzt (pipeline.grid_cv – bei seltenen Klassen/wenigen Zeilen weniger) ·
+    time_split: zeitlicher Split in Schritt 4 → GridSearchCV mit TimeSeriesSplit."""
     L = []
     grid = cfg.model == pl.MODEL_SVM and cfg.grid_search
     if grid:
         base = estimator_code(replace(cfg, grid_search=False), task, plain=True, override={"C": None, "gamma": None})
+        folds = grid_cv or min(max(int(cfg.cv), 2), 10)
+        cv = f"TimeSeriesSplit(n_splits={folds})" if time_split else str(folds)
         L += [f"param_grid = {_grid_param(cfg)!r}   # " + tx("wie im Kurs"),
-              f"grid = GridSearchCV({base}, param_grid, cv={grid_cv or min(max(int(cfg.cv), 2), 10)}, n_jobs=-1)",
+              f"grid = GridSearchCV({base}, param_grid, cv={cv}, n_jobs=-1)"
+              + ("   # " + tx("zeitlicher Split: jeder Fold validiert auf späteren Zeilen") if time_split else ""),
               "grid.fit(X_train, y_train)",
               "print(grid.best_params_, grid.best_score_)", ""]
     if cfg.model == pl.MODEL_SVM and task != pl.T_REG:
@@ -466,9 +511,10 @@ def model_code(cfg: pl.ModelConfig, task: str, calib_cv: int = 5, grid_cv: int |
     return "\n".join(L)
 
 
-def curve_code(cfg: pl.ModelConfig, task: str, label_scaled: bool = False) -> str:
+def curve_code(cfg: pl.ModelConfig, task: str, label_scaled: bool = False, time_split: bool = False) -> str:
     """Code für Schritt 7: Fehler auf Training und Validierung je Parameterwert – wie die Elbow-Methode im Kurs
-    (die App wertet dabei Stichproben von höchstens 5000 Zeilen aus)."""
+    (die App wertet dabei Stichproben von höchstens 5000 Zeilen aus). time_split: Validierungsanteil = der jüngste
+    Teil der (nach der Zeit sortierten) Trainingsdaten."""
     clf = task != pl.T_REG
     L = []
     if cfg.model == pl.MODEL_SVM and cfg.grid_search:
@@ -479,7 +525,10 @@ def curve_code(cfg: pl.ModelConfig, task: str, label_scaled: bool = False) -> st
               "plt.show()", ""]
     if not cfg.curve:
         return "\n".join(L) if L else "# " + tx("keine Validierungskurve (in Schritt 6 ausgeschaltet)")
-    if cfg.validation == "split":
+    if cfg.validation == "split" and time_split:
+        L.append(f"X_fit, X_val, y_fit, y_val = train_test_split(X_train, y_train, test_size={_float(cfg.validation_split)}, "
+                 "shuffle=False)   # " + tx("Validierung = der jüngste Teil der Trainingsdaten"))
+    elif cfg.validation == "split":
         strat = ", stratify=y_train" if clf else ""
         L.append(f"X_fit, X_val, y_fit, y_val = train_test_split(X_train, y_train, test_size={_float(cfg.validation_split)}, "
                  f"random_state={int(cfg.seed)}{strat})   # " + tx("Validierungsanteil aus den Trainingsdaten"))
@@ -493,7 +542,17 @@ def curve_code(cfg: pl.ModelConfig, task: str, label_scaled: bool = False) -> st
                                                                        if label_scaled else "   # MAE"))
     L.append("error_train, error_val = [], []")
     m, x = cfg.model, "values"
-    if m == pl.MODEL_TREES and cfg.tree_variant != pl.TREE_SINGLE:
+    if m == pl.MODEL_GB:
+        L += [f"values = {pl.forest_steps(cfg.gb_iter)!r}",
+              f"m = {estimator_code(cfg, task)}",
+              "m.fit(X_fit, y_fit)   # " + tx("EIN Training – staged_predict liefert die Vorhersage nach jeder Runde"),
+              "stages = zip(m.staged_predict(X_fit), m.staged_predict(X_val))",
+              "for n, (pred_fit, pred_val) in enumerate(stages, start=1):",
+              "    if n in values:",
+              "        error_train.append(error(y_fit, pred_fit))",
+              "        error_val.append(error(y_val, pred_val))"]
+        xlabel = "max_iter"
+    elif m == pl.MODEL_TREES and cfg.tree_variant != pl.TREE_SINGLE:
         L += [f"values = {pl.forest_steps(cfg.n_estimators)!r}",
               f"m = {estimator_code(cfg, task)}",
               "m.set_params(warm_start=True)   # " + tx("jeder Schritt fügt nur neue Bäume hinzu"),
@@ -540,7 +599,7 @@ def curve_code(cfg: pl.ModelConfig, task: str, label_scaled: bool = False) -> st
               "    error_train.append(error(y_fit[rows], m.predict(X_fit[rows])))",
               "    error_val.append(error(y_val, m.predict(X_val)))"]
         xlabel = tx("Trainingszeilen")
-    if m != pl.MODEL_LINREG:
+    if m not in (pl.MODEL_LINREG, pl.MODEL_GB):
         L += ["    error_train.append(error(y_fit, m.predict(X_fit)))",
               "    error_val.append(error(y_val, m.predict(X_val)))"]
     ylabel = "Error Rate" if clf else "MAE"
@@ -570,18 +629,36 @@ def details_code(cfg: pl.ModelConfig, task: str) -> str:
     if cfg.model == pl.MODEL_TREES:
         return ("importances = pd.Series(model.feature_importances_, feature_columns).sort_values(ascending=False)\n"
                 "print(importances.head(25))")
+    if cfg.model == pl.MODEL_GB:
+        return ("from sklearn.inspection import permutation_importance   # "
+                + tx("HistGradientBoosting hat kein feature_importances_") + "\n"
+                f"imp = permutation_importance(model, X_test, y_test, n_repeats=3, random_state={int(cfg.seed)})\n"
+                "print(pd.Series(imp.importances_mean, feature_columns).sort_values(ascending=False).head(25))")
     if cfg.model == pl.MODEL_SVM:
         svc = "model.calibrated_classifiers_[0].estimator" if task != pl.T_REG else "model"
         return f"print('Support vectors:', {svc}.n_support_)"
     return ""
 
 
-def eval_code(task: str, threshold: float = 0.5, label_scaled: bool = False, cfg: pl.ModelConfig | None = None) -> str:
+def eval_code(task: str, threshold: float = 0.5, label_scaled: bool = False, cfg: pl.ModelConfig | None = None,
+              baseline_column: str | None = None) -> str:
+    """Code für Schritt 8. baseline_column (binär): Vergleich mit einer Wahrscheinlichkeit aus den Daten (z. B. Elo)
+    auf denselben Testzeilen."""
     if task == pl.T_BIN:
         code = ("proba = model.predict_proba(X_test)[:, 1]   # " + tx("Wahrscheinlichkeit für Klasse 1") + "\n"
                 f"predictions = (proba > {_float(threshold)}).astype(int)\n"
                 "print(classification_report(y_test, predictions))\n"
-                "print(confusion_matrix(y_test, predictions))")
+                "print(confusion_matrix(y_test, predictions))\n"
+                "from sklearn.metrics import log_loss, brier_score_loss\n"
+                "print('Log loss:', log_loss(y_test, proba), '· Brier:', brier_score_loss(y_test, proba))   # "
+                + tx("Güte der Wahrscheinlichkeiten – kleiner = besser"))
+        if baseline_column:
+            code += ("\n\n"
+                     f"p_base = pd.to_numeric(df.loc[test.index, {baseline_column!r}], errors='coerce').values   # "
+                     + _cm(tx("Vergleich: Wahrscheinlichkeit aus den Daten (z. B. Elo)")) + "\n"
+                     "ok = ~np.isnan(p_base)   # " + tx("nur Zeilen mit Wert") + "\n"
+                     "print('Log loss – model:', log_loss(y_test[ok], proba[ok]), '· baseline:', "
+                     "log_loss(y_test[ok], p_base[ok]))")
     elif task == pl.T_MULTI:
         code = ("predictions = model.predict(X_test)\n"
                 "print(classification_report(y_test, predictions))\n"
@@ -640,6 +717,7 @@ def full_script(source: dict, actions: list[dict], numeric_cols: set, recipe: di
     scaled = bool(recipe.get("label_scaler"))
     calib = pl.calibration_cv(recipe=recipe) if cfg.model == pl.MODEL_SVM and task != pl.T_REG else 5
     gcv = pl.grid_cv(cfg, task, recipe=recipe) if cfg.model == pl.MODEL_SVM and cfg.grid_search else None
+    ts = pl.is_time_split(recipe)
     parts = [
         '"""' + tx("Automatisch erzeugt mit dem Streamlit-ML-Template – entspricht den Einstellungen in der App.")
         + '"""',
@@ -650,9 +728,9 @@ def full_script(source: dict, actions: list[dict], numeric_cols: set, recipe: di
                   strip_columns=bool(source.get("strip_columns"))), "",
         "# " + tx("2) Datenaufbereitung 1"), step2_code(actions, numeric_cols, new_columns), "",
         "# " + tx("4) Datenaufbereitung 2"), step4_code(recipe), "",
-        "# " + tx("6) Modell & Training") + f" – {pl.model_name(cfg.model)}", model_code(cfg, task, calib, gcv), "",
-        "# " + tx("7) Training vs. Validierung"), curve_code(cfg, task, scaled), "",
-        "# " + tx("8) Evaluation"), eval_code(task, threshold, scaled, cfg), "",
+        "# " + tx("6) Modell & Training") + f" – {pl.model_name(cfg.model)}", model_code(cfg, task, calib, gcv, ts), "",
+        "# " + tx("7) Training vs. Validierung"), curve_code(cfg, task, scaled, ts), "",
+        "# " + tx("8) Evaluation"), eval_code(task, threshold, scaled, cfg, recipe.get("baseline_column")), "",
         "# " + tx("9) Speichern & Laden"), save_code(folder, fmt),
     ]
     return "\n".join(parts) + "\n"

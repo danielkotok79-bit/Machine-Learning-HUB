@@ -1083,4 +1083,161 @@ T = {
     "**Geladen: {name}** · {model} · Label `{label}` · {v} · {n} Features → {n2} Eingänge · gespeichert {v2}": (
         "**Loaded: {name}** · {model} · label `{label}` · {v} · {n} features → {n2} inputs · saved {v2}",
         "**Wczytano: {name}** · {model} · etykieta `{label}` · {v} · cechy: {n} → wejścia: {n2} · zapisano {v2}"),
+    # Gradient Boosting, zeitlicher Split, Vergleich mit einer Wahrscheinlichkeit aus den Daten (z. B. Elo)
+    "Fehler je Anzahl Runden (max_iter) – ein Training, Vorhersage nach jeder Runde; mit bestem Wert": (
+        "error by number of rounds (max_iter) – one training run, prediction after every round; with best value",
+        "błąd według liczby rund (max_iter) – jeden trening, prognoza po każdej rundzie; z najlepszą wartością"),
+    "**Das Modell schlägt '{col}':** Log Loss im Mittel {d} niedriger (± {se} Standardfehler, {n} Testzeilen) – "
+    "mehr als Zufall. Die Features enthalten Information, die in '{col}' noch nicht steckt.": (
+        "**The model beats '{col}':** log loss {d} lower on average (± {se} standard error, {n} test rows) – more "
+        "than chance. The features contain information that is not yet in '{col}'.",
+        "**Model pokonuje '{col}':** log loss średnio niższy o {d} (± {se} błędu standardowego, wiersze testowe: "
+        "{n}) – więcej niż przypadek. Cechy zawierają informację, której w '{col}' jeszcze nie ma."),
+    "**Kein klarer Unterschied zu '{col}':** Unterschied im Log Loss {d} (± {se} Standardfehler, {n} Testzeilen) "
+    "– das liegt im Bereich des Zufalls. Das Modell ist nicht nachweislich besser als diese einfache Vorhersage; "
+    "neue Informationen (andere Features) helfen meist mehr als ein anderes Modell.": (
+        "**No clear difference from '{col}':** difference in log loss {d} (± {se} standard error, {n} test rows) – "
+        "within the range of chance. The model is not demonstrably better than this simple prediction; new "
+        "information (other features) usually helps more than another model.",
+        "**Brak wyraźnej różnicy względem '{col}':** różnica log loss {d} (± {se} błędu standardowego, wiersze "
+        "testowe: {n}) – to mieści się w granicach przypadku. Model nie jest wyraźnie lepszy od tej prostej "
+        "prognozy; nowe informacje (inne cechy) pomagają zwykle bardziej niż inny model."),
+    "**'{col}' ist besser als das Modell:** Log Loss des Modells im Mittel {d} höher (± {se} Standardfehler, {n} "
+    "Testzeilen). '{col}' als Feature aufnehmen oder das Modell vereinfachen.": (
+        "**'{col}' is better than the model:** the model's log loss is {d} higher on average (± {se} standard "
+        "error, {n} test rows). Add '{col}' as a feature or simplify the model.",
+        "**'{col}' jest lepsza od modelu:** log loss modelu średnio wyższy o {d} (± {se} błędu standardowego, "
+        "wiersze testowe: {n}). Dodaj '{col}' jako cechę albo uprość model."),
+    "Vergleich mit '{col}'": (
+        "Comparison with '{col}'",
+        "Porównanie z '{col}'"),
+    "Dieselben {n} Testzeilen: Das Modell muss eine fertige Vorhersage aus den Daten schlagen – sonst bringt es "
+    "nichts Neues. Log Loss und Brier messen, wie gut die Wahrscheinlichkeiten stimmen (kleiner = besser); Accuracy "
+    "hier mit der Schwelle 0.5 für alle.": (
+        "The same {n} test rows: the model has to beat a ready-made prediction from the data – otherwise it adds "
+        "nothing new. Log loss and Brier measure how well the probabilities fit (smaller = better); accuracy here "
+        "with the threshold 0.5 for all.",
+        "Te same wiersze testowe ({n}): model musi pokonać gotową prognozę z danych – inaczej nie wnosi nic "
+        "nowego. Log loss i Brier mierzą, jak dobrze zgadzają się prawdopodobieństwa (mniej = lepiej); accuracy tu "
+        "z progiem 0.5 dla wszystkich."),
+    "Modell: {name}": (
+        "Model: {name}",
+        "Model: {name}"),
+    "naive Vorhersage (immer {pct})": (
+        "naive prediction (always {pct})",
+        "prognoza naiwna (zawsze {pct})"),
+    "Kalibrierung: Testzeilen nach der vorhergesagten Wahrscheinlichkeit in 10 gleich große Gruppen – liegt eine "
+    "Linie auf der Diagonale, stimmen die Wahrscheinlichkeiten (70 % vorhergesagt → in 70 % der Fälle "
+    "eingetreten). Erst dann lassen sie sich z. B. mit Wettquoten vergleichen.": (
+        "Calibration: test rows in 10 equally sized groups by predicted probability – if a line lies on the "
+        "diagonal, the probabilities are right (70 % predicted → happened in 70 % of cases). Only then can they be "
+        "compared with e.g. betting odds.",
+        "Kalibracja: wiersze testowe w 10 równych grupach według przewidywanego prawdopodobieństwa – jeśli linia "
+        "leży na przekątnej, prawdopodobieństwa się zgadzają (przewidywane 70 % → zdarzyło się w 70 % przypadków). "
+        "Dopiero wtedy można je porównywać np. z kursami bukmacherskimi."),
+    "Datensatz mit Spalten **pre_\\*** und **post_\\*/inplay_\\*** erkannt (Format des Sportdaten-Tools). "
+    "Vorgeschlagen sind nur Werte, die **vor** dem Spiel bekannt sind (pre_\\*, lineup_\\*), ein zeitlicher Split "
+    "und – falls vorhanden – der Vergleich mit der Elo-Wahrscheinlichkeit in Schritt 8.": (
+        "Dataset with columns **pre_\\*** and **post_\\*/inplay_\\*** detected (format of the sports data tool). "
+        "Proposed are only values known **before** the game (pre_\\*, lineup_\\*), a time-based split and – if "
+        "available – the comparison with the Elo probability in step 8.",
+        "Wykryto zbiór z kolumnami **pre_\\*** i **post_\\*/inplay_\\*** (format narzędzia z danymi sportowymi). "
+        "Proponowane są tylko wartości znane **przed** meczem (pre_\\*, lineup_\\*), podział czasowy i – jeśli "
+        "jest – porównanie z prawdopodobieństwem Elo w kroku 8."),
+    "{n} Features sind erst während oder nach dem Spiel bekannt (inplay_\\*, post_\\*): {cols} – für Vorhersagen "
+    "vor dem Spiel ist das ein Datenleck (unrealistisch gute Kennzahlen).": (
+        "{n} features are only known during or after the game (inplay_\\*, post_\\*): {cols} – for predictions "
+        "before the game this is a data leak (unrealistically good metrics).",
+        "Cechy znane dopiero w trakcie albo po meczu (inplay_\\*, post_\\*): {n} – {cols} – dla prognoz przed "
+        "meczem to wyciek danych (nierealnie dobre wskaźniki)."),
+    "Aufteilung": (
+        "Split",
+        "Podział"),
+    "HistGradientBoosting teilt jedes Feature in höchstens 255 Stufen ein – dadurch auch bei Hunderttausenden "
+    "Zeilen schnell. Skalierung (Schritt 4) braucht es nicht. early_stopping ist aus: Es werden genau max_iter "
+    "Runden trainiert.": (
+        "HistGradientBoosting divides every feature into at most 255 levels – so it is fast even with hundreds of "
+        "thousands of rows. It does not need scaling (step 4). early_stopping is off: exactly max_iter rounds are "
+        "trained.",
+        "HistGradientBoosting dzieli każdą cechę na najwyżej 255 przedziałów – dzięki temu jest szybki nawet przy "
+        "setkach tysięcy wierszy. Nie potrzebuje skalowania (krok 4). early_stopping jest wyłączone: trenowanych "
+        "jest dokładnie max_iter rund."),
+    "Zu wenige Testzeilen mit einem Wert in '{col}' für einen Vergleich.": (
+        "Too few test rows with a value in '{col}' for a comparison.",
+        "Za mało wierszy testowych z wartością w '{col}' do porównania."),
+    "HistGradientBoosting hat kein feature_importances_ – welche Features wichtig sind, zeigt die Permutation "
+    "Importance oben.": (
+        "HistGradientBoosting has no feature_importances_ – the permutation importance above shows which features "
+        "matter.",
+        "HistGradientBoosting nie ma feature_importances_ – które cechy są ważne, pokazuje permutation importance "
+        "powyżej."),
+    "Zufällig wie im Kurs (train_test_split). Zeitlich für Daten mit Reihenfolge – Spiele, Kurse, Messreihen: "
+    "Test = die jüngsten Zeilen, Training = alles davor. So sieht das Modell beim Lernen nichts aus der Zukunft; "
+    "ein zufälliger Split würde spätere Zeilen ins Training mischen und die Kennzahlen schönen.": (
+        "Random as in the course (train_test_split). By time for data with an order – games, prices, measurement "
+        "series: test = the most recent rows, training = everything before. This way the model sees nothing from "
+        "the future while learning; a random split would mix later rows into training and flatter the metrics.",
+        "Losowo jak na kursie (train_test_split). Czasowo dla danych z kolejnością – mecze, kursy, serie pomiarów: "
+        "test = najnowsze wiersze, trening = wszystko wcześniej. Dzięki temu model podczas nauki nie widzi niczego "
+        "z przyszłości; losowy podział wmieszałby późniejsze wiersze do treningu i upiększył wskaźniki."),
+    "Zeitspalte": (
+        "Time column",
+        "Kolumna czasu"),
+    "Güte der Wahrscheinlichkeiten – kleiner = besser. Bestraft sichere Fehlprognosen stark; wichtig, wenn man mit "
+    "den Wahrscheinlichkeiten rechnet (z. B. gegen Wettquoten).": (
+        "Quality of the probabilities – smaller = better. Punishes confident wrong predictions heavily; important "
+        "when you calculate with the probabilities (e.g. against betting odds).",
+        "Jakość prawdopodobieństw – mniej = lepiej. Mocno karze pewne błędne prognozy; ważne, gdy liczy się na "
+        "prawdopodobieństwach (np. względem kursów bukmacherskich)."),
+    "Datum (z. B. 2024-01-31) oder Zahl (Jahr, Saison). Die Spalte muss kein Feature sein.": (
+        "Date (e.g. 2024-01-31) or number (year, season). The column does not have to be a feature.",
+        "Data (np. 2024-01-31) albo liczba (rok, sezon). Kolumna nie musi być cechą."),
+    "Zeitlicher Split: Anteil der jüngsten Zeilen im Test.": (
+        "Time-based split: share of the most recent rows in the test set.",
+        "Podział czasowy: udział najnowszych wierszy w teście."),
+    "Anzahl Runden = Bäume nacheinander. Zu wenige → Underfitting, zu viele → das Modell lernt Rauschen. Die beste "
+    "Zahl zeigt Schritt 7 (Validierungskurve).": (
+        "Number of rounds = trees one after another. Too few → underfitting, too many → the model learns noise. "
+        "Step 7 shows the best number (validation curve).",
+        "Liczba rund = drzewa jedno po drugim. Za mało → underfitting, za dużo → model uczy się szumu. Najlepszą "
+        "liczbę pokazuje krok 7 (krzywa walidacji)."),
+    "Wie stark jeder Baum die Fehler der vorigen korrigiert. Kleiner = vorsichtiger, braucht dafür mehr Runden "
+    "(z. B. 0.05 mit 300 statt 0.1 mit 100).": (
+        "How strongly each tree corrects the errors of the previous ones. Smaller = more careful, but needs more "
+        "rounds (e.g. 0.05 with 300 instead of 0.1 with 100).",
+        "Jak mocno każde drzewo poprawia błędy poprzednich. Mniej = ostrożniej, ale potrzeba więcej rund (np. 0.05 "
+        "z 300 zamiast 0.1 ze 100)."),
+    "Größe jedes Baums (Anzahl Blätter). Kleiner = einfachere Bäume, weniger Overfitting.": (
+        "Size of each tree (number of leaves). Smaller = simpler trees, less overfitting.",
+        "Rozmiar każdego drzewa (liczba liści). Mniej = prostsze drzewa, mniej overfittingu."),
+    "Maximale Tiefe – 0 = unbegrenzt (None); die Größe begrenzt meist max_leaf_nodes.": (
+        "Maximum depth – 0 = unlimited (None); the size is usually limited by max_leaf_nodes.",
+        "Maksymalna głębokość – 0 = bez limitu (None); rozmiar ogranicza zwykle max_leaf_nodes."),
+    "Mindestanzahl Zeilen je Blatt – größer = glattere Vorhersagen (Standard 20).": (
+        "Minimum number of rows per leaf – larger = smoother predictions (default 20).",
+        "Minimalna liczba wierszy w liściu – więcej = gładsze prognozy (domyślnie 20)."),
+    " Zeitlicher Split: TimeSeriesSplit – jeder Fold validiert auf Zeilen nach seinen Trainingszeilen.": (
+        " Time-based split: TimeSeriesSplit – every fold validates on rows after its training rows.",
+        " Podział czasowy: TimeSeriesSplit – każdy fold waliduje na wierszach po swoich wierszach treningowych."),
+    "Vergleich in Schritt 8 (optional): Wahrscheinlichkeit für '{pos}' aus den Daten": (
+        "Comparison in step 8 (optional): probability of '{pos}' from the data",
+        "Porównanie w kroku 8 (opcjonalnie): prawdopodobieństwo '{pos}' z danych"),
+    " Beim zeitlichen Split (Schritt 4) ist der Anteil der jüngste Teil der Trainingsdaten.": (
+        " With the time-based split (step 4) the share is the most recent part of the training data.",
+        " Przy podziale czasowym (krok 4) ten udział to najnowsza część danych treningowych."),
+    "Zeitraum in '{col}': {a} … {b}": (
+        "Period in '{col}': {a} … {b}",
+        "Okres w '{col}': {a} … {b}"),
+    "Eine fertige Vorhersage aus den Daten, z. B. die Siegchance nach Elo (pre_elo_prob_home) oder aus Wettquoten. "
+    "Schritt 8 vergleicht das Modell damit auf denselben Testzeilen – ein Modell, das sie nicht schlägt, bringt "
+    "nichts Neues.": (
+        "A ready-made prediction from the data, e.g. the win probability by Elo (pre_elo_prob_home) or from betting "
+        "odds. Step 8 compares the model with it on the same test rows – a model that does not beat it adds "
+        "nothing new.",
+        "Gotowa prognoza z danych, np. szansa na wygraną według Elo (pre_elo_prob_home) albo z kursów "
+        "bukmacherskich. Krok 8 porównuje z nią model na tych samych wierszach testowych – model, który jej nie "
+        "pokonuje, nie wnosi nic nowego."),
+    " · {n} Zeilen ohne Zeitwert werden entfernt": (
+        " · {n} rows without a time value will be removed",
+        " · wiersze bez wartości czasu zostaną usunięte: {n}"),
 }
