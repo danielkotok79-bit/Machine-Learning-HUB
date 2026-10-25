@@ -295,7 +295,10 @@ def step4_code(r: dict) -> str:
                  + tx("inf wie fehlend behandeln"))
     sp = r["split"]
     time_col = sp.get("time_column") if sp.get("mode") == pl.SPLIT_TIME else None
-    dropped = [c for c in r.get("dropped_columns") or [] if c != time_col]  # Zeitspalte wird für den Split gebraucht
+    # Zeitspalte (Split) und Vergleichsspalte (Schritt 8) werden später noch gebraucht – nicht aus df entfernen;
+    # als Feature fallen sie trotzdem weg (features enthält sie nicht)
+    keep = {time_col, r.get("baseline_column")} - {None}
+    dropped = [c for c in r.get("dropped_columns") or [] if c not in keep]
     if dropped:
         L.append(f"df = df.drop({dropped!r}, axis=1)   # " + tx("Spalten mit zu vielen Lücken"))
     if r.get("dropna_columns"):

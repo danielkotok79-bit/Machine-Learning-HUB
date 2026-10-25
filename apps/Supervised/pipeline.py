@@ -1126,25 +1126,41 @@ def time_split(values: np.ndarray, test_size: float) -> tuple[np.ndarray, np.nda
     first = ordered[n - n_test]
     pos_tr, pos_te = order[ordered < first], order[ordered >= first]
     if not len(pos_tr):
-        raise ValueError(tx("Zeitlicher Split nicht möglich: Die jüngsten Zeilen haben alle denselben Zeitwert wie die "
-                            "ältesten – die Spalte trennt keine Zeiträume (andere Zeitspalte oder kleineres test_size)."))
+        newer = float(np.mean(ordered > ordered[0]))  # Anteil der Zeilen nach dem ältesten Zeitwert
+        if newer == 0:
+            raise ValueError(tx("Zeitlicher Split nicht möglich: Alle Zeilen haben denselben Zeitwert ({v}) – die "
+                                "Spalte trennt keine Zeiträume. Andere Zeitspalte wählen.", v=time_text(ordered[0])))
+        mx = np.floor(newer * 100) / 100
+        if mx < 0.05:  # kleinster Wert des Reglers in Schritt 4 – ein kleineres test_size ist dort nicht möglich
+            raise ValueError(tx("Zeitlicher Split nicht möglich: Nur {pct} der Zeilen liegen nach dem ältesten Zeitwert "
+                                "({v}) – die Spalte trennt kaum Zeiträume. Eine feinere Zeitspalte wählen (z. B. Datum "
+                                "statt Saison).", pct=_pct(newer), v=time_text(ordered[0])))
+        raise ValueError(tx("Zeitlicher Split nicht möglich: Bei test_size = {ts} fällt die Grenze auf den ältesten "
+                            "Zeitwert ({v}) – weil Zeilen mit demselben Zeitwert zusammenbleiben, kämen alle Zeilen in "
+                            "den Test. test_size höchstens {mx} wählen.",
+                            ts=_fmt_value(test_size), v=time_text(ordered[0]), mx=f"{mx:g}"))
     return pos_tr, pos_te
 
 
+SPORT_LABELS = ("home_win", "p1_win")  # Label der Datensätze des Sportdaten-Tools (NBA bzw. Tennis)
+
+
 def match_data_layout(columns) -> dict | None:
-    """Datensatz im Format des Sportdaten-Tools (Spalten pre_*, lineup_*, inplay_*, post_*)? Dann Vorschläge für
-    Schritt 4: als Features nur Werte, die vor dem Spiel bekannt sind; post_* (nach dem Spiel) und inplay_* (während
-    des Spiels) wären ein Datenleck. Rückgabe: {"features", "leaky", "label", "time", "baseline"} oder None."""
+    """Datensatz im Format des Sportdaten-Tools (Label home_win bzw. p1_win und Spalten pre_* / lineup_*, dazu oft
+    inplay_* und post_*)? Dann Vorschläge für Schritt 4: als Features nur Werte, die vor dem Spiel bekannt sind;
+    post_* (nach dem Spiel) und inplay_* (während des Spiels) wären ein Datenleck. Erkannt wird am Label und an pre_* –
+    nicht an post_*/inplay_*, die sich im Tool abwählen lassen (und Namen wie post_code in fremden Daten nicht
+    verwechseln). Rückgabe: {"features", "leaky", "label", "time", "baseline"} oder None."""
     cols = [str(c) for c in columns]
-    pre = [c for c in cols if c.startswith(("pre_", "lineup_"))]
-    leaky = [c for c in cols if c.startswith(("post_", "inplay_"))]
-    if not pre or not leaky:
-        return None
 
     def pick(names):
         return next((n for n in names if n in cols), None)
 
-    return {"features": pre, "leaky": leaky, "label": pick(("home_win", "p1_win")),
+    label = pick(SPORT_LABELS)
+    pre = [c for c in cols if c.startswith(("pre_", "lineup_"))]
+    if label is None or not pre:
+        return None
+    return {"features": pre, "leaky": [c for c in cols if c.startswith(("post_", "inplay_"))], "label": label,
             "time": pick(("date", "match_date_est", "tourney_date", "season", "year")),
             "baseline": next((c for c in pre if "elo_prob" in c), None)}
 
@@ -1243,9 +1259,18 @@ def encode_label(s: pd.Series, recipe: dict) -> np.ndarray:
     return values.map(mapping).to_numpy(dtype="float64")
 
 
-def suggest_missing(df: pd.DataFrame, col: str, candidates: list[str] | None = None) -> tuple[str, str]:
+def group_candidates(df: pd.DataFrame, candidates) -> list[str]:
+    """Spalten, die als Gruppe für den Gruppen-Mittelwert taugen: Zahl, höchstens 1 % Lücken, höchstens 200
+    verschiedene Werte (Reihenfolge wie übergeben)."""
+    return [c for c in dict.fromkeys(candidates or []) if c in df.columns and is_numeric(df[c])
+            and df[c].isna().mean() <= 0.01 and df[c].nunique() <= 200]
+
+
+def suggest_missing(df: pd.DataFrame, col: str, candidates: list[str] | None = None,
+                    corr: pd.DataFrame | None = None) -> tuple[str, str]:
     """Vorschlag für fehlende Werte: bei Zahlen Gruppen-Mittelwert über die am stärksten korrelierte,
-    diskrete Spalte (z. B. mort_acc ↔ total_acc), sonst Median bzw. eigene Kategorie."""
+    diskrete Spalte (z. B. mort_acc ↔ total_acc), sonst Median bzw. eigene Kategorie.
+    corr (von suggest_missing_all): Korrelationen schon berechnet – candidates sind dann bereits geprüft."""
     s = df[col]
     pct = s.isna().mean() * 100
     if pct > 40:
@@ -1255,17 +1280,28 @@ def suggest_missing(df: pd.DataFrame, col: str, candidates: list[str] | None = N
     if not is_numeric(s):
         return M_CONST, "fehlend"
     best, best_r = None, 0.0
-    for c in candidates or []:
-        if c == col or c not in df.columns or not is_numeric(df[c]):
+    for c in (candidates or []) if corr is not None else group_candidates(df, candidates):
+        if c == col:
             continue
-        if df[c].isna().mean() > 0.01 or df[c].nunique() > 200:
-            continue
-        r = s.corr(df[c].astype(float))
+        r = corr.at[col, c] if corr is not None else s.corr(df[c].astype(float))
         if pd.notna(r) and abs(r) > best_r:
             best, best_r = c, abs(r)
     if best is not None and best_r >= 0.3:
         return M_GROUP, best
     return M_MEDIAN, ""
+
+
+def suggest_missing_all(df: pd.DataFrame, cols, candidates: list[str] | None = None) -> dict:
+    """Vorschläge für mehrere Spalten – dieselben Regeln wie suggest_missing, aber die Kandidaten werden nur einmal
+    geprüft und alle Korrelationen in einem Schritt berechnet (DataFrame.corr, paarweise vollständige Zeilen wie
+    Series.corr). Bei breiten Daten wie denen des Sportdaten-Tools (ATP: 67 Spalten mit Lücken × 49 Kandidaten,
+    79 000 Zeilen) dauert das etwa 3 statt 20 Sekunden. Rückgabe: {Spalte: (Strategie, Parameter)}."""
+    cols = list(dict.fromkeys(cols))
+    eligible = group_candidates(df, candidates)
+    need = [c for c in cols if is_numeric(df[c]) and 1 < df[c].isna().mean() * 100 <= 40]
+    corr = df[list(dict.fromkeys(need + eligible))].astype(float).corr() if need and eligible else None
+    return {c: suggest_missing(df, c, eligible, corr=corr) if corr is not None else suggest_missing(df, c, [])
+            for c in cols}
 
 
 def _apply_fills(X: pd.DataFrame, fills: dict) -> pd.DataFrame:
@@ -1412,6 +1448,8 @@ def prepare_ml_data(
         raise ValueError(tx("Label '{label}' ist nicht in den Daten.", label=label))
     if split_mode not in SPLIT_MODES:
         raise ValueError(tx("Unbekannte Art des Splits: {v}", v=split_mode))
+    if not 0 < float(test_size) < 1:
+        raise ValueError(tx("test_size muss zwischen 0 und 1 liegen (z. B. 0.2) – angegeben: {v}.", v=test_size))
     if split_mode == SPLIT_TIME:
         if not time_column or time_column not in df.columns:
             raise ValueError(tx("Zeitlicher Split: bitte eine Zeitspalte wählen (z. B. date oder season)."))
@@ -1419,6 +1457,8 @@ def prepare_ml_data(
             raise ValueError(tx("Die Zeitspalte darf nicht das Label sein."))
     if baseline_column is not None and baseline_column not in df.columns:
         raise ValueError(tx("Vergleichsspalte '{col}' ist nicht in den Daten.", col=baseline_column))
+    if baseline_column is not None and baseline_column == label:
+        raise ValueError(tx("Die Vergleichsspalte darf nicht das Label sein."))
     features = [f for f in dict.fromkeys(features) if f != label]
     unknown = [f for f in features if f not in df.columns]
     if unknown:
@@ -1553,6 +1593,23 @@ def prepare_ml_data(
         # gleiche Aufteilung wie train_test_split(X, y, …): sie hängt nur von Zeilenzahl, Seed und y ab
         pos_tr, pos_te = train_test_split(np.arange(len(d)), test_size=test_size, random_state=random_state,
                                           stratify=strat_y)
+    # Genug zum Lernen? Beim zeitlichen Split kann das Training klein werden (Zeilen mit demselben Zeitwert bleiben
+    # zusammen) oder eine Klasse fehlen (z. B. im frühen Zeitraum nur Siege) – dann lernt kein Modell etwas Sinnvolles.
+    period = (tx(" (zeitlicher Split: Training {a} … {b})", a=split_info["train_from"], b=split_info["train_until"])
+              if split_mode == SPLIT_TIME else "")
+    if len(pos_tr) < 10:
+        raise ValueError(tx("Nur {n} Trainingszeilen{period} – zu wenig zum Lernen (mindestens 10). test_size "
+                            "verkleinern oder eine feinere Zeitspalte wählen.", n=len(pos_tr), period=period))
+    if task != T_REG:
+        present = sorted(set(np.unique(y[pos_tr].astype(int)).tolist()))
+        absent = [classes[i] for i in range(len(classes)) if i not in present]
+        if len(present) < 2:
+            raise ValueError(tx("In den Trainingsdaten{period} kommt nur die Klasse '{cls}' vor – das Modell könnte "
+                                "nichts anderes vorhersagen. test_size ändern, eine andere Zeitspalte oder den "
+                                "zufälligen Split (mit stratify) wählen.", period=period, cls=classes[present[0]]))
+        if absent:
+            warn.append(tx("Klassen ohne eine einzige Trainingszeile{period}: {cls} – das Modell kann sie nie "
+                           "vorhersagen.", period=period, cls=", ".join(f"'{c}'" for c in absent)))
     d_tr = d.iloc[pos_tr]
     log.append(tx("Split zuerst: Füllwerte, Kategorien und Scaler nur aus den {n} Trainingszeilen gelernt – die "
                   "{n2} Testzeilen werden damit nur umgewandelt (kein Datenleck)",
@@ -1708,10 +1765,16 @@ def prepare_ml_data(
             warn.append(tx("Vergleichsspalte '{col}' wird ignoriert – den Vergleich gibt es nur bei binären Labels.",
                            col=baseline_column))
         else:
-            b = df.loc[i_te, baseline_column]
-            b = (b if is_numeric(b) else parse_numbers(b)).to_numpy(dtype="float64")
+            def probs(rows):
+                b = df.loc[rows, baseline_column]
+                return (b if is_numeric(b) else parse_numbers(b)).to_numpy(dtype="float64", na_value=np.nan)
+
+            b = probs(i_te)
             ok = b[np.isfinite(b)]
-            if not len(ok) or ok.min() < 0 or ok.max() > 1:
+            if not len(ok):
+                raise ValueError(tx("Vergleichsspalte '{col}' hat in den Testzeilen keinen einzigen Wert.",
+                                    col=baseline_column))
+            if ok.min() < 0 or ok.max() > 1:
                 raise ValueError(tx("Vergleichsspalte '{col}' muss Wahrscheinlichkeiten zwischen 0 und 1 enthalten.",
                                     col=baseline_column))
             base_te = b
@@ -1719,6 +1782,21 @@ def prepare_ml_data(
             if len(ok) < len(b):
                 log.append(tx("Vergleichsspalte '{col}': {n} Testzeilen ohne Wert – der Vergleich nutzt nur Zeilen mit "
                               "Wert", col=baseline_column, n=_n(len(b) - len(ok))))
+            # Passt die Spalte zur positiven Klasse? Auf den Trainingszeilen (der Test bleibt unberührt) muss sie
+            # „positive Klasse“ besser als Zufall vorhersagen – sonst ist es meist die Wahrscheinlichkeit der anderen
+            # Klasse (z. B. Siegchance der Heimmannschaft, aber positive Klasse „0“ = Auswärtssieg).
+            b_tr = probs(i_tr)
+            fin = np.isfinite(b_tr)
+            recipe["baseline_auc_train"] = None
+            if fin.sum() >= 10 and len(np.unique(y_tr[fin])) == 2:
+                auc = float(roc_auc_score(y_tr[fin].astype(int), b_tr[fin]))
+                recipe["baseline_auc_train"] = auc
+                if auc < 0.5:
+                    warn.append(tx("Vergleichsspalte '{col}' sagt '{pos}' auf den Trainingszeilen schlechter vorher "
+                                   "als Zufall (ROC-AUC {auc:.2f}) – vermutlich ist sie die Wahrscheinlichkeit für "
+                                   "'{neg}'. Dann in Schritt 4 '{neg}' als positive Klasse wählen, sonst ist der "
+                                   "Vergleich in Schritt 8 wertlos.",
+                                   col=baseline_column, pos=classes[1], neg=classes[0], auc=auc))
 
     # i) Datenleck-Check (Trainingszeilen): Feature korreliert fast perfekt mit dem Label?
     if task in (T_BIN, T_REG) and np.std(y_tr) > 0:
@@ -2298,6 +2376,10 @@ def grid_search(cfg: ModelConfig, task: str, X: np.ndarray, y: np.ndarray, time_
                       return_train_score=True, n_jobs=-1)
     gs.fit(X, y)
     if not np.isfinite(gs.best_score_):
+        if time_order:  # TimeSeriesSplit: der erste Fold lernt nur aus dem ältesten Teil – oft nur eine Klasse
+            raise ValueError(tx("GridSearchCV: keine gültige Bewertung – beim zeitlichen Split lernen die ersten Folds "
+                                "(TimeSeriesSplit) nur aus den ältesten Zeilen; dort fehlt vermutlich eine Klasse oder "
+                                "es sind zu wenige Zeilen. cv verkleinern oder ohne GridSearchCV trainieren."))
         raise ValueError(tx("GridSearchCV: keine gültige Bewertung (zu wenige Zeilen je Fold) – cv verkleinern oder "
                             "ohne GridSearchCV trainieren."))
     res = gs.cv_results_

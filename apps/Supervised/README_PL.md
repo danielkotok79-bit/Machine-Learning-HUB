@@ -172,15 +172,16 @@ Kolejność w kroku 6 to ranking – miejsce 1 jest zwykle najmocniejsze:
 
 ## Dane sportowe: podział czasowy i porównanie z Elo
 
-Aplikacja rozpoznaje pliki CSV w formacie narzędzia z danymi sportowymi (Datasety NBA i tenis) po kolumnach `pre_*`
-i `post_*`/`inplay_*` i w kroku 4 proponuje pasujące ustawienia:
+Aplikacja rozpoznaje pliki CSV w formacie narzędzia z danymi sportowymi (Datasety NBA i tenis) po etykiecie
+`home_win` albo `p1_win` razem z kolumnami `pre_*`/`lineup_*` – także eksporty, w których grupy `inplay_*` i `post_*`
+odznaczono w narzędziu – i w kroku 4 proponuje pasujące ustawienia:
 
 | Propozycja | Dlaczego |
 |---|---|
 | cechy: tylko `pre_*` i `lineup_*` | znane przed meczem. `inplay_*` (w trakcie) i `post_*` (po meczu) byłyby wyciekiem danych – jeśli mimo to je wybierzesz, krok 4 ostrzega |
 | etykieta `home_win` (NBA) albo `p1_win` (tenis) | cel prognozy |
 | podział czasowy według `date` (tenis: `match_date_est`) | trening = starsze mecze, test = najnowsze. Mecze z tego samego dnia nigdy nie trafiają do obu części. Dlatego kolumna z datą zostaje w kroku 2 bez zmian (inaczej proponowana byłaby „Data → rok”) |
-| kolumna porównawcza `pre_elo_prob_home` (tenis: `pre_elo_prob_p1`) | szansa na wygraną według Elo przed meczem – narzędzie liczy Elo mecz po meczu tylko z wcześniejszych meczów |
+| kolumna porównawcza `pre_elo_prob_home` (tenis: `pre_elo_prob_p1`) | szansa na wygraną według Elo przed meczem – narzędzie liczy Elo mecz po meczu tylko z wcześniejszych meczów. Dotyczy gospodarzy albo gracza 1, czyli klasy `1` – dlatego jest proponowana tylko wtedy, gdy `1` jest klasą pozytywną. Jeśli wybrana kolumna porównawcza przewiduje klasę pozytywną na wierszach treningowych gorzej niż przypadek (ROC-AUC poniżej 0.5), ostrzegają krok 4 i krok 8 |
 
 **Porównanie w kroku 8.** Na tych samych wierszach testowych obok siebie stoją model, kolumna porównawcza i prognoza
 naiwna (zawsze udział klasy pozytywnej w treningu): accuracy (próg 0.5), log loss, Brier i ROC-AUC. Decyduje
@@ -190,15 +191,21 @@ kalibracji pokazuje, czy np. przewidywane 70 % zdarza się też w ok. 70 % przyp
 prawdopodobieństwa nadają się do porównania z kursami bukmacherskimi.
 
 Przykład z danymi NBA z narzędzia (stan na 22.10.2026, 28 382 mecze od sezonu 2004-05, test = 20 % najnowszych meczów
-od marca 2022, Gradient Boosting na wszystkich `pre_*`/`lineup_*`, 300 rund, `learning_rate=0.05`): log loss 0.621
-wobec 0.620 dla samego Elo – **brak wyraźnej różnicy**. Zgadza się to z samym narzędziem: w NBA wartości `pre_*`
-wnoszą niewiele ponad Elo; więcej daje skład (kto gra). W tenisie natomiast modele z formą, serwisem i returnem są
-wyraźnie lepsze od Elo.
+od marca 2022 – `test_size` 0.2 –, poza tym propozycje z kroku 4; Gradient Boosting na wszystkich `pre_*`/`lineup_*`
+z 300 rundami, `learning_rate=0.05` i walidacją „Część danych treningowych (czyściej)”): log loss 0.621 wobec 0.620
+dla samego Elo – brak przewagi, bo model jest przeuczony. Krok 7 to pokazuje i proponuje 50 rund; po „Przejmij
+najlepszą wartość do kroku 6” i ponownym treningu: log loss **0.613 wobec 0.620**, różnica −0.006 ± 0.002 na mecz –
+model jest lepszy od Elo nieznacznie, ale bardziej niż przypadkiem. Liczby rund nie warto więc zgadywać, tylko
+sprawdzić w kroku 7. Zgadza się to z benchmarkiem narzędzia (trening do sezonu 2023, test od 2024): same `pre_*`
+0.6083 ≈ Elo 0.6085, z `lineup_*` (kto gra) 0.6022. W tenisie (ATP, również 20 % testu, od lutego 2021) już Gradient
+Boosting z wartościami domyślnymi jest wyraźnie lepszy od Elo: 0.608 wobec 0.634.
 
 Podział czasowy działa z każdą kolumną z datą albo liczbą (rok, sezon), kolumna porównawcza – z każdą kolumną z
 prawdopodobieństwami od 0 do 1 dla klasy pozytywnej (np. z kursów bukmacherskich) – także poza danymi sportowymi.
 Wiersze bez wartości czasu są usuwane; wiersze o tej samej wartości czasu zostają razem (udział testu może więc nieco
-odbiegać od `test_size`, np. przy całych sezonach).
+odbiegać od `test_size`, np. przy całych sezonach). Krok 4 sprawdza wynik: jeśli zostaje mniej niż 10 wierszy
+treningowych albo w treningu brakuje jakiejś klasy (np. bo występuje dopiero w najnowszych wierszach), komunikat
+wyjaśnia, co zrobić; jeśli granica wypada na najstarszej wartości czasu, podaje największy możliwy `test_size`.
 
 ## Nowe kolumny (krok 2)
 
@@ -313,7 +320,7 @@ Rozbudowa:
 
 ```bash
 pip install pytest
-pytest -q                                  # 293 testy, ok. 5 minut
+pytest -q                                  # 310 testów, ok. 5 minut
 python tests/synthetic.py --rows 20000     # syntetyczny przykładowy CSV (bez prawdziwych danych)
 ```
 
@@ -329,7 +336,8 @@ python tests/synthetic.py --rows 20000     # syntetyczny przykładowy CSV (bez p
 | `tests/test_audit3_regressions.py` | trzeci audyt: żaden kod z nazw kolumn/wartości w pokazywanym kodzie Pythona, krok 10 z kolumnami o tej samej nazwie, tytuły wykresów (notatnik, `$`), zmiana języka (tabele, eksport, adres) |
 | `tests/test_audit4_regressions.py` | czwarty audyt (scikit-learn): „przejmij najlepszą wartość” dla wytrenowanego modelu i z GridSearchCV, dokładne liczby w pokazywanym kodzie, GridSearchCV przy małej liczbie wierszy w foldzie, pytanie przed pickle, nazwy z plików nie jako Markdown, bezpieczny kod wczytywania `.skops`, zapis bez utraty poprzedniego modelu, limit rozmiaru `.skops`, uwaga o `drop_first`, opisy osi w bieżącym języku |
 | `tests/test_charts.py` | nowe wykresy w kroku 3 (jointplot, gęstość 2D, lmplot, histogram według grup): nietypowe dane, pokazywany kod działa, test klikania |
-| `tests/test_sports_timesplit.py` | rozpoznawanie formatu danych sportowych (propozycje, kolumna z datą zostaje), podział czasowy (trening przed testem, te same dni razem, liczba/data, komunikaty błędów), pokazywany kod = aplikacja także przy podziale czasowym, Gradient Boosting (krzywa z jednego treningu, najlepsza wartość, uwaga „więcej rund”), GridSearchCV z `TimeSeriesSplit`, porównanie z prawdopodobieństwem (ocena, błąd standardowy, wiersze bez wartości), cały skrypt, test klikania z danymi sportowymi (kroki 1–10) |
+| `tests/test_audit5_regressions.py` | piąty audyt (Gradient Boosting, podział czasowy, Elo): kolumna porównawcza drugiej klasy (brak propozycji, ostrzeżenie w kroku 4 i 8), podział czasowy bez obu klas albo ze zbyt małym treningiem, rozpoznawanie bez `post_*`/`inplay_*` i bez fałszywego alarmu, kod kroku 8 przy usuniętej kolumnie porównawczej, uwaga „przygotuj ponownie” po zmianie kolumny porównawczej, komunikaty (granica na najstarszej wartości czasu, kolumna porównawcza bez wartości w teście albo = etykieta, `test_size` 0/1, GridSearchCV z `TimeSeriesSplit`), szybkość kroku 4 przy szerokich danych |
+| `tests/test_sports_timesplit.py` | rozpoznawanie formatu danych sportowych (propozycje, kolumna z datą zostaje), podział czasowy (trening przed testem, te same dni razem, liczba/data, komunikaty błędów), pokazywany kod = aplikacja także przy podziale czasowym, Gradient Boosting (krzywa z jednego treningu, najlepsza wartość, uwaga „więcej rund”), GridSearchCV z `TimeSeriesSplit`, porównanie z prawdopodobieństwem (ocena, błąd standardowy, wiersze bez wartości), cały skrypt, test klikania z danymi sportowymi (kroki 1–10, „przejmij najlepszą wartość” przy Gradient Boosting) |
 | `tests/test_i18n.py` | języki: każdy tekst ma tłumaczenie angielskie i polskie z tymi samymi symbolami zastępczymi, niemiecki bez zmian, CSV dla Excela zależnie od języka, wygenerowany kod liczy to samo w każdym języku, cała aplikacja po angielsku i po polsku bez niemieckich pozostałości |
 
 ## Uwagi

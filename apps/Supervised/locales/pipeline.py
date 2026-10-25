@@ -793,12 +793,6 @@ T = {
     "Zeitspalte '{col}': weder eine Zahl (z. B. Jahr, Saison) noch ein erkennbares Datum (z. B. 2024-01-31).": (
         "Time column '{col}': neither a number (e.g. year, season) nor a recognisable date (e.g. 2024-01-31).",
         "Kolumna czasu '{col}': ani liczba (np. rok, sezon), ani rozpoznawalna data (np. 2024-01-31)."),
-    "Zeitlicher Split nicht möglich: Die jüngsten Zeilen haben alle denselben Zeitwert wie die ältesten – die "
-    "Spalte trennt keine Zeiträume (andere Zeitspalte oder kleineres test_size).": (
-        "Time-based split not possible: the most recent rows all have the same time value as the oldest – the "
-        "column does not separate periods (choose another time column or a smaller test_size).",
-        "Podział czasowy niemożliwy: najnowsze wiersze mają tę samą wartość czasu co najstarsze – kolumna nie "
-        "rozdziela okresów (inna kolumna czasu albo mniejszy test_size)."),
     "Unbekannte Art des Splits: {v}": (
         "Unknown kind of split: {v}",
         "Nieznany rodzaj podziału: {v}"),
@@ -876,4 +870,70 @@ T = {
     "Runden (n_iter_)": (
         "Rounds (n_iter_)",
         "Rundy (n_iter_)"),
+    # Audyt 5
+    " (zeitlicher Split: Training {a} … {b})": (
+        " (time-based split: training {a} … {b})",
+        " (podział czasowy: trening {a} … {b})"),
+    "Zeitlicher Split nicht möglich: Bei test_size = {ts} fällt die Grenze auf den ältesten Zeitwert ({v}) – weil "
+    "Zeilen mit demselben Zeitwert zusammenbleiben, kämen alle Zeilen in den Test. test_size höchstens {mx} wählen.": (
+        "Time-based split not possible: with test_size = {ts} the boundary falls on the oldest time value ({v}) – since "
+        "rows with the same time value stay together, all rows would end up in the test set. Choose test_size of at "
+        "most {mx}.",
+        "Podział czasowy niemożliwy: przy test_size = {ts} granica wypada na najstarszej wartości czasu ({v}) – "
+        "ponieważ wiersze o tej samej wartości czasu zostają razem, wszystkie wiersze trafiłyby do testu. Wybierz "
+        "test_size najwyżej {mx}."),
+    "Zeitlicher Split nicht möglich: Nur {pct} der Zeilen liegen nach dem ältesten Zeitwert ({v}) – die Spalte trennt "
+    "kaum Zeiträume. Eine feinere Zeitspalte wählen (z. B. Datum statt Saison).": (
+        "Time-based split not possible: only {pct} of the rows come after the oldest time value ({v}) – the column "
+        "hardly separates periods. Choose a finer time column (e.g. date instead of season).",
+        "Podział czasowy niemożliwy: tylko {pct} wierszy leży po najstarszej wartości czasu ({v}) – kolumna prawie nie "
+        "rozdziela okresów. Wybierz dokładniejszą kolumnę czasu (np. datę zamiast sezonu)."),
+    "Zeitlicher Split nicht möglich: Alle Zeilen haben denselben Zeitwert ({v}) – die Spalte trennt keine Zeiträume. "
+    "Andere Zeitspalte wählen.": (
+        "Time-based split not possible: all rows have the same time value ({v}) – the column does not separate "
+        "periods. Choose another time column.",
+        "Podział czasowy niemożliwy: wszystkie wiersze mają tę samą wartość czasu ({v}) – kolumna nie rozdziela "
+        "okresów. Wybierz inną kolumnę czasu."),
+    "test_size muss zwischen 0 und 1 liegen (z. B. 0.2) – angegeben: {v}.": (
+        "test_size must be between 0 and 1 (e.g. 0.2) – given: {v}.",
+        "test_size musi być między 0 a 1 (np. 0.2) – podano: {v}."),
+    "Die Vergleichsspalte darf nicht das Label sein.": (
+        "The comparison column must not be the label.",
+        "Kolumna porównawcza nie może być etykietą."),
+    "Nur {n} Trainingszeilen{period} – zu wenig zum Lernen (mindestens 10). test_size verkleinern oder eine feinere "
+    "Zeitspalte wählen.": (
+        "Only {n} training rows{period} – too few to learn from (at least 10). Reduce test_size or choose a finer time "
+        "column.",
+        "Tylko wiersze treningowe: {n}{period} – za mało do nauki (co najmniej 10). Zmniejsz test_size albo wybierz "
+        "dokładniejszą kolumnę czasu."),
+    "In den Trainingsdaten{period} kommt nur die Klasse '{cls}' vor – das Modell könnte nichts anderes vorhersagen. "
+    "test_size ändern, eine andere Zeitspalte oder den zufälligen Split (mit stratify) wählen.": (
+        "The training data{period} contain only the class '{cls}' – the model could predict nothing else. Change "
+        "test_size, choose another time column or the random split (with stratify).",
+        "W danych treningowych{period} jest tylko klasa '{cls}' – model nie mógłby przewidzieć niczego innego. Zmień "
+        "test_size, wybierz inną kolumnę czasu albo podział losowy (ze stratify)."),
+    "Klassen ohne eine einzige Trainingszeile{period}: {cls} – das Modell kann sie nie vorhersagen.": (
+        "Classes without a single training row{period}: {cls} – the model can never predict them.",
+        "Klasy bez ani jednego wiersza treningowego{period}: {cls} – model nigdy ich nie przewidzi."),
+    "GridSearchCV: keine gültige Bewertung – beim zeitlichen Split lernen die ersten Folds (TimeSeriesSplit) nur aus "
+    "den ältesten Zeilen; dort fehlt vermutlich eine Klasse oder es sind zu wenige Zeilen. cv verkleinern oder ohne "
+    "GridSearchCV trainieren.": (
+        "GridSearchCV: no valid score – with the time-based split the first folds (TimeSeriesSplit) learn only from the "
+        "oldest rows; a class is probably missing there or there are too few rows. Reduce cv or train without "
+        "GridSearchCV.",
+        "GridSearchCV: brak poprawnej oceny – przy podziale czasowym pierwsze foldy (TimeSeriesSplit) uczą się tylko "
+        "na najstarszych wierszach; prawdopodobnie brakuje tam jakiejś klasy albo jest za mało wierszy. Zmniejsz cv "
+        "albo trenuj bez GridSearchCV."),
+    "Vergleichsspalte '{col}' hat in den Testzeilen keinen einzigen Wert.": (
+        "Comparison column '{col}' has not a single value in the test rows.",
+        "Kolumna porównawcza '{col}' nie ma w wierszach testowych ani jednej wartości."),
+    "Vergleichsspalte '{col}' sagt '{pos}' auf den Trainingszeilen schlechter vorher als Zufall (ROC-AUC {auc:.2f}) – "
+    "vermutlich ist sie die Wahrscheinlichkeit für '{neg}'. Dann in Schritt 4 '{neg}' als positive Klasse wählen, "
+    "sonst ist der Vergleich in Schritt 8 wertlos.": (
+        "Comparison column '{col}' predicts '{pos}' worse than chance on the training rows (ROC-AUC {auc:.2f}) – it "
+        "is probably the probability of '{neg}'. Then choose '{neg}' as the positive class in step 4, otherwise the "
+        "comparison in step 8 is worthless.",
+        "Kolumna porównawcza '{col}' przewiduje '{pos}' na wierszach treningowych gorzej niż przypadek (ROC-AUC "
+        "{auc:.2f}) – zapewne to prawdopodobieństwo dla '{neg}'. Wtedy w kroku 4 wybierz '{neg}' jako klasę "
+        "pozytywną, inaczej porównanie w kroku 8 nic nie znaczy."),
 }

@@ -157,15 +157,16 @@ Die Reihenfolge in Schritt 6 ist die Rangliste – Platz 1 ist in der Regel am s
 
 ## Sportdaten: zeitlicher Split und Vergleich mit Elo
 
-Die App erkennt CSV-Dateien im Format des Sportdaten-Tools (Datasety NBA i tenis) an den Spalten `pre_*` und
-`post_*`/`inplay_*` und schlägt in Schritt 4 passende Einstellungen vor:
+Die App erkennt CSV-Dateien im Format des Sportdaten-Tools (Datasety NBA i tenis) am Label `home_win` bzw. `p1_win`
+zusammen mit Spalten `pre_*`/`lineup_*` – auch Exporte, in denen die Gruppen `inplay_*` und `post_*` im Tool abgewählt
+wurden – und schlägt in Schritt 4 passende Einstellungen vor:
 
 | Vorschlag | Warum |
 |---|---|
 | Features: nur `pre_*` und `lineup_*` | vor dem Spiel bekannt. `inplay_*` (während) und `post_*` (nach dem Spiel) wären ein Datenleck – wählt man sie trotzdem, warnt Schritt 4 |
 | Label `home_win` (NBA) bzw. `p1_win` (Tennis) | Ziel der Vorhersage |
 | zeitlicher Split nach `date` (Tennis: `match_date_est`) | Training = ältere Spiele, Test = die jüngsten. Spiele desselben Tages landen nie in beiden Teilen. Die Datumsspalte bleibt dafür in Schritt 2 unverändert (sonst würde „Datum → Jahr“ vorgeschlagen) |
-| Vergleichsspalte `pre_elo_prob_home` (Tennis: `pre_elo_prob_p1`) | die Siegchance nach Elo vor dem Spiel – das Tool rechnet Elo Spiel für Spiel nur aus früheren Spielen |
+| Vergleichsspalte `pre_elo_prob_home` (Tennis: `pre_elo_prob_p1`) | die Siegchance nach Elo vor dem Spiel – das Tool rechnet Elo Spiel für Spiel nur aus früheren Spielen. Sie gilt für die Heimmannschaft bzw. Spieler 1, also die Klasse `1` – vorgeschlagen wird sie deshalb nur, wenn `1` die positive Klasse ist. Sagt eine gewählte Vergleichsspalte die positive Klasse auf den Trainingszeilen schlechter vorher als Zufall (ROC-AUC unter 0.5), warnen Schritt 4 und Schritt 8 |
 
 **Vergleich in Schritt 8.** Auf denselben Testzeilen stehen Modell, Vergleichsspalte und naive Vorhersage (immer
 der Anteil der positiven Klasse im Training) nebeneinander: Accuracy (Schwelle 0.5), Log Loss, Brier und ROC-AUC.
@@ -174,16 +175,22 @@ Unterschied je Spiel mit Standardfehler (gepaart, dieselben Spiele) und sagt, ob
 mehr als zufällig schlägt. Das Kalibrierungs-Diagramm zeigt, ob z. B. 70 % vorhergesagt auch in etwa 70 % der Fälle
 eintreten – erst dann taugen die Wahrscheinlichkeiten für einen Vergleich mit Wettquoten.
 
-Beispiel mit den NBA-Daten des Tools (Stand 22.10.2026, 28 382 Spiele seit 2004-05, Test = 20 % jüngste Spiele ab
-März 2022, Gradient Boosting auf allen `pre_*`/`lineup_*`, 300 Runden, `learning_rate=0.05`): Log Loss 0.621 gegen
-0.620 für Elo allein – **kein klarer Unterschied**. Das deckt sich mit dem Tool selbst: In der NBA holen die
-`pre_*`-Werte gegenüber Elo kaum etwas heraus; mehr bringt die Aufstellung (wer spielt). Im Tennis liegen Modelle mit
-Form-, Aufschlag- und Return-Werten dagegen deutlich vor Elo.
+Beispiel mit den NBA-Daten des Tools (Stand 22.10.2026, 28 382 Spiele seit 2004-05, Test = 20 % jüngste Spiele ab März
+2022 – `test_size` 0.2 –, sonst Vorschläge aus Schritt 4; Gradient Boosting auf allen `pre_*`/`lineup_*` mit 300
+Runden, `learning_rate=0.05` und der Validierung „Anteil aus Training (sauberer)“): Log Loss 0.621 gegen 0.620 für Elo
+allein – kein Vorteil, denn das Modell ist überangepasst. Schritt 7 meldet das und schlägt 50 Runden vor; nach „Besten
+Wert in Schritt 6 übernehmen“ und neuem Training: Log Loss **0.613 gegen 0.620**, Unterschied −0.006 ± 0.002 je Spiel
+– das Modell schlägt Elo knapp, aber mehr als zufällig. Die Zahl der Runden also nicht raten, sondern in Schritt 7
+prüfen. Das passt zum Benchmark des Tools (Training bis Saison 2023, Test ab 2024): nur `pre_*` 0.6083 ≈ Elo 0.6085,
+mit `lineup_*` (wer spielt) 0.6022. Im Tennis (ATP, ebenfalls 20 % Test, ab Februar 2021) liegt schon Gradient
+Boosting mit den Standardwerten klar vor Elo: 0.608 gegen 0.634.
 
 Der zeitliche Split funktioniert mit jeder Datums- oder Zahlenspalte (Jahr, Saison), die Vergleichsspalte mit jeder
 Spalte mit Wahrscheinlichkeiten zwischen 0 und 1 für die positive Klasse (z. B. aus Wettquoten) – auch außerhalb von
 Sportdaten. Zeilen ohne Zeitwert werden entfernt; Zeilen mit demselben Zeitwert bleiben zusammen (der Testanteil kann
-daher etwas von `test_size` abweichen, z. B. bei ganzen Saisons).
+daher etwas von `test_size` abweichen, z. B. bei ganzen Saisons). Schritt 4 prüft das Ergebnis: Bleiben weniger als 10
+Trainingszeilen oder fehlt dem Training eine Klasse (z. B. weil sie erst in den jüngsten Zeilen vorkommt), erklärt
+eine Meldung, was zu tun ist; fällt die Grenze auf den ältesten Zeitwert, nennt sie das größte mögliche `test_size`.
 
 ## Neue Spalten (Schritt 2)
 
@@ -295,7 +302,7 @@ Erweitern:
 
 ```bash
 pip install pytest
-pytest -q                                  # 293 Tests, ca. 5 Minuten
+pytest -q                                  # 310 Tests, ca. 5 Minuten
 python tests/synthetic.py --rows 20000     # synthetische Demo-CSV (keine echten Daten)
 ```
 
@@ -311,7 +318,8 @@ python tests/synthetic.py --rows 20000     # synthetische Demo-CSV (keine echten
 | `tests/test_audit3_regressions.py` | drittes Audit: kein Code aus Spaltennamen/Werten im angezeigten Python-Code, Schritt 10 mit gleichnamigen Spalten, Diagrammtitel (Notebook, `$`), Sprachwechsel (Tabellen, Export, Adresse) |
 | `tests/test_audit4_regressions.py` | viertes Audit (scikit-learn): „Besten Wert übernehmen“ für das trainierte Modell und mit GridSearchCV, exakte Zahlen im angezeigten Code, GridSearchCV mit wenigen Zeilen je Fold, Rückfrage vor pickle, Namen aus Dateien nicht als Markdown, sicherer Lade-Code für `.skops`, Speichern ohne Verlust des alten Modells, Größenlimit für `.skops`, Hinweis zu `drop_first`, Achsentexte in der aktuellen Sprache |
 | `tests/test_charts.py` | neue Diagramme in Schritt 3 (Jointplot, Dichte 2D, lmplot, Histogramm je Gruppe): ungewöhnliche Daten, angezeigter Code läuft, Klick-Test |
-| `tests/test_sports_timesplit.py` | Sportdaten-Format erkennen (Vorschläge, Datumsspalte bleibt), zeitlicher Split (Training vor dem Test, gleiche Tage zusammen, Zahl/Datum, Fehlermeldungen), angezeigter Code = App auch beim zeitlichen Split, Gradient Boosting (Kurve aus einem Training, bester Wert, Hinweis „mehr Runden“), GridSearchCV mit `TimeSeriesSplit`, Vergleich mit einer Wahrscheinlichkeit (Urteil, Standardfehler, Zeilen ohne Wert), ganzes Skript, Klick-Test mit Sportdaten (Schritt 1–10) |
+| `tests/test_audit5_regressions.py` | fünftes Audit (Gradient Boosting, zeitlicher Split, Elo): Vergleichsspalte der anderen Klasse (kein Vorschlag, Warnung in Schritt 4 und 8), zeitlicher Split ohne beide Klassen oder mit zu wenig Training, Erkennung ohne `post_*`/`inplay_*` und ohne Fehlalarm, Code von Schritt 8 bei entfernter Vergleichsspalte, Hinweis „neu vorbereiten“ nach Wechsel der Vergleichsspalte, Meldungen (Grenze beim ältesten Zeitwert, Vergleichsspalte ohne Testwert oder = Label, `test_size` 0/1, GridSearchCV mit `TimeSeriesSplit`), Tempo von Schritt 4 bei breiten Daten |
+| `tests/test_sports_timesplit.py` | Sportdaten-Format erkennen (Vorschläge, Datumsspalte bleibt), zeitlicher Split (Training vor dem Test, gleiche Tage zusammen, Zahl/Datum, Fehlermeldungen), angezeigter Code = App auch beim zeitlichen Split, Gradient Boosting (Kurve aus einem Training, bester Wert, Hinweis „mehr Runden“), GridSearchCV mit `TimeSeriesSplit`, Vergleich mit einer Wahrscheinlichkeit (Urteil, Standardfehler, Zeilen ohne Wert), ganzes Skript, Klick-Test mit Sportdaten (Schritt 1–10, „Besten Wert übernehmen“ bei Gradient Boosting) |
 | `tests/test_i18n.py` | Sprachen: jeder Text hat eine englische und polnische Übersetzung mit denselben Platzhaltern, Deutsch unverändert, Excel-CSV je Sprache, erzeugter Code rechnet in jeder Sprache gleich, die ganze App auf Englisch und Polnisch ohne deutsche Reste |
 
 ## Hinweise

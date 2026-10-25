@@ -169,15 +169,16 @@ The order in step 6 is the ranking – rank 1 is usually the strongest:
 
 ## Sports data: time-based split and comparison with Elo
 
-The app recognises CSV files in the format of the sports data tool (Datasety NBA i tenis) by the columns `pre_*`
-and `post_*`/`inplay_*` and proposes suitable settings in step 4:
+The app recognises CSV files in the format of the sports data tool (Datasety NBA i tenis) by the label `home_win` or
+`p1_win` together with `pre_*`/`lineup_*` columns – also exports in which the groups `inplay_*` and `post_*` were
+unticked in the tool – and proposes suitable settings in step 4:
 
 | Proposal | Why |
 |---|---|
 | features: only `pre_*` and `lineup_*` | known before the game. `inplay_*` (during) and `post_*` (after the game) would be a data leak – if you select them anyway, step 4 warns |
 | label `home_win` (NBA) or `p1_win` (tennis) | target of the prediction |
 | time-based split by `date` (tennis: `match_date_est`) | training = older games, test = the most recent ones. Games of the same day never end up in both parts. For this the date column stays unchanged in step 2 (otherwise "Date → year" would be proposed) |
-| comparison column `pre_elo_prob_home` (tennis: `pre_elo_prob_p1`) | the win probability by Elo before the game – the tool computes Elo game by game from earlier games only |
+| comparison column `pre_elo_prob_home` (tennis: `pre_elo_prob_p1`) | the win probability by Elo before the game – the tool computes Elo game by game from earlier games only. It refers to the home team or player 1, i.e. class `1` – so it is only proposed when `1` is the positive class. If a chosen comparison column predicts the positive class worse than chance on the training rows (ROC-AUC below 0.5), steps 4 and 8 warn |
 
 **Comparison in step 8.** On the same test rows, the model, the comparison column and the naive prediction (always
 the share of the positive class in training) are shown side by side: accuracy (threshold 0.5), log loss, Brier and
@@ -186,16 +187,22 @@ difference per game with its standard error (paired, the same games) and says wh
 comparison column by more than chance. The calibration chart shows whether e.g. 70 % predicted also happens in about
 70 % of cases – only then are the probabilities fit for a comparison with betting odds.
 
-Example with the tool's NBA data (as of 22.10.2026, 28,382 games since 2004-05, test = the most recent 20 % from
-March 2022, Gradient Boosting on all `pre_*`/`lineup_*`, 300 rounds, `learning_rate=0.05`): log loss 0.621 against
-0.620 for Elo alone – **no clear difference**. This matches the tool itself: in the NBA the `pre_*` values add hardly
-anything over Elo; the line-up (who plays) helps more. In tennis, on the other hand, models with form, serve and
-return values are clearly ahead of Elo.
+Example with the tool's NBA data (as of 22.10.2026, 28,382 games since 2004-05, test = the most recent 20 % from March
+2022 – `test_size` 0.2 –, otherwise proposals from step 4; Gradient Boosting on all `pre_*`/`lineup_*` with 300
+rounds, `learning_rate=0.05` and the validation "Share of training data (cleaner)"): log loss 0.621 against 0.620 for
+Elo alone – no advantage, because the model overfits. Step 7 reports this and proposes 50 rounds; after "Apply the
+best value in step 6" and training again: log loss **0.613 against 0.620**, a difference of −0.006 ± 0.002 per game –
+the model beats Elo narrowly, but by more than chance. So don't guess the number of rounds, check it in step 7. This
+matches the tool's benchmark (training up to season 2023, test from 2024): `pre_*` only 0.6083 ≈ Elo 0.6085, with
+`lineup_*` (who plays) 0.6022. In tennis (ATP, also 20 % test, from February 2021) even Gradient Boosting with the
+default values is clearly ahead of Elo: 0.608 against 0.634.
 
 The time-based split works with any date or number column (year, season), the comparison column with any column of
 probabilities between 0 and 1 for the positive class (e.g. from betting odds) – also outside sports data. Rows
 without a time value are removed; rows with the same time value stay together (so the test share can differ a little
-from `test_size`, e.g. with whole seasons).
+from `test_size`, e.g. with whole seasons). Step 4 checks the result: if fewer than 10 training rows remain or the
+training data lacks a class (e.g. because it only occurs in the most recent rows), a message explains what to do; if
+the boundary falls on the oldest time value, it names the largest possible `test_size`.
 
 ## New columns (step 2)
 
@@ -310,7 +317,7 @@ Extending:
 
 ```bash
 pip install pytest
-pytest -q                                  # 293 tests, about 5 minutes
+pytest -q                                  # 310 tests, about 5 minutes
 python tests/synthetic.py --rows 20000     # synthetic demo CSV (no real data)
 ```
 
@@ -326,7 +333,8 @@ python tests/synthetic.py --rows 20000     # synthetic demo CSV (no real data)
 | `tests/test_audit3_regressions.py` | third audit: no code from column names/values in the Python code shown, step 10 with columns of the same name, chart titles (notebook, `$`), language switch (tables, export, address) |
 | `tests/test_audit4_regressions.py` | fourth audit (scikit-learn): “apply the best value” for the trained model and with GridSearchCV, exact numbers in the code shown, GridSearchCV with few rows per fold, question before pickle, names from files not as Markdown, safe loading code for `.skops`, saving without losing the old model, size limit for `.skops`, note on `drop_first`, axis texts in the current language |
 | `tests/test_charts.py` | new charts in step 3 (joint plot, density 2D, lmplot, histogram per group): unusual data, the code shown runs, click test |
-| `tests/test_sports_timesplit.py` | recognising the sports data format (proposals, date column kept), time-based split (training before test, same days together, number/date, error messages), the code shown = app also with the time-based split, Gradient Boosting (curve from one training run, best value, note "more rounds"), GridSearchCV with `TimeSeriesSplit`, comparison with a probability (verdict, standard error, rows without a value), whole script, click test with sports data (steps 1–10) |
+| `tests/test_audit5_regressions.py` | fifth audit (Gradient Boosting, time-based split, Elo): comparison column of the other class (no proposal, warning in steps 4 and 8), time-based split without both classes or with too little training data, recognition without `post_*`/`inplay_*` and without false alarms, step 8 code with a removed comparison column, “prepare again” note after changing the comparison column, messages (boundary on the oldest time value, comparison column without test values or = label, `test_size` 0/1, GridSearchCV with `TimeSeriesSplit`), speed of step 4 with wide data |
+| `tests/test_sports_timesplit.py` | recognising the sports data format (proposals, date column kept), time-based split (training before test, same days together, number/date, error messages), the code shown = app also with the time-based split, Gradient Boosting (curve from one training run, best value, note "more rounds"), GridSearchCV with `TimeSeriesSplit`, comparison with a probability (verdict, standard error, rows without a value), whole script, click test with sports data (steps 1–10, “apply the best value” with Gradient Boosting) |
 | `tests/test_i18n.py` | languages: every text has an English and a Polish translation with the same placeholders, German unchanged, Excel CSV per language, the generated code computes the same in every language, the whole app in English and Polish without German leftovers |
 
 ## Notes

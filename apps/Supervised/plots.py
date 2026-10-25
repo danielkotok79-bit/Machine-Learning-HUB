@@ -284,14 +284,23 @@ def corr_with_target(df: pd.DataFrame, target: str, positive=None, method: str =
     return num.corrwith(y.astype(float), method=method).dropna().sort_values()
 
 
-def fig_corr_target(corr: pd.Series, target: str, positive=None):
+def fig_corr_target(corr: pd.Series, target: str, positive=None, top: int | None = 30):
+    """Korrelation jeder Spalte mit einer Spalte als Balken. top: nur die stärksten (|r|) zeichnen – bei breiten Daten
+    (z. B. 160 Spalten des Sportdaten-Tools) entstünde sonst ein meterhohes Bild, das bei jedem Klick Sekunden kostet;
+    die Tabelle daneben in der App zeigt alle."""
+    total = len(corr)
+    if top and total > top:
+        corr = corr.loc[corr.abs().sort_values(ascending=False).index[:top]].sort_values()
     fig, ax = plt.subplots(figsize=(8, 0.34 * len(corr) + 1.4))
     ax.barh(corr.index.astype(str), corr.values, color=[POS if v > 0 else NEG for v in corr.values], height=0.62)
     ax.axvline(0, color=AXIS, linewidth=1)
     lim = max(abs(corr).max() * 1.15, 0.05) if len(corr) else 1
     ax.set_xlim(-lim, lim)
     label = f"{target} = '{positive}'" if positive is not None else target
-    ax.set_title(tx("Korrelation mit {label}", label=label))
+    title = tx("Korrelation mit {label}", label=label)
+    if len(corr) < total:
+        title += tx(" – die {n} stärksten von {m}", n=len(corr), m=total)
+    ax.set_title(title)
     ax.set_xlabel(tx("Korrelation (rot positiv, blau negativ)"))
     ax.grid(axis="y", visible=False)
     fig.tight_layout()

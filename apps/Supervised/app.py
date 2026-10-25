@@ -1156,11 +1156,13 @@ def missing_editor(df, miss_cols, features):
     sig = (ss.get("viz_token"), tuple(miss_cols))  # neue Daten aus Schritt 2 → Zählungen neu berechnen
     if ss.get("ed_missing__sig") != sig:
         rows = []
+        kept = {c for c in miss_cols if c in prev_map and pl._clean(prev_map[c].get("Strategie"))}
+        new = pl.suggest_missing_all(df, [c for c in miss_cols if c not in kept], features)  # alle auf einmal: schnell
         for c in miss_cols:
-            if c in prev_map and pl._clean(prev_map[c].get("Strategie")):
+            if c in kept:
                 strat, param = prev_map[c]["Strategie"], pl._clean(prev_map[c].get("Parameter"))
             else:
-                strat, param = pl.suggest_missing(df, c, features)
+                strat, param = new[c]
             rows.append({"Spalte": c, "Typ": N_("Zahl") if pl.is_numeric(df[c]) else N_("Kategorie"),
                          "Fehlend": int(df[c].isna().sum()), "Fehlend %": round(df[c].isna().mean() * 100, 3),
                          "Strategie": strat, "Parameter": param})
@@ -1191,9 +1193,10 @@ def page_prep2():
     nun = cached("_nunique", ss.viz_token, df.nunique)
     layout = pl.match_data_layout(cols)  # Datensatz des Sportdaten-Tools (pre_*/post_*)? → passende Vorschläge
     if layout:
-        st.info(tx("Datensatz mit Spalten **pre_\\*** und **post_\\*/inplay_\\*** erkannt (Format des Sportdaten-Tools). "
+        st.info(tx("Datensatz im Format des Sportdaten-Tools erkannt (Label **{label}**, Spalten **pre_\\***). "
                    "Vorgeschlagen sind nur Werte, die **vor** dem Spiel bekannt sind (pre_\\*, lineup_\\*), ein zeitlicher "
-                   "Split und – falls vorhanden – der Vergleich mit der Elo-Wahrscheinlichkeit in Schritt 8."),
+                   "Split und – falls vorhanden – der Vergleich mit der Elo-Wahrscheinlichkeit in Schritt 8.",
+                   label=layout["label"]),
                 icon=":material/sports_score:")
 
     st.subheader(tx("Label (y) & Problemtyp"))
@@ -1376,7 +1379,9 @@ def page_prep2():
         if probs:
             c1, _ = st.columns([2, 1])
             with c1:
-                default = layout["baseline"] if layout and layout["baseline"] in probs else NONE
+                # Elo-Spalte des Tools = Siegchance von home/p1 = Klasse '1' – nur dann als Vorschlag
+                fits = layout and layout["baseline"] in probs and str(pos) == "1"
+                default = layout["baseline"] if fits else NONE
                 base_col = opt(sb(tx("Vergleich in Schritt 8 (optional): Wahrscheinlichkeit für '{pos}' aus den Daten",
                                      pos=pos), [NONE] + probs, "w_base_col", default=default,
                                   help=tx("Eine fertige Vorhersage aus den Daten, z. B. die Siegchance nach Elo "
@@ -1413,8 +1418,8 @@ def page_prep2():
     p = ss.prep
     r = p.recipe
     used = set(r["features"]) | set(r["dropped_columns"]) | set(r.get("empty_columns", []))
-    split_now = (mode, time_col if mode == pl.SPLIT_TIME else None)
-    split_then = (r["split"].get("mode", pl.SPLIT_RANDOM), r["split"].get("time_column"))
+    split_now = (mode, time_col if mode == pl.SPLIT_TIME else None, base_col)
+    split_then = (r["split"].get("mode", pl.SPLIT_RANDOM), r["split"].get("time_column"), r.get("baseline_column"))
     if (r["label"], r["task"]) != (label, task) or used != set(features) or split_now != split_then:
         st.info(tx("Die Einstellungen oben wurden seit dem Vorbereiten geändert → erneut **Daten für ML vorbereiten**."))
     st.success(tx("Fertig: X_train {shape} · X_test {shape2} · {n} Features → {n2} Modell-Eingänge",
@@ -2090,6 +2095,12 @@ def baseline_section(p, r, scores):
     if cmp["n"] < 20:
         st.info(tx("Zu wenige Testzeilen mit einem Wert in '{col}' für einen Vergleich.", col=col))
         return
+    auc_tr = r.get("baseline_auc_train")
+    if auc_tr is not None and auc_tr < 0.5:  # vermutlich die Wahrscheinlichkeit der anderen Klasse (Schritt 4)
+        st.warning(tx("'{col}' sagt '{pos}' schon auf den Trainingszeilen schlechter vorher als Zufall (ROC-AUC "
+                      "{auc:.2f}) – vermutlich ist es die Wahrscheinlichkeit für '{neg}'. Dann ist dieser Vergleich "
+                      "wertlos: in Schritt 4 '{neg}' als positive Klasse wählen.",
+                      col=col, pos=pos, neg=r["classes"][0], auc=auc_tr))
     st.caption(tx("Dieselben {n} Testzeilen: Das Modell muss eine fertige Vorhersage aus den Daten schlagen – sonst "
                   "bringt es nichts Neues. Log Loss und Brier messen, wie gut die Wahrscheinlichkeiten stimmen "
                   "(kleiner = besser); Accuracy hier mit der Schwelle 0.5 für alle.", n=fmt_int(cmp["n"])))

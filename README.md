@@ -105,7 +105,7 @@ The Polish and German versions of the third document are one bilingual file (Pol
 
 ## Tests
 
-**912 automated tests** (pytest, including Streamlit `AppTest` tests of the whole interface) – run per app:
+**956 automated tests** (pytest, including Streamlit `AppTest` tests of the whole interface) – run per app:
 
 ```bash
 pip install pytest
@@ -115,7 +115,7 @@ pytest -q
 
 | App | Tests |
 |---|---|
-| Supervised | 266 |
+| Supervised | 310 |
 | Clustering | 268 |
 | NLP | 188 |
 | Deep Learning | 190 |

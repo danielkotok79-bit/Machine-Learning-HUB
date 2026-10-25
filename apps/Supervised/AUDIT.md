@@ -1,9 +1,10 @@
 # Audyt kodu – Data-Analysis-Template (Streamlit + Keras, od wersji 9: scikit-learn)
 
-> Cztery audyty: **audyt 1** (poniżej), **audyt 2** – całe oprogramowanie po rozszerzeniach, **audyt 3** – kod
-> wersji 6 i 7, **audyt 4** – silnik scikit-learn z wersji 9 (na końcu pliku). Pomiędzy nimi: **wersja 6** – wersje
-> językowe (angielska i polska) i sposób sprawdzenia, że wersja niemiecka się nie zmieniła, **wersja 7** – cztery
-> nowe wykresy w kroku 3, oraz **wersja 9** – silnik supervised learning (scikit-learn, pięć modeli) zamiast Keras.
+> Pięć audytów: **audyt 1** (poniżej), **audyt 2** – całe oprogramowanie po rozszerzeniach, **audyt 3** – kod wersji 6
+> i 7, **audyt 4** – silnik scikit-learn z wersji 9, **audyt 5** – Gradient Boosting, podział czasowy i porównanie z
+> Elo (na końcu pliku). Pomiędzy nimi: **wersja 6** – wersje językowe (angielska i polska) i sposób sprawdzenia, że
+> wersja niemiecka się nie zmieniła, **wersja 7** – cztery nowe wykresy w kroku 3, oraz **wersja 9** – silnik
+> supervised learning (scikit-learn, pięć modeli) zamiast Keras.
 
 **Data:** 14.10.2026 · **Zakres:** `app.py`, `pipeline.py`, `plots.py`, `codegen.py`, testy
 **Metoda:** przegląd kodu + ok. 30 sond z przypadkami brzegowymi + testy w przeglądarce (Playwright) na
@@ -539,3 +540,93 @@ Drobne poprawki bez osobnego numeru: po polsku „Głębokość (średnio)” ja
 scikit-learn 1.9, skops 0.16, Streamlit 1.66); składnia sprawdzona dla Pythona 3.10. 15 nowych testów odtwarza błędy
 B1–B4 i C1–C7 – uruchomione na kodzie sprzed audytu wszystkie kończą się niepowodzeniem (sprawdzone); 3 testy
 zabezpieczają poprawkę E3 z wersji 9 (opisy osi w bieżącym języku). Uruchomienie: `pytest -q` (ok. 5 minut).
+
+---
+
+# Audyt 5 – Gradient Boosting, podział czasowy i porównanie z Elo (25.10.2026)
+
+**Zakres:** kod z aktualizacji z 24.10.2026 (commit `3f349fd`): Gradient Boosting
+(`HistGradientBoostingClassifier`/`Regressor`, krzywa z `staged_predict`, szczegóły modelu, zapis `.skops`), podział
+czasowy (`time_split`, walidacja na najnowszej części treningu, GridSearchCV z `TimeSeriesSplit`), rozpoznawanie
+formatu narzędzia z danymi sportowymi (`match_data_layout`), kolumna porównawcza i porównanie w kroku 8
+(`compare_probabilities`, wykres kalibracji), zmiany w krokach 2, 4 i 6–8 w `app.py`, generowany i eksportowany kod w
+`codegen.py`, nowe teksty i tłumaczenia, przykład NBA w README i testy w `tests/test_sports_timesplit.py`.
+**Metoda:** przegląd każdej nowej funkcji; sondy z prawdziwymi danymi z narzędzia „Datasety NBA i tenis” (NBA: 28 382
+mecze, 144 kolumny; ATP: 78 874 mecze, 178 kolumn) przez logikę aplikacji i AppTest, interfejs po angielsku i po
+polsku z syntetycznymi danymi w tym formacie; eksporty z narzędzia z odznaczonymi grupami (`post_*`, `inplay_*`);
+przypadki brzegowe podziału czasowego (całe sezony, jedna wartość czasu, klasy tylko w najnowszych wierszach, mało
+wierszy, `test_size` 0 i 1, liczby i daty, typy nullable); kolumna porównawcza z lukami, dla drugiej klasy, usunięta w
+kroku 4, równa etykiecie; benchmark narzędzia odtworzony niezależnie od aplikacji; pomiary czasu kroku 4 na szerokich
+danych; pełne testy także w środowisku jak w CI (pandas 3.1, numpy 2.5.4). Każdy potwierdzony błąd jest naprawiony i –
+poza README (A3) i samym testem (C7) – ma test regresyjny (`tests/test_audit5_regressions.py`).
+
+**Wynik:** 13 naprawionych problemów – 4 średnie (w tym błędny wniosek w README), 7 drobnych, 2 dotyczące szybkości.
+Przy ustawieniach proponowanych dla danych z narzędzia (etykieta `home_win`/`p1_win`, klasa pozytywna `1`, kolumna
+`pre_elo_prob_*`) model i porównanie liczyły poprawnie; błędy dotyczyły innych ustawień, eksportów bez niektórych
+grup, komunikatów i szybkości – oraz wniosku w przykładzie NBA.
+
+| # | Waga | Problem | Skutek | Poprawka |
+|---|---|---|---|---|
+| A1 | średnia | Kolumna porównawcza dla drugiej klasy: klasa pozytywna `0` (wygrana gości), a `pre_elo_prob_home` to szansa gospodarzy (klasa `1`) | aplikacja i tak proponowała Elo jako porównanie, a krok 8 ogłaszał „model lepszy od Elo” (dane NBA: log loss 0.62 wobec 0.94) – porównanie bez wartości i bez żadnej uwagi | Elo proponowane tylko przy klasie pozytywnej `1`; krok 4 liczy ROC-AUC kolumny porównawczej na wierszach treningowych (test zostaje nietknięty) – poniżej 0.5 ostrzeżenie w kroku 4 i w kroku 8 z radą, którą klasę wybrać |
+| A2 | średnia | Podział czasowy bez obu klas albo z bardzo małym treningiem | np. 2 wiersze z 2020 i 118 z 2021, `test_size` 0.3 → cały 2021 w teście, trening na 2 wierszach, tylko uwaga „udział testu 98 %”; gdy we wczesnym okresie jest jedna klasa, Gradient Boosting „uczył się” modelu, który zawsze mówi `0` | co najmniej 10 wierszy treningowych i obie klasy w treningu – inaczej komunikat z radą (mniejszy `test_size`, dokładniejsza kolumna czasu, losowy podział ze stratify); przy wielu klasach ostrzeżenie o klasach bez wiersza treningowego |
+| A3 | średnia | README (DE/EN/PL), przykład NBA: „Gradient Boosting, 300 rund – log loss 0.621 wobec 0.620 dla Elo, brak wyraźnej różnicy” | wniosek z przeuczonego modelu. Przy tych samych ustawieniach (walidacja „część danych treningowych”) krok 7 pokazuje przeuczenie i proponuje 50 rund – po przejęciu model jest lepszy od Elo: 0.613 wobec 0.620, różnica −0.006 ± 0.002 na mecz, prawie 3 błędy standardowe | przykład policzony od nowa i opisany krok po kroku (300 rund → propozycja z kroku 7 → wynik); dodane `test_size` 0.2 oraz wyniki benchmarku narzędzia i tenisa |
+| A4 | średnia | Rozpoznawanie formatu wymagało kolumn `post_*`/`inplay_*` | eksport z narzędzia bez tych grup (można je odznaczyć) nie był rozpoznany: brak propozycji, a w kroku 2 proponowane „Data → rok” dla `date` – po jego zastosowaniu podział czasowy był możliwy już tylko według roku; z kolei obce dane z `pre_tax_income` i `post_code` uchodziły za dane sportowe | rozpoznawanie po etykiecie `home_win`/`p1_win` razem z kolumnami `pre_*`/`lineup_*`; `post_*`/`inplay_*` są opcjonalne |
+| C1 | niska | Kolumna porównawcza z lukami i strategią „usuń kolumnę” w kroku 4 | pokazywany i eksportowany kod kroku 8 kończył się `KeyError` – kod kroku 4 usuwał z `df` kolumnę, z której krok 8 czyta porównanie | kod kroku 4 zostawia w `df` kolumnę czasu i kolumnę porównawczą (jako cechy i tak odpadają) |
+| C2 | niska | Zmiana kolumny porównawczej po przygotowaniu danych | brak uwagi „zmienione od przygotowania” – krok 8 porównywał dalej ze starą kolumną | kolumna porównawcza należy do porównania ustawień w kroku 4 |
+| C3 | niska | Komunikat, gdy granica podziału wypada na najstarszej wartości czasu (np. 100 wierszy z 2020, 20 z 2021, `test_size` 0.5) | „najnowsze wiersze mają tę samą wartość czasu co najstarsze” – nieprawda, a rada nie mówiła, jaki `test_size` zadziała | osobne komunikaty: jedna wartość czasu w całej kolumnie; granica na najstarszej wartości – z największym możliwym `test_size` (tu 0.16, sprawdzone, że działa); mniej niż 5 % wierszy po najstarszej wartości – rada, by wybrać dokładniejszą kolumnę czasu (suwak zaczyna się od 0.05) |
+| C4 | niska | Kolumna porównawcza bez żadnej wartości w wierszach testowych; etykieta jako kolumna porównawcza | mylący komunikat „musi zawierać prawdopodobieństwa od 0 do 1”; etykieta jako „porównanie” z samą sobą była przyjmowana | jasne komunikaty dla obu przypadków |
+| C5 | niska | `test_size` 0 albo 1 (tylko przez `pipeline.py` – suwak w aplikacji na to nie pozwala) | podział czasowy: `IndexError`; losowy: komunikat scikit-learn po angielsku | sprawdzenie na początku z komunikatem w języku aplikacji |
+| C6 | niska | SVM z GridSearchCV przy podziale czasowym, gdy pierwsze foldy `TimeSeriesSplit` mają tylko jedną klasę | komunikat „za mało wierszy w foldzie”, choć przyczyną jest kolejność czasowa | komunikat wyjaśnia foldy `TimeSeriesSplit` (pierwsze uczą się tylko na najstarszych wierszach) |
+| C7 | niska (testy) | Test klikania „Przejmij najlepszą wartość” dla Gradient Boosting był warunkowy | gdy krok 7 nic nie proponował, test przechodził bez naciśnięcia przycisku | ustawienia, przy których propozycja jest pewna (400 rund, `learning_rate` 1, `min_samples_leaf` 2); test sprawdza pokazywany kod, wartość w kroku 6 i wybór modelu |
+| P1 | niska (szybkość) | Krok 4, pomoc „korelacja z kolumną z lukami” przy szerokich danych | wykres ze wszystkimi kolumnami liczbowymi (NBA 134, ATP 163 słupki – obraz wysoki na 47–57 cali) rysowany przy każdym kliknięciu w kroku 4: każde kliknięcie 4,6–5,0 s (NBA) i 6,3–7,8 s (ATP) | wykres pokazuje 30 najsilniejszych korelacji (tytuł to mówi), tabela obok – wszystkie; kliknięcie 1,7–1,8 s (NBA) i 1,8–2,3 s (ATP) |
+| P2 | niska (szybkość) | Krok 4, propozycje strategii dla brakujących wartości | korelacje liczone kolumna po kolumnie (ATP: 67 kolumn z lukami × 49 kandydatów, 20 s) – pierwsze wejście do kroku 4 trwało 26 s | `suggest_missing_all`: kandydaci sprawdzani raz, wszystkie korelacje w jednym kroku – te same propozycje (test), 3 s; pierwsze wejście do kroku 4: 5 s |
+
+Drobne poprawki bez osobnego numeru: liczba testów w głównym README (EN/DE/PL) nie była zaktualizowana 24.10 –
+teraz Supervised 310, razem 956.
+
+## Co sprawdzono i działa poprawnie
+
+* **Gradient Boosting:** `n_iter_` zawsze = `max_iter` (bez early stopping), krzywa z `staged_predict` z jednego
+  treningu = osobne treningi z mniejszą liczbą rund; szczegóły modelu, zapis i wczytanie `.skops` (zaufany tylko typ
+  `TreePredictor` z scikit-learn) dla wszystkich typów problemu.
+* **Podział czasowy:** trening zawsze starszy niż test, wiersze o tej samej wartości czasu razem, daty i liczby, typy
+  nullable (`Int64`, `Float64`, `boolean`), wiersze bez wartości czasu usuwane; pokazywany i eksportowany kod daje te
+  same `X_train`/`X_test`/`y` co aplikacja.
+* **Prawdziwe dane z narzędzia:** NBA i ATP przez logikę aplikacji (kroki 2–8) i AppTest (kroki 1–4); migawka z
+  narzędzia (mecze bez wyniku: id + `pre_*` + `lineup_*`) → prognoza w kroku 10 działa; interfejs po angielsku i po
+  polsku z syntetycznymi danymi w formacie narzędzia (kroki 1–10) bez niemieckich pozostałości. Benchmark narzędzia
+  odtworzony co do czwartego miejsca (trening do sezonu 2023, test od 2024, log loss: `pre_*` 0.6083, `pre_*` +
+  `lineup_*` 0.6022, Elo 0.6085). Tenis (ATP, test 20 %): Gradient Boosting z wartościami domyślnymi 0.608 wobec Elo
+  0.634.
+* **Porównanie w kroku 8:** log loss, Brier i ROC-AUC = scikit-learn; błąd standardowy różnicy liczony parami; wiersze
+  bez wartości pominięte; wykres kalibracji dla skrajnych danych (stałe prawdopodobieństwa, mało wierszy, jedna klasa w
+  koszyku) – bez błędów i ostrzeżeń.
+* **Teksty:** katalog tłumaczeń kompletny (989 tekstów, te same symbole zastępcze), bez nieaktualnych wpisów.
+
+## Uwagi (bez zmian)
+
+* Krzywa w kroku 7 przy walidacji „część danych treningowych” bierze przy podziale czasowym najnowsze wiersze treningu
+  (`shuffle=False`); mecze z jednego dnia mogą trafić częściowo do części walidacyjnej – wpływ pomijalny (między
+  treningiem a testem takie mecze zawsze zostają razem).
+* Domyślna walidacja „dane testowe” (jak w kursie): kto wybiera najlepszą wartość według niej, ocenia krok 8 zbyt
+  optymistycznie – krok 7 to mówi i poleca „część danych treningowych”; przykład NBA w README korzysta z tej czystej
+  walidacji.
+* Krzywa w kroku 7 mierzy błąd klasyfikacji (1 − accuracy), a porównanie w kroku 8 – log loss. Błąd klasyfikacji
+  jest miarą zgrubną: na danych NBA log loss wyraźnie rośnie między 50 a 600 rundami (0.613 → 0.629), a błąd
+  klasyfikacji zmienia się tylko w granicach szumu (0.353 → 0.358, tolerancja 0.007) – przy 600 rundach krok 7
+  pokazuje przeuczenie, ale nie proponuje mniejszej wartości (przy 300 rundach proponuje 50). Krzywa log loss dla
+  klasyfikacji binarnej byłaby czulsza – to zmiana projektu (kod w aplikacji, testy zgodności), do rozważenia.
+* Kod wykresu „korelacja z kolumną” w kroku 3 rysuje wszystkie kolumny – w notatniku nie ma tego problemu z szybkością
+  co w aplikacji (P1).
+* Nazwy kolumn trafiają do tekstów Markdown bez escapowania – jak w całej aplikacji; to własne dane użytkownika, a
+  aplikacja jest przeznaczona do użytku lokalnego.
+* `HistGradientBoosting` liczy na wszystkich rdzeniach (OpenMP); na mocno obciążonym komputerze trening bywa
+  wielokrotnie wolniejszy (zmierzone dla NBA: ok. 4 s bez obciążenia, ok. 5 min przy równolegle działających testach).
+
+## Testy (stan po audycie 5)
+
+310 testów (293 + 17 w `tests/test_audit5_regressions.py`) – wszystkie przechodzą (Python 3.13, pandas 3.0.5 oraz
+3.1.0 jak w CI, numpy 2.5, scikit-learn 1.9.1, skops 0.16, Streamlit 1.66); składnia sprawdzona dla Pythona 3.10. Nowe
+testy odtwarzają błędy A1, A2, A4, C1–C6, P1 i P2 – uruchomione na kodzie sprzed audytu wszystkie kończą się
+niepowodzeniem (sprawdzone); C7 to poprawiony test klikania w `tests/test_sports_timesplit.py`. Uruchomienie:
+`pytest -q` (ok. 5–8 minut).

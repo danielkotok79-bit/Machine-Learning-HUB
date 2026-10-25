@@ -1135,15 +1135,6 @@ T = {
         "Kalibracja: wiersze testowe w 10 równych grupach według przewidywanego prawdopodobieństwa – jeśli linia "
         "leży na przekątnej, prawdopodobieństwa się zgadzają (przewidywane 70 % → zdarzyło się w 70 % przypadków). "
         "Dopiero wtedy można je porównywać np. z kursami bukmacherskimi."),
-    "Datensatz mit Spalten **pre_\\*** und **post_\\*/inplay_\\*** erkannt (Format des Sportdaten-Tools). "
-    "Vorgeschlagen sind nur Werte, die **vor** dem Spiel bekannt sind (pre_\\*, lineup_\\*), ein zeitlicher Split "
-    "und – falls vorhanden – der Vergleich mit der Elo-Wahrscheinlichkeit in Schritt 8.": (
-        "Dataset with columns **pre_\\*** and **post_\\*/inplay_\\*** detected (format of the sports data tool). "
-        "Proposed are only values known **before** the game (pre_\\*, lineup_\\*), a time-based split and – if "
-        "available – the comparison with the Elo probability in step 8.",
-        "Wykryto zbiór z kolumnami **pre_\\*** i **post_\\*/inplay_\\*** (format narzędzia z danymi sportowymi). "
-        "Proponowane są tylko wartości znane **przed** meczem (pre_\\*, lineup_\\*), podział czasowy i – jeśli "
-        "jest – porównanie z prawdopodobieństwem Elo w kroku 8."),
     "{n} Features sind erst während oder nach dem Spiel bekannt (inplay_\\*, post_\\*): {cols} – für Vorhersagen "
     "vor dem Spiel ist das ein Datenleck (unrealistisch gute Kennzahlen).": (
         "{n} features are only known during or after the game (inplay_\\*, post_\\*): {cols} – for predictions "
@@ -1240,4 +1231,22 @@ T = {
     " · {n} Zeilen ohne Zeitwert werden entfernt": (
         " · {n} rows without a time value will be removed",
         " · wiersze bez wartości czasu zostaną usunięte: {n}"),
+    # Audyt 5
+    "Datensatz im Format des Sportdaten-Tools erkannt (Label **{label}**, Spalten **pre_\\***). Vorgeschlagen sind "
+    "nur Werte, die **vor** dem Spiel bekannt sind (pre_\\*, lineup_\\*), ein zeitlicher Split und – falls "
+    "vorhanden – der Vergleich mit der Elo-Wahrscheinlichkeit in Schritt 8.": (
+        "Dataset in the format of the sports data tool detected (label **{label}**, columns **pre_\\***). Proposed are "
+        "only values known **before** the game (pre_\\*, lineup_\\*), a time-based split and – if available – the "
+        "comparison with the Elo probability in step 8.",
+        "Wykryto zbiór w formacie narzędzia z danymi sportowymi (etykieta **{label}**, kolumny **pre_\\***). "
+        "Proponowane są tylko wartości znane **przed** meczem (pre_\\*, lineup_\\*), podział czasowy i – jeśli "
+        "jest – porównanie z prawdopodobieństwem Elo w kroku 8."),
+    "'{col}' sagt '{pos}' schon auf den Trainingszeilen schlechter vorher als Zufall (ROC-AUC {auc:.2f}) – "
+    "vermutlich ist es die Wahrscheinlichkeit für '{neg}'. Dann ist dieser Vergleich wertlos: in Schritt 4 '{neg}' als "
+    "positive Klasse wählen.": (
+        "'{col}' predicts '{pos}' worse than chance already on the training rows (ROC-AUC {auc:.2f}) – it is probably "
+        "the probability of '{neg}'. Then this comparison is worthless: choose '{neg}' as the positive class in step 4.",
+        "'{col}' przewiduje '{pos}' już na wierszach treningowych gorzej niż przypadek (ROC-AUC {auc:.2f}) – "
+        "zapewne to prawdopodobieństwo dla '{neg}'. Wtedy to porównanie nic nie znaczy: w kroku 4 wybierz "
+        "'{neg}' jako klasę pozytywną."),
 }

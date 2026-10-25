@@ -95,4 +95,7 @@ T = {
     "perfekt kalibriert": (
         "perfectly calibrated",
         "idealna kalibracja"),
+    " – die {n} stärksten von {m}": (
+        " – the {n} strongest of {m}",
+        " – {n} najsilniejszych z {m}"),
 }

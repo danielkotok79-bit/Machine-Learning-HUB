@@ -52,9 +52,11 @@ def test_layout_of_the_sports_tool_is_detected(games):
     # Schritt 2: die Datumsspalte bleibt für den zeitlichen Split erhalten (sonst 'Datum → Jahr')
     prof = pl.column_profile(games).set_index("Spalte")
     assert prof.at["date", "Aktion"] == pl.A_KEEP
+    # Audit 5: erkannt am Label (home_win/p1_win) + pre_* – auch ohne post_/inplay_ (im Tool abwählbar) …
     assert pl.column_profile(games.drop(columns=["post_margin", "post_total", "inplay_ht_diff"])).set_index(
-        "Spalte").at["date", "Aktion"] == pl.A_YEAR
-    # ohne post_/inplay_ kein Sportdatensatz – z. B. eine Spalte 'post_code' allein reicht nicht
+        "Spalte").at["date", "Aktion"] == pl.A_KEEP
+    # … aber ohne Label kein Sportdatensatz: dann wieder der normale Vorschlag 'Datum → Jahr'
+    assert pl.column_profile(games.drop(columns=["home_win"])).set_index("Spalte").at["date", "Aktion"] == pl.A_YEAR
     assert pl.match_data_layout(["pre_x", "y"]) is None and pl.match_data_layout(["post_code", "y"]) is None
 
 
@@ -313,20 +315,22 @@ def test_app_sports_dataset_time_split_boosting_and_elo(tmp_path, monkeypatch):
     nav(5)
     assert at.radio(key="w_model").options[0].startswith("1 · Gradient Boosting")
     assert at.session_state["w_model"] == pl.MODEL_GB  # Platz 1 ist vorausgewählt
-    at.number_input(key="w_gb_iter").set_value(400).run()
-    at.number_input(key="w_gb_lr").set_value(0.5).run()
+    at.number_input(key="w_gb_iter").set_value(400).run()  # bewusst überangepasst: 400 Runden, learning_rate 1,
+    at.number_input(key="w_gb_lr").set_value(1.0).run()     # min_samples_leaf 2 → Schritt 7 schlägt weniger Runden vor
+    at.number_input(key="w_gb_leaf").set_value(2).run()
     at.radio(key="w_val").set_value("split").run()
-    assert "HistGradientBoostingClassifier(max_iter=400, learning_rate=0.5, early_stopping=False" in \
-        "\n".join(c.value for c in at.code)
+    assert ("HistGradientBoostingClassifier(max_iter=400, learning_rate=1, min_samples_leaf=2, early_stopping=False"
+            in "\n".join(c.value for c in at.code))
     _button(at, "Training starten").click().run()
     _ok(at, "Training")
     nav(6)
     _ok(at, "Schritt 7")
     curve = at.session_state["history"]["curve"]
     assert curve["param"] == "max_iter"
-    if any(b.label == "Besten Wert in Schritt 6 übernehmen" for b in at.button):
-        _button(at, "Besten Wert in Schritt 6 übernehmen").click().run()
-        assert at.session_state["w_gb_iter"] < 400
+    best = curve["values"][curve["best_index"]]
+    assert best < 400  # das Modell lernt bald nur noch Rauschen
+    _button(at, "Besten Wert in Schritt 6 übernehmen").click().run()  # Audit 5: früher nur „falls vorhanden“ geprüft
+    assert at.session_state["w_gb_iter"] == best and at.session_state["w_model"] == pl.MODEL_GB
     assert any("shuffle=False" in c.value for c in at.code)
 
     nav(7)
