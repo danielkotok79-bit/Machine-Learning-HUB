@@ -541,9 +541,10 @@ def model_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
     ])
 
 
-def anomaly_curve_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
+def anomaly_curve_code(cfg: pl.ClusterConfig, n_rows: int, curve: dict | None = None) -> str:
     """Code für Schritt 7 der Anomalie-Modelle – wie pipeline.anomaly_curve(): Schwelle je Anteil auffälliger Zeilen
-    und Knick der Score-Kurve (IF, LOF) bzw. k-Distanz, ihr Knick und der Rauschanteil je eps (DBSCAN)."""
+    und Knick der Score-Kurve (IF, LOF) bzw. k-Distanz, ihr Knick und der Rauschanteil je eps (DBSCAN). curve: das
+    Ergebnis aus der App – hat sie zu große eps übersprungen (Speicher), überspringt der Code dieselben."""
     L = [_knee_code(), ""]
     if cfg.model in (pl.MODEL_IFOREST, pl.MODEL_LOF):
         L += [f"levels = {pl.CONTAM_LEVELS!r}   # " + tx("Anteil auffälliger Zeilen (contamination)"),
@@ -554,6 +555,9 @@ def anomaly_curve_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
               f"top = max(int(np.ceil({pl.KNEE_TOP} * len(score))), min(len(score), 20))",
               "desc = np.sort(score)[::-1][:top]   # " + tx("die auffälligsten 20 % der Zeilen, absteigend sortiert"),
               "knee = knick(desc)",
+              f"if knee is not None and knee + 1 > int(np.ceil({pl.KNEE_TOP} * len(score))):   # "
+              + tx("unter 100 Zeilen: Knick nur unter den auffälligsten 20 %"),
+              "    knee = None",
               "if knee is not None:",
               f"    print({tx('Knick der Score-Kurve – contamination etwa:')!r}, (knee + 1) / len(score))",
               "",
@@ -579,15 +583,20 @@ def anomaly_curve_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
           "kdist = np.sort(neighbors.kneighbors(X_query)[0][:, -1])   # "
           + tx("k-Distanz: Kernpunkt, wenn sie höchstens eps ist"),
           "knee = knick(kdist)",
-          "eps_knee = float(f'{kdist[knee]:.4g}') if knee is not None else None",
+          f"eps_knee = float(f'{{max(kdist[knee], {pl.EPS_MIN!r}):.4g}}') if knee is not None else None   # "
+          + tx("mindestens {v} – bei vielen gleichen Zeilen ist die k-Distanz oft 0", v=f"{pl.EPS_MIN:g}"),
           f"print({tx('Knick der k-Distanz – eps etwa:')!r}, eps_knee)",
           f"print({tx('Anteil Kernpunkte bei eps =')!r}, {_float(cfg.eps)}, np.mean(kdist <= {_float(cfg.eps)}))"]
     grid = cfg.curve and n_rows <= pl.CURVE_ROWS
     if grid:
         L += ["",
               f"eps_values = sorted({{float(f'{{v:.4g}}') for v in np.quantile(kdist, {pl.EPS_LEVELS!r}) if v > 0}}"
-              f" | {{{_float(cfg.eps)}}})",
-              "clusters, noise = [], []",
+              f" | {{{_float(cfg.eps)}}})"]
+        done = ((curve or {}).get("grid") or {})
+        if done.get("skipped") and done.get("eps"):
+            L.append(f"eps_values = [e for e in eps_values if e <= {max(done['eps'])!r}]   # "
+                     + tx("größere eps übersprungen: DBSCAN hielte zu viele Nachbarpaare im Speicher"))
+        L += ["clusters, noise = [], []",
               "for e in eps_values:",
               f"    lab = DBSCAN(eps=e, min_samples={int(cfg.min_samples)}{metric}).fit(X).labels_",
               "    clusters.append(lab.max() + 1)",
@@ -606,11 +615,11 @@ def anomaly_curve_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
     return "\n".join(L)
 
 
-def curve_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
+def curve_code(cfg: pl.ClusterConfig, n_rows: int, curve: dict | None = None) -> str:
     """Code für Schritt 7: Elbow-Methode (Inertia je K) und Silhouette je K – bei den Anomalie-Modellen Schwelle
-    bzw. eps (anomaly_curve_code)."""
+    bzw. eps (anomaly_curve_code, curve = Ergebnis der App)."""
     if pl.is_anomaly(cfg.model):
-        return anomaly_curve_code(cfg, n_rows)
+        return anomaly_curve_code(cfg, n_rows, curve)
     if not cfg.curve:
         return "# " + tx("keine Elbow-/Silhouette-Kurve (in Schritt 6 ausgeschaltet)")
     L = []
@@ -781,8 +790,10 @@ def predict_code(folder: str, model: str = pl.MODEL_KMEANS) -> str:
 
 
 def full_script(source: dict, actions: list[dict], numeric_cols: set, recipe: dict, cfg: pl.ClusterConfig,
-                folder: str = "models/mein_modell", fmt: str = ".skops", new_columns: list[dict] | None = None) -> str:
-    """Gesamte Pipeline als lauffähiges Python-Skript (für Jupyter oder die Kommandozeile)."""
+                folder: str = "models/mein_modell", fmt: str = ".skops", new_columns: list[dict] | None = None,
+                curve: dict | None = None) -> str:
+    """Gesamte Pipeline als lauffähiges Python-Skript (für Jupyter oder die Kommandozeile). curve: Schritt 7 aus
+    der App (DBSCAN: dort übersprungene eps überspringt auch das Skript)."""
     n = int((recipe.get("n_rows") or {}).get("train", 0))
     parts = [
         '"""' + tx("Automatisch erzeugt mit DATA-Analysis-Clustering – entspricht den Einstellungen in der App.")
@@ -795,7 +806,8 @@ def full_script(source: dict, actions: list[dict], numeric_cols: set, recipe: di
         "# " + tx("2) Datenaufbereitung 1"), step2_code(actions, numeric_cols, new_columns), "",
         "# " + tx("4) Datenaufbereitung 2"), step4_code(recipe), "",
         "# " + tx("6) Modell & Training") + " – " + pl.model_name(cfg.model), model_code(cfg, n), "",
-        "# " + (tx("7) Schwelle bzw. eps") if pl.is_anomaly(cfg.model) else tx("7) Wahl von K")), curve_code(cfg, n), "",
+        "# " + (tx("7) Schwelle bzw. eps") if pl.is_anomaly(cfg.model) else tx("7) Wahl von K")),
+        curve_code(cfg, n, curve), "",
         "# " + (tx("8) Auswertung der Anomalien") if pl.is_anomaly(cfg.model) else tx("8) Cluster-Auswertung")),
         eval_code(recipe, cfg), "",
         "# " + tx("9) Speichern & Laden"), save_code(folder, fmt, pl.MODEL_VARS.get(cfg.model, "kmeans")),

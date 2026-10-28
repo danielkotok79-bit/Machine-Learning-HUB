@@ -842,12 +842,13 @@ def fig_kdist(curve: dict, eps: float):
     if len(finite):  # wenige extreme Ausreißer würden den Knick ganz unten zusammendrücken → oben abschneiden
         top = max(float(np.quantile(finite, 0.995)) * 1.3, float(eps) * 1.4,
                   float(kd[knee]) * 1.6 if knee is not None and knee < len(kd) else 0.0)
-        a1.set_ylim(bottom=0)  # Abstände sind nie negativ
         if finite.max() > top:
             a1.set_ylim(0, top)
             a1.annotate(tx("abgeschnitten – höchster Wert {v}", v=f"{finite.max():.4g}"), (1, 1),
                         xycoords="axes fraction", xytext=(-4, -14), textcoords="offset points", ha="right",
                         fontsize=8, color=MUTED)
+        else:  # Abstände sind nie negativ; eps über allen k-Distanzen (alles Kernpunkte) → Linie trotzdem sichtbar
+            a1.set_ylim(0, max(a1.get_ylim()[1], float(eps) * 1.15 if np.isfinite(eps) else 0.0))
     a1.axhline(eps, color=INK2, linewidth=1.2, linestyle="--")
     a1.annotate(tx("eingestellt: eps = {v}", v=f"{eps:.4g}"), (0, eps), xycoords=("axes fraction", "data"),
                 xytext=(4, 6), textcoords="offset points", fontsize=9, color=INK2, bbox=LABEL_BOX)

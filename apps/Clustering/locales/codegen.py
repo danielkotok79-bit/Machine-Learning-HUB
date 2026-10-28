@@ -252,4 +252,14 @@ T = {
         "anomaly (1 = anomalous), anomaly score, note",
         "anomalia (1 = nietypowy), wskaźnik anomalii, uwaga"),
     "anomalien.csv": ("anomalies.csv", "anomalie.csv"),
+    # Audit 6
+    "unter 100 Zeilen: Knick nur unter den auffälligsten 20 %": (
+        "below 100 rows: knee only among the most anomalous 20 %",
+        "poniżej 100 wierszy: załamanie tylko wśród 20 % najbardziej nietypowych"),
+    "mindestens {v} – bei vielen gleichen Zeilen ist die k-Distanz oft 0": (
+        "at least {v} – with many identical rows the k-distance is often 0",
+        "co najmniej {v} – przy wielu identycznych wierszach k-odległość często wynosi 0"),
+    "größere eps übersprungen: DBSCAN hielte zu viele Nachbarpaare im Speicher": (
+        "larger eps skipped: DBSCAN would keep too many neighbour pairs in memory",
+        "większe eps pominięte: DBSCAN trzymałby w pamięci zbyt wiele par sąsiadów"),
 }

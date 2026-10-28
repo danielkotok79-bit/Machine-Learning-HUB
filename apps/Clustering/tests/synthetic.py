@@ -199,16 +199,17 @@ def anomaly_like(n: int = 1200, share: float = 0.02, seed: int = 3) -> pd.DataFr
 
 
 HOUR_MS = 3_600_000
+OI_STEPS = {"5min": 5, "15min": 15, "30min": 30, "1h": 60, "4h": 240, "1d": 1440}  # intervalTime → Minuten
 
 
 class FakeBybit:
     """Simulierte öffentliche Bybit-API v5 – nur für Tests, keine echten Kurse. Gleiche Antwortformen wie die echte
     API: Kerzen und Funding die neuesten zuerst, höchstens limit je Seite, start/end inklusive, Open Interest mit
-    nextPageCursor. Die jüngste Kerze läuft noch (now liegt in ihr).
+    nextPageCursor im Raster intervalTime (simuliert alle 5 Minuten). Die jüngste Kerze läuft noch (now liegt in ihr).
 
     shock = (Symbol, Kerze): dort ein Kurssturz (−9 %) mit 25-fachem Umsatz, großer Spanne, Funding-Sprung und
-    Rückgang des Open Interest – den soll die Anomalieerkennung finden. Kerze als Index ab dem Ende (−200 = 200
-    Kerzen vor der jüngsten)."""
+    Rückgang des Open Interest (ab ¼ der Kerze: Liquidationen) – den soll die Anomalieerkennung finden. Kerze als
+    Index ab dem Ende (−200 = 200 Kerzen vor der jüngsten)."""
 
     def __init__(self, symbols=("BTCUSDT", "ETHUSDT", "SOLUSDT"), minutes: int = 60, n: int = 2400,
                  now_ms: int = 1_790_000_000_000 + 30 * 60_000, seed: int = 7, shock=("SOLUSDT", -200)):
@@ -225,19 +226,21 @@ class FakeBybit:
         self.kl, self.fund, self.oi, self.shock_start = {}, {}, {}, None
         f_ts = np.arange(first - first % (8 * HOUR_MS), now_ms + 1, 8 * HOUR_MS)
         o_ts = np.arange(first - first % HOUR_MS, now_ms + 1, HOUR_MS)
+        o5 = np.arange(o_ts[0], now_ms + 1, 5 * 60_000)  # Open Interest alle 5 min (stündlich wie zuvor gezogen)
         for j, sym in enumerate(symbols):
             r = common * (1.0 + 0.3 * j) + (0 if j == 0 else rng.normal(0, 0.004, n))
             turn = np.exp(rng.normal(np.log(8e6 / (j + 1)), 0.25, n))
             wick = np.abs(rng.normal(0, 0.002, n))
             rate = 1e-4 + rng.normal(0, 1.5e-5, len(f_ts))
-            oi = 2e5 * (j + 1) * np.exp(np.cumsum(rng.normal(0, 0.002, len(o_ts))))
+            oi_h = 2e5 * (j + 1) * np.exp(np.cumsum(rng.normal(0, 0.002, len(o_ts))))
+            oi = np.exp(np.interp(o5, o_ts, np.log(oi_h)))  # zwischen den vollen Stunden: log-linear
             if shock and sym == shock[0]:
                 i = shock[1] % n
                 self.shock_start = int(starts[i])
                 r[i], turn[i], wick[i] = -0.09, turn[i] * 25, 0.03
                 rate[f_ts > starts[i]] = rate[f_ts > starts[i]] - 6e-4 * np.exp(
                     -(f_ts[f_ts > starts[i]] - starts[i]) / (3 * 8 * HOUR_MS))
-                oi[o_ts >= starts[i] + bar] *= 0.85
+                oi[o5 >= starts[i] + bar // 4] *= 0.85  # Liquidationen während der Sturz-Kerze
             close = 50.0 * (j + 1) * np.exp(np.cumsum(r))
             open_ = np.r_[close[0] / np.exp(r[0]), close[:-1]]
             high = np.maximum(open_, close) * (1 + wick)
@@ -245,9 +248,10 @@ class FakeBybit:
             self.kl[sym] = [[str(int(t)), f"{o:.6f}", f"{h:.6f}", f"{lo:.6f}", f"{c:.6f}", f"{v / c:.4f}", f"{v:.2f}"]
                             for t, o, h, lo, c, v in zip(starts, open_, high, low, close, turn)]
             self.fund[sym] = [(int(t), float(x)) for t, x in zip(f_ts, rate)]
-            self.oi[sym] = [(int(t), float(x)) for t, x in zip(o_ts, oi)]
+            self.oi[sym] = [(int(t), float(x)) for t, x in zip(o5, oi)]
         self.calls = 0
         self.requests = []
+        self._oi_pages = {}  # (Symbol, Raster, von, bis) → sortierte Zeilen – Blättern ohne neu zu sortieren
 
     def get(self, path: str, **p) -> dict:
         self.calls += 1
@@ -276,9 +280,14 @@ class FakeBybit:
                                                              "fundingRateTimestamp": str(t)} for t, x in rows]}
         if path == "/v5/market/open-interest":
             assert 1 <= limit <= 200
-            assert p.get("intervalTime") in ("5min", "15min", "30min", "1h", "4h", "1d")
+            assert p.get("intervalTime") in OI_STEPS
             lo, hi = int(p.get("startTime") or 0), int(p.get("endTime") or self.now_ms)
-            rows = sorted((x for x in self.oi[sym] if lo <= x[0] <= hi), key=lambda x: -x[0])
+            step = OI_STEPS[p["intervalTime"]] * 60_000
+            key = (sym, step, lo, hi)
+            if key not in self._oi_pages:
+                self._oi_pages[key] = sorted((x for x in self.oi[sym] if lo <= x[0] <= hi and x[0] % step == 0),
+                                             key=lambda x: -x[0])
+            rows = self._oi_pages[key]
             off = int(p.get("cursor") or 0)
             page = rows[off:off + limit]
             nxt = str(off + limit) if off + limit < len(rows) else ""

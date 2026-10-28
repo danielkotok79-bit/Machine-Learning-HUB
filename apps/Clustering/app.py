@@ -1724,12 +1724,19 @@ def anomaly_params_ui(key, p, n, n_feat):
         contamination_ui()
     else:
         init("w_min_samples", int(min(max(5, 2 * n_feat), 50)))
-        if "w_eps" not in ss:  # Startwert aus der k-Distanz einer Stichprobe – genauer misst Schritt 7
-            ss.w_eps = cached("_eps_start", (ss.get("prep_token"), int(ss.w_min_samples), ss.get("w_metric")),
+        # Startwert aus der k-Distanz einer Stichprobe – genauer misst Schritt 7. Neu berechnet, wenn sich Daten (neue
+        # Vorbereitung, z. B. anderer Scaler), min_samples oder metric ändern und eps noch aus den Daten stammt
+        # (Startwert oder in Schritt 7 übernommener Vorschlag): ein eps aus anderen Einheiten wäre sonst viel zu groß
+        # oder zu klein. Selbst eingegebene Werte bleiben.
+        token = eps_token()
+        auto = ss.get("_eps_auto")  # (Token, eps) – zuletzt aus den Daten gesetzt
+        if "w_eps" not in ss or (auto is not None and auto[0] != token and ss.w_eps == auto[1]):
+            ss.w_eps = cached("_eps_start", token,
                               lambda: pl.suggest_eps(p.X, ss.w_min_samples, ss.get("w_metric", "euclidean")))
+            ss._eps_auto = (token, ss.w_eps)
         c1, c2, c3, _ = st.columns([1.2, 1.2, 1.4, 2])
         with c1:
-            st.number_input("eps", 1e-6, 1e9, step=0.05, format="%.4g", key="w_eps",
+            st.number_input("eps", pl.EPS_MIN, 1e9, step=0.05, format="%.4g", key="w_eps",
                             help=tx("Radius der Nachbarschaft in den skalierten Features. Startwert: Knick der "
                                     "k-Distanz einer Stichprobe – Schritt 7 zeigt, welches eps passt."))
         with c2:
@@ -1864,10 +1871,17 @@ def on_apply_contamination(c):
     ss._k_msg = tx("Übernommen: contamination = {pct} – jetzt in Schritt 6 neu trainieren.", pct=pl.share_text(c))
 
 
+def eps_token():
+    """Wovon ein eps aus den Daten abhängt: Vorbereitung (Skalierung, Features), min_samples und metric."""
+    return ss.get("prep_token"), int(ss.get("w_min_samples") or 0), ss.get("w_metric")
+
+
 @with_lang
 def on_apply_eps(e):
-    ss.w_eps = float(e)
-    ss._k_msg = tx("Übernommen: eps = {v} – jetzt in Schritt 6 neu trainieren.", v=f"{float(e):.4g}")
+    e = min(max(float(e), pl.EPS_MIN), 1e9)  # Grenzen des Eingabefelds in Schritt 6
+    ss.w_eps = e
+    ss._eps_auto = (eps_token(), e)  # Vorschlag aus den Daten – nach neuer Vorbereitung wieder neu berechnet
+    ss._k_msg = tx("Übernommen: eps = {v} – jetzt in Schritt 6 neu trainieren.", v=f"{e:.4g}")
 
 
 def page_threshold():
@@ -1939,7 +1953,7 @@ def page_threshold():
                                            "Schwelle (Score)": [pl.score_text(t) for t in curve["thresholds"]],
                                            "Zeilen über der Schwelle": curve["counts"]})), hide_index=True)
             st.caption(tx("contamination = Anteil auffälliger Zeilen → die passende Schwelle auf dem Score."))
-    code(cg.curve_code(cfg, info["n_rows"]))
+    code(cg.curve_code(cfg, info["n_rows"], curve))
 
 
 def page_k():
@@ -2477,7 +2491,8 @@ def page_save():
         raw = ss.df_raw
         code_folder = f"models/{Path(ss.get('saved_folder', tx('mein_modell'))).name}"
         script = cg.full_script(src, ss.actions_fitted, {c for c in raw.columns if pl.is_numeric(raw[c])},
-                                r, ss.model_cfg, code_folder, ss.w_save_fmt, new_columns=ss.get("new_cols_fitted"))
+                                r, ss.model_cfg, code_folder, ss.w_save_fmt, new_columns=ss.get("new_cols_fitted"),
+                                curve=(ss.get("history") or {}).get("curve"))
         st.download_button(tx("Komplette Pipeline als Python-Skript (für Jupyter)"), script.encode("utf-8"),
                            file_name="clustering_pipeline.py", mime="text/x-python", icon=":material/download:")
         code(cg.save_code(code_folder, ss.w_save_fmt, pl.MODEL_VARS.get(ss.model_cfg.model, "kmeans")))
@@ -2689,6 +2704,10 @@ def assign_anomalies(model, recipe, model_id, key, src):
                     m[1].metric("Recall", pl.share_text(cmp["recall"]))
                     m[2].metric("ROC-AUC", f"{cmp['roc_auc']:.3f}")
                     m[3].metric("Average Precision", f"{cmp['ap']:.3f}")
+                    pos = md_text(cmp["positive"])
+                    st.caption(tx("Positiv = '{pos}' – wie im Training.", pos=pos)
+                               if cmp.get("positive_source") == "training" else
+                               tx("Positiv = '{pos}' – die seltenere Gruppe (Anomalien sind selten).", pos=pos))
                 c1, _ = st.columns([3, 2])
                 with c1:
                     show(plots.fig_anomaly_groups(cmp["table"], cmp["share"], recipe.get("group_col") or ""))

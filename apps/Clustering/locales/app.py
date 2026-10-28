@@ -1465,4 +1465,11 @@ T = {
         "Preparing and scoring new data …",
         "Przygotowanie i ocena nowych danych …"),
     "Anomalie-Score der neuen Daten": ("Anomaly score of the new data", "Wskaźnik anomalii nowych danych"),
+    # Audit 6
+    "Positiv = '{pos}' – wie im Training.": (
+        "Positive = '{pos}' – as in training.",
+        "Pozytywna = '{pos}' – jak w treningu."),
+    "Positiv = '{pos}' – die seltenere Gruppe (Anomalien sind selten).": (
+        "Positive = '{pos}' – the rarer group (anomalies are rare).",
+        "Pozytywna = '{pos}' – rzadsza grupa (anomalie są rzadkie)."),
 }

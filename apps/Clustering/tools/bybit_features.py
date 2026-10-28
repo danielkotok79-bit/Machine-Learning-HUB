@@ -14,6 +14,9 @@ Zwei Formen der CSV:
 
 Kein Blick in die Zukunft: Jede Kennzahl einer Kerze nutzt nur Daten bis zu ihrem Schluss – z-Werte vergleichen mit
 den VORIGEN Kerzen, Funding und Open Interest sind die zum Kerzenschluss bekannten Werte, die laufende Kerze fehlt.
+Open Interest vorsichtig: Bybit sagt nicht, ob der Zeitstempel Beginn oder Messzeitpunkt meint – ein Wert zählt daher
+erst ein Raster nach seinem Zeitstempel (series: Raster höchstens ¼ Kerze, mindestens 5 min – bei 1h-Kerzen endet die
+OI-Änderung also 15 min vor dem Kerzenschluss). Bei 1- und 3-Minuten-Kerzen fehlt Open Interest (nur alle 5 min).
 Mit --split lässt sich daher auf einem früheren Zeitraum trainieren und ein späterer in Schritt 10 der App bewerten –
 wie im Live-Betrieb.
 
@@ -94,7 +97,8 @@ DESCRIPTIONS = {  # für <name>_columns.csv – in der App: Schritt 1 „Spalten
     "excess_z": "return minus benchmark return as z-score - coin-specific move",
     "funding_bp": "funding rate known at candle close in basis points (1 bp = 0.01 %)",
     "funding_z": "funding rate as z-score vs. the previous baseline candles",
-    "oi_chg_pct": "change of the open interest over the candle in %",
+    "oi_chg_pct": "change of the open interest in % over one candle length, ending one open interest interval before "
+                  "the candle close (1h candles: 15 min) - only values surely known at the close",
     "oi_z": "open interest change as z-score vs. the previous baseline candles",
     "ret_window_pct": "return over the whole period in %",
     "vola_ann_pct": "annualised volatility in % (std of the log returns)",
@@ -282,10 +286,24 @@ def top_symbols(client, category: str, n: int) -> list[str]:
     return [sym for _, sym in found[:n]]
 
 
-def oi_interval(minutes: int) -> tuple[int, str]:
-    """Open-Interest-Raster zur Kerzenlänge: das gröbste, das nicht länger als die Kerze ist (mindestens 5 min)."""
-    fit = [x for x in OI_INTERVALS if x[0] <= minutes]
+def oi_interval(minutes: int, fine: bool = False) -> tuple[int, str]:
+    """Open-Interest-Raster zur Kerzenlänge: das gröbste, das nicht länger als die Kerze ist (mindestens 5 min).
+    fine=True (series, eine Zeile je Kerze): höchstens ¼ der Kerze – ein OI-Wert gilt erst ein Raster nach seinem
+    Zeitstempel als bekannt (oi_step_ms), so deckt die OI-Änderung trotzdem gut ¾ der Kerze ab."""
+    limit = minutes / 4 if fine else minutes
+    fit = [x for x in OI_INTERVALS if x[0] <= limit]
     return fit[-1] if fit else OI_INTERVALS[0]
+
+
+def oi_step_ms(oi: pd.DataFrame | None, minutes: int) -> int:
+    """Raster der Open-Interest-Daten in ms (typischer Abstand der Zeitstempel), ohne Daten das zur Kerze passende.
+
+    Bybit dokumentiert nicht, ob der Zeitstempel eines OI-Werts den Beginn seines Rasters meint (Wert erst am Ende
+    bekannt) oder den Zeitpunkt der Messung. Vorsichtig: Ein Wert gilt erst ein Raster nach seinem Zeitstempel als
+    bekannt – so gibt es in keinem der beiden Fälle einen Blick in die Zukunft."""
+    if oi is not None and len(oi) >= 2:
+        return int(np.median(np.diff(oi["ts"].to_numpy(dtype="int64"))))
+    return oi_interval(minutes, fine=True)[0] * MS_MIN
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -396,9 +414,9 @@ def series_features(k: pd.DataFrame, s: Settings, bench_r: pd.Series | None = No
     if funding is not None:
         f["funding_bp"] = asof(close_ms, funding, "rate", FUNDING_MAX_AGE) * 1e4
         f["funding_z"] = zscore(f["funding_bp"], b, 0.5)
-    if oi is not None:
-        oi_min = oi_interval(s.minutes)[0]
-        level = pd.Series(asof(close_ms, oi, "oi", 3 * oi_min * MS_MIN), index=k.index)
+    if oi is not None:  # OI-Stand, der zum Kerzenschluss sicher bekannt ist: Zeitstempel + Raster ≤ Schluss
+        step = oi_step_ms(oi, s.minutes)
+        level = pd.Series(asof(close_ms - step, oi, "oi", 3 * step), index=k.index)
         f["oi_chg_pct"] = (100 * (level / level.shift(1) - 1)).replace([np.inf, -np.inf], np.nan)
         f["oi_z"] = zscore(f["oi_chg_pct"], b, 0.05)
     return f
@@ -497,9 +515,9 @@ def cross_features(k: pd.DataFrame, s: Settings, start_ms: int, end_ms: int, ben
     if funding is not None:
         sel = funding[(funding["ts"] > start_ms) & (funding["ts"] <= end_ms)]
         out["funding_mean_bp"] = 1e4 * float(sel["rate"].mean()) if len(sel) else np.nan
-    if oi is not None:
-        age = 3 * oi_interval(s.minutes)[0] * MS_MIN
-        first, last = asof([start_ms, end_ms], oi, "oi", age)
+    if oi is not None:  # wie bei series: ein OI-Wert gilt erst ein Raster nach seinem Zeitstempel als bekannt
+        step = oi_step_ms(oi, s.minutes)
+        first, last = asof([start_ms - step, end_ms - step], oi, "oi", 3 * step)
         out["oi_chg_pct"] = 100 * (last / first - 1) if first > 0 and np.isfinite(last) else np.nan
     return out
 
@@ -543,10 +561,12 @@ def build_cross(raw: dict, s: Settings, start_ms: int, end_ms: int, log=None, mi
 # ---------------------------------------------------------------------------------------------------------------------
 # Ablauf
 # ---------------------------------------------------------------------------------------------------------------------
-def collect(client, symbols: list[str], s: Settings, fetch_start_ms: int, end_ms: int, log=None) -> dict:
-    """Rohdaten je Symbol holen. Ein Fehler bei einem Symbol (z. B. unbekannter Name) überspringt nur dieses."""
+def collect(client, symbols: list[str], s: Settings, fetch_start_ms: int, end_ms: int, log=None,
+            fine_oi: bool = True) -> dict:
+    """Rohdaten je Symbol holen. Ein Fehler bei einem Symbol (z. B. unbekannter Name) überspringt nur dieses.
+    fine_oi: Open Interest im feinen Raster (series, siehe oi_interval) – cross braucht nur Anfang und Ende."""
     log = log or (lambda msg: None)
-    oi_min, oi_name = oi_interval(s.minutes)
+    oi_min, oi_name = oi_interval(s.minutes, fine=fine_oi)
     todo = list(dict.fromkeys(symbols))
     if s.benchmark and s.benchmark not in todo:
         todo.append(s.benchmark)
@@ -556,7 +576,7 @@ def collect(client, symbols: list[str], s: Settings, fetch_start_ms: int, end_ms
             k = fetch_klines(client, s.category, sym, s.interval, fetch_start_ms, end_ms)
             fund = fetch_funding(client, s.category, sym, fetch_start_ms - FUNDING_MAX_AGE, end_ms) \
                 if s.funding else None
-            oi = fetch_open_interest(client, s.category, sym, oi_name, fetch_start_ms - 3 * oi_min * MS_MIN, end_ms) \
+            oi = fetch_open_interest(client, s.category, sym, oi_name, fetch_start_ms - 4 * oi_min * MS_MIN, end_ms) \
                 if s.oi else None
         except FatalError:
             raise
@@ -706,6 +726,10 @@ def main(argv=None, client=None) -> int:
                  window=args.window or default_window(minutes), baseline=args.baseline or default_baseline(minutes),
                  benchmark=None if bench.lower() == "none" else bench.upper(),
                  funding=funding and not args.no_funding, oi=oi and not args.no_oi)
+    if s.oi and args.mode == "series" and minutes < OI_INTERVALS[0][0]:  # sonst: OI-Sprung nur jede 5. Minute
+        log(f"note: open interest exists only every {OI_INTERVALS[0][0]} minutes - left out for {minutes}-minute "
+            "candles (use 5m or longer)")
+        s.oi = False
     client = client or Client(base_url=args.base_url, pause=args.pause, cache_dir=args.cache, offline=args.offline,
                               log=log)
     out = Path(args.out or f"bybit_{args.mode}_{args.category}_{args.interval}.csv")
@@ -724,7 +748,7 @@ def main(argv=None, client=None) -> int:
         log(f"{args.mode}: {len(symbols)} symbol(s), {args.category}, interval {args.interval}, "
             f"{ms_text(start_ms)} ... {ms_text(end_ms)} UTC" + (f", warm-up from {ms_text(fetch_start)}" if warmup
                                                                 else ""))
-        raw = collect(client, symbols, s, fetch_start, end_ms, log)
+        raw = collect(client, symbols, s, fetch_start, end_ms, log, fine_oi=args.mode == "series")
         if args.mode == "series":
             df = build_series(raw, s, start_ms, end_ms, keep_ohlcv=args.keep_ohlcv, log=log)
         else:

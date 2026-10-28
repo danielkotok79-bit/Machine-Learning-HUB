@@ -186,7 +186,12 @@ nietypowy (`Anomalia = 1`), gdy jego wskaźnik przekracza **próg**.
 * **Porównanie ze znanym podziałem** (np. *Class* w danych o oszustwach): model nigdy go nie widział. Przy dwóch
   grupach rzadsza liczy się jako „pozytywna”: **precision** (udział prawdziwych przypadków wśród zgłoszeń),
   **recall** (udział znalezionych prawdziwych przypadków); **ROC-AUC** i **average precision** oceniają wskaźnik
-  niezależnie od progu (przypadek: 0.5 albo udział grupy pozytywnej).
+  niezależnie od progu (przypadek: 0.5 albo udział grupy pozytywnej). W kroku 10 grupa pozytywna pozostaje ta
+  z treningu – także wtedy, gdy w nowych danych (np. próbce z wieloma oszustwami) rzadsza jest druga.
+* **eps (DBSCAN):** wartość startowa w kroku 6 pochodzi z k-odległości próbki i jest liczona od nowa po nowym
+  przygotowaniu (np. innym scalerze), innym `min_samples` albo `metric` – tak samo propozycja przejęta w kroku 7; eps
+  wpisane ręcznie zostaje. Przy wielu identycznych wierszach (np. same cechy kategoryczne) k-odległość często wynosi
+  0; krok 7 proponuje wtedy najmniejsze eps (1e-6): identyczne wiersze tworzą klastry, rzadkie kombinacje są szumem.
 * **Nie ograniczaj tego, co chcesz monitorować.** *Ogranicz wartości* w kroku 2 obcina właśnie te skrajne wartości,
   które tworzą anomalię – przy wykrywaniu anomalii poprawiaj tylko wartości niemożliwe.
 * **Skalowanie:** LOF i DBSCAN liczą odległości → StandardScaler w kroku 4. Isolation Forest tnie po jednej cesze
@@ -228,7 +233,7 @@ nietypowe?”
 | `cs_spread_pct` | szacowany spread bid-ask w % (Corwin-Schultz z max/min), średnia w oknie – stres płynności |
 | `corr_btc`, `excess_z` | korelacja z benchmarkiem (domyślnie BTC) w oknie; zwrot minus zwrot benchmarku jako wartość z – własny ruch coina |
 | `funding_bp`, `funding_z` | funding znany na zamknięciu świecy w punktach bazowych; jako wartość z (tylko kontrakty perpetual) |
-| `oi_chg_pct`, `oi_z` | zmiana open interest w %; jako wartość z (tylko kontrakty perpetual) |
+| `oi_chg_pct`, `oi_z` | zmiana open interest w % w czasie jednej świecy, kończącym się jeden interwał OI przed zamknięciem świecy (świece 1h: 15 min); jako wartość z (tylko kontrakty perpetual, świece od 5 minut) |
 
 `ret_pct`, `range_pct` i `oi_chg_pct` służą do czytania; przykładowa konfiguracja bierze pozostałe 11 kolumn jako
 cechy (Isolation Forest, 1 % nietypowych). Wskazówka: wybierz w kroku 4 `symbol` jako znany podział – wtedy krok 8
@@ -245,6 +250,11 @@ dzienny), `ret_skew`, `ret_kurt` (grube ogony), `funding_mean_bp`, `oi_chg_pct` 
   świecy, funding i open interest to wartości znane na zamknięciu świecy, trwająca świeca jest pomijana. Rozbieg dla
   wartości z skrypt pobiera dodatkowo przed startem. Sprawdza to test: obcięcie danych → wcześniejsze wiersze
   pozostają co do bitu takie same.
+* **Open interest ostrożnie:** Bybit nie dokumentuje, czy znacznik czasu wartości open interest oznacza początek jej
+  interwału, czy moment pomiaru. Skrypt zakłada więc, że wartość jest znana dopiero jeden interwał po swoim znaczniku
+  czasu, i pobiera open interest w drobnej siatce (najwyżej ¼ świecy, co najmniej 5 min) – dzięki temu zmiana nadal
+  obejmuje prawie całą świecę. Przy świecach 1- i 3-minutowych open interest jest pomijany (istnieje tylko co
+  5 minut).
 * `--split DATA` zapisuje `<nazwa>_train.csv` (wcześniej) i `<nazwa>_new.csv` (od tej daty): trenuj na pierwszej
   części, drugą oceniaj w kroku 10 – jak na żywo.
 * `<nazwa>_columns.csv` opisuje kolumny – w kroku 1 w sekcji *Opcjonalnie: wczytaj opisy kolumn*.
@@ -346,10 +356,11 @@ Rozszerzanie:
 * inna metoda → w `pipeline.py` `MODEL_NAMES`, `MODEL_CLASSES`, `MODEL_VARS`, `MODEL_WHY` i pola w `ClusterConfig`.
   Metoda wykrywania anomalii dodatkowo w `ANOMALY_MODELS`, `anomaly_params()`, `anomaly_scores()` (wskaźnik: wyższy =
   bardziej nietypowy) i `anomaly_threshold()` – trening, kroki 7–10 i zapis działają wtedy przez `train_anomaly()`,
-  `anomaly_curve()` i `score_new()`; nowe typy do bezpiecznego wczytywania w `SKOPS_TRUSTED`. W `app.py` parametry
-  w `anomaly_params_ui()` i wyjaśnienie w `HOW_ANOMALY`, w `codegen.py` `anomaly_model_code()` i `predict_code()`;
-  `tests/test_anomaly.py` sprawdza, że kod liczy to samo co aplikacja. Metoda klastrowania jak K-Means: wzorem są
-  `make_kmeans()`/`train_kmeans()` i `model_code()`.
+  `anomaly_curve()` i `score_new()`; jeśli metoda potrzebuje dużo pamięci, limit w `size_problem()`; nowe typy do
+  bezpiecznego wczytywania w `SKOPS_TRUSTED`. W `app.py` parametry w `anomaly_params_ui()` i wyjaśnienie w
+  `HOW_ANOMALY`, w `codegen.py` `anomaly_model_code()` i `predict_code()`; `tests/test_anomaly.py` sprawdza, że kod
+  liczy to samo co aplikacja. Metoda klastrowania jak K-Means: wzorem są `make_kmeans()`/`train_kmeans()` i
+  `model_code()`.
 * nowy lub zmieniony tekst → napisz po niemiecku w `tx("…")` (stałe: `N_("…")`) i dodaj tłumaczenie angielskie
   i polskie w odpowiednim pliku w `locales/`; `pytest tests/test_i18n.py` zgłasza brakujące tłumaczenia.
 
@@ -357,7 +368,7 @@ Rozszerzanie:
 
 ```bash
 pip install pytest
-pytest -q                                  # 349 testów, ok. 5 minut
+pytest -q                                  # 362 testy, ok. 5 minut
 python tests/synthetic.py                  # syntetyczne dane College (777 wierszy, nie są to prawdziwe dane)
 ```
 
@@ -371,6 +382,7 @@ python tests/synthetic.py                  # syntetyczne dane College (777 wiers
 | `tests/test_new_features.py` | rok + miesiąc, nowe kolumny, *ogranicz wartości*, nowe kolumny dla nowych danych, zapis danych, podsumowanie |
 | `tests/test_audit_regressions.py` … `test_audit4_regressions.py` | testy regresji z czterech audytów aplikacji bazowej, przeniesione na klastrowanie (liczby, daty, rozpoznawanie CSV, limity formuł, konfiguracje, ochrona ZIP, brak kodu z nazw w pokazywanym kodzie, zmiana języka, bezpieczne wczytywanie, tylko modele K-Means) |
 | `tests/test_audit5_regressions.py` | audyt 5 (aplikacja Clustering): kod eksportu = aplikacja także po usunięciu wierszy/kolumn, brak nieproszonej grupy porównawczej, kolumny ID jako nazwa wiersza, tekst „jak w kursie” z prawdziwymi grupami, brak Markdown z obcych modeli, odrzucanie uszkodzonego `preprocessing.json`, puste klastry, uwaga o zmienionych ustawieniach |
+| `tests/test_audit6_regressions.py` | audyt 6 (wykrywanie anomalii, skrypt Bybit): grupa pozytywna w kroku 10 jak w treningu, wartość startowa eps po nowym przygotowaniu, propozycja eps nigdy 0, ochrona pamięci dla DBSCAN i LOF (trening i tabela eps, kod = aplikacja), identyczne wiersze, małe dane, linia eps na wykresie k-odległości, open interest bez zaglądania w przyszłość, drobna siatka OI, brak OI przy świecach 1-minutowych |
 | `tests/test_app.py` | test klikania interfejsu (wszystkie 10 kroków jak w kursie; CSV ze średnikiem, zmienione ustawienia, nieużyteczne wartości, ochrona przed nadpisaniem; nowe kolumny, błędy rysowania, eksport) |
 | `tests/test_app_anomaly.py` | test klikania trzech modeli anomalii przez kroki 4–10 oraz CSV z Bybit z przykładową konfiguracją aż do oceny nowych danych |
 | `tests/test_charts.py` | wykresy kroku 3 i wykresy klastrów (łokieć/Silhouette, wykres Silhouette, wielkości, profile, PCA, tabela krzyżowa) |
@@ -398,3 +410,7 @@ python tests/synthetic.py                  # syntetyczne dane College (777 wiers
 * LOF i DBSCAN porównują każdy wiersz z sąsiadami – przy bardzo wielu wierszach (od ok. 50 000) trwa to i zajmuje
   pamięć; Isolation Forest pozostaje szybki. K-odległość dla kroku 7 od 20 000 wierszy używa próbki, siatka eps jest
   liczona tylko do 20 000 wierszy.
+* **Ochrona pamięci:** DBSCAN (scikit-learn) trzyma wszystkie sąsiedztwa jednocześnie w pamięci – przy zbyt dużym eps
+  albo wielu identycznych wierszach rośnie to z kwadratem liczby wierszy. Aplikacja szacuje liczbę par sąsiadów na
+  400 losowych wierszach i powyżej 40 mln par (ok. 1 GB) odmawia treningu z wyjaśnieniem; w tabeli eps w kroku 7
+  pomija takie wartości eps. Tak samo LOF, gdy wiersze × `n_neighbors` przekracza 40 mln.

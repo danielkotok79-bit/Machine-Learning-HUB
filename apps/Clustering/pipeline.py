@@ -71,6 +71,7 @@ from sklearn.metrics import (
     calinski_harabasz_score,
     davies_bouldin_score,
     normalized_mutual_info_score,
+    pairwise_distances,
     silhouette_samples,
 )
 
@@ -1565,6 +1566,12 @@ MAX_CONTAMINATION = 0.5  # scikit-learn: contamination höchstens 0.5
 CONTAM_LEVELS = [0.001, 0.0025, 0.005, 0.01, 0.02, 0.05, 0.1]  # Schritt 7: Schwelle für diese Anteile auffälliger Zeilen
 EPS_LEVELS = [0.5, 0.75, 0.9, 0.95, 0.975, 0.99]  # Schritt 7 (DBSCAN): eps = diese Quantile der k-Distanz
 KNEE_TOP = 0.2  # Knick der Score-Kurve: in den auffälligsten 20 % der Zeilen gesucht
+EPS_MIN = 1e-6  # kleinstes eps (Eingabe in Schritt 6): bei vielen genau gleichen Zeilen ist die k-Distanz oft 0
+# DBSCAN hält alle Nachbarschaften (Abstand ≤ eps) gleichzeitig im Speicher – je Nachbarpaar etwa 15–35 Byte –, LOF je
+# Zeile n_neighbors Abstände (etwa 50 Byte). Über dieser Zahl von Paaren droht ein Absturz (Speicher voll): Training
+# mit Hinweis abgelehnt, in der eps-Tabelle von Schritt 7 übersprungen.
+MAX_NEIGHBOR_PAIRS = 40_000_000
+PAIR_SAMPLE = 400  # an so vielen zufälligen Zeilen wird die Zahl der Nachbarpaare für DBSCAN geschätzt
 
 
 @dataclass
@@ -1863,6 +1870,8 @@ def anomaly_curve(cfg: ClusterConfig, X: np.ndarray, score: np.ndarray, progress
         top = max(int(np.ceil(KNEE_TOP * n)), min(n, 20))
         desc = np.sort(score)[::-1][:top]
         knee = knee_index(desc)
+        if knee is not None and knee + 1 > int(np.ceil(KNEE_TOP * n)):  # unter 100 Zeilen ist die Kurve länger als
+            knee = None  # 20 % – ein Knick dahinter wäre kein Vorschlag für Anomalien (bis zu 50 % der Zeilen)
         return {"kind": "threshold", "levels": list(CONTAM_LEVELS), "thresholds": thresholds.tolist(),
                 "counts": [int(np.sum(score > t)) for t in thresholds], "sorted": desc, "knee": knee,
                 "suggest": None if knee is None else suggest_share(knee + 1, n)}
@@ -1876,11 +1885,17 @@ def anomaly_curve(cfg: ClusterConfig, X: np.ndarray, score: np.ndarray, progress
     kdist = np.sort(neighbors.kneighbors(query)[0][:, -1])
     knee = knee_index(kdist)
     out = {"kind": "kdist", "kdist": kdist, "k": k, "n_rows": int(len(query)), "sampled": rows is not None,
-           "knee": knee, "suggest": None if knee is None else float(f"{kdist[knee]:.4g}"),
-           "core_share": float(np.mean(kdist <= float(cfg.eps))), "grid": None}
+           "knee": knee,  # Vorschlag mindestens EPS_MIN: bei vielen gleichen Zeilen liegt der Knick oft bei 0
+           "suggest": None if knee is None else float(f"{max(float(kdist[knee]), EPS_MIN):.4g}"),
+           "core_share": float(np.mean(kdist <= float(cfg.eps))),
+           "zero_share": float(np.mean(kdist <= EPS_MIN)),  # Zeilen mit min_samples − 1 genau gleichen Zeilen
+           "grid": None}
     if cfg.curve and n <= CURVE_ROWS:
         values = sorted({float(f"{v:.4g}") for v in np.quantile(kdist, EPS_LEVELS) if v > 0} | {float(cfg.eps)})
-        grid = {"eps": [], "clusters": [], "noise": []}
+        pairs = neighbor_pairs(X, values, params.get("metric", "euclidean"), cfg.seed)
+        grid = {"eps": [], "clusters": [], "noise": [],  # zu große eps (Speicher) übersprungen – immer die größten
+                "skipped": [e for e, m in zip(values, pairs) if m > MAX_NEIGHBOR_PAIRS]}
+        values = [e for e, m in zip(values, pairs) if m <= MAX_NEIGHBOR_PAIRS]
         for i, e in enumerate(values):
             labels = DBSCAN(**{**params, "eps": e}).fit(X).labels_
             grid["eps"].append(e)
@@ -1907,7 +1922,50 @@ def suggest_eps(X: np.ndarray, min_samples: int = 5, metric: str = "euclidean", 
     kdist = np.sort(NearestNeighbors(n_neighbors=k, **kw).fit(sample).kneighbors(sample)[0][:, -1])
     i = knee_index(kdist)
     value = kdist[i] if i is not None else np.quantile(kdist, 0.9)
-    return float(f"{max(float(value), 1e-6):.4g}")
+    return float(f"{max(float(value), EPS_MIN):.4g}")
+
+
+def neighbor_pairs(X: np.ndarray, eps, metric: str = "euclidean", seed: int = RANDOM_STATE):
+    """DBSCAN: Wie viele Nachbarpaare (Abstand ≤ eps, jede Zeile zählt sich selbst mit) hält DBSCAN.fit gleichzeitig
+    im Speicher? Geschätzt aus PAIR_SAMPLE zufälligen Zeilen: mittlere Zahl der Nachbarn × Zeilen. Solange selbst
+    'jede Zeile mit jeder' (n²) unter MAX_NEIGHBOR_PAIRS bleibt, wird nichts gemessen – Rückgabe dann n².
+    eps: eine Zahl oder eine Liste (gleiche Stichprobe für alle → wächst mit eps, nie umgekehrt)."""
+    X = np.asarray(X, dtype="float64")
+    values = np.atleast_1d(np.asarray(eps, dtype="float64"))
+    n = len(X)
+    if n * n <= MAX_NEIGHBOR_PAIRS:
+        counts = np.full(len(values), float(n * n))
+    else:
+        rows = np.random.default_rng(int(seed)).choice(n, min(PAIR_SAMPLE, n), replace=False)
+        step = max(1, 2_000_000 // n)  # höchstens etwa 2 Mio. Abstände (16 MB) auf einmal
+        hits = np.zeros(len(values))
+        for i in range(0, len(rows), step):
+            d = pairwise_distances(X[rows[i:i + step]], X, metric=metric if metric in METRICS else "euclidean")
+            hits += [np.count_nonzero(d <= e) for e in values]
+        counts = hits / len(rows) * n
+    return float(counts[0]) if np.ndim(eps) == 0 else counts.tolist()
+
+
+def size_problem(cfg: ClusterConfig, X: np.ndarray) -> str | None:
+    """Sprengt das Training den Speicher? DBSCAN: geschätzte Nachbarpaare bei eps (neighbor_pairs), LOF: Zeilen ×
+    n_neighbors. Über MAX_NEIGHBOR_PAIRS eine Meldung mit Ausweg statt eines Absturzes – sonst None."""
+    n = len(X)
+    if cfg.model == MODEL_DBSCAN:
+        pairs = neighbor_pairs(X, float(cfg.eps), cfg.metric, cfg.seed)
+        if pairs > MAX_NEIGHBOR_PAIRS:
+            return tx("DBSCAN: Bei eps = {eps} liegen im Mittel {m} Zeilen im Umkreis jeder Zeile – zusammen etwa {p} "
+                      "Nachbarpaare, die DBSCAN gleichzeitig im Speicher hält (Grenze: {lim}). eps verkleinern (Knick "
+                      "der k-Distanz in Schritt 7) oder eine Stichprobe nehmen (Seitenleiste). Viele genau gleiche "
+                      "Zeilen (z. B. nur kategoriale Features) wirken wie ein großes eps.",
+                      eps=f"{float(cfg.eps):.4g}", m=_n(round(pairs / max(n, 1))), p=_n(pairs),
+                      lim=_n(MAX_NEIGHBOR_PAIRS))
+    elif cfg.model == MODEL_LOF:
+        k = anomaly_params(cfg, n)["n_neighbors"]
+        if n * k > MAX_NEIGHBOR_PAIRS:
+            return tx("LOF: {n} Zeilen × n_neighbors {k} = {p} Abstände im Speicher (Grenze: {lim}). n_neighbors "
+                      "senken oder eine Stichprobe nehmen (Seitenleiste).",
+                      n=_n(n), k=k, p=_n(n * k), lim=_n(MAX_NEIGHBOR_PAIRS))
+    return None
 
 
 def train_anomaly(cfg: ClusterConfig, prep: PrepResult, progress=None):
@@ -1922,6 +1980,12 @@ def train_anomaly(cfg: ClusterConfig, prep: PrepResult, progress=None):
         raise ValueError(tx("contamination muss zwischen 0 und 0.5 liegen (Anteil auffälliger Zeilen, z. B. 0.01 = 1 %)."))
     if cfg.model == MODEL_DBSCAN and not (np.isfinite(cfg.eps) and cfg.eps > 0):
         raise ValueError(tx("eps muss größer als 0 sein."))
+    if not np.ptp(X, axis=0).any():  # Isolation Forest meldete hier sonst ALLE Zeilen als auffällig
+        raise ValueError(tx("Alle Zeilen sind nach der Vorbereitung gleich – es gibt nichts Auffälliges zu finden. In "
+                            "Schritt 4 Features wählen, die sich zwischen den Zeilen unterscheiden."))
+    problem = size_problem(cfg, X)
+    if problem:
+        raise ValueError(problem)
     t0 = time.time()
     if progress:
         progress(0.05, tx("Trainiere {name} …", name=model_name(cfg.model)), None)
@@ -2103,6 +2167,12 @@ def threshold_assessment(curve: dict | None, info: dict, cfg: ClusterConfig) -> 
             e = curve["suggest"]
             notes.append(tx("**Knick der k-Distanz bei eps ≈ {eps}:** Rechts davon liegen die Zeilen deutlich weiter von "
                             "ihren Nachbarn entfernt – Kandidaten für Rauschen.", eps=f"{e:.4g}"))
+            if e <= EPS_MIN and curve.get("zero_share"):
+                notes.append(tx(":orange[**Viele genau gleiche Zeilen:**] Bei {pct} der Zeilen ist die k-Distanz 0 – sie "
+                                "haben mindestens min_samples − 1 genau gleiche Zeilen (typisch, wenn alle Features "
+                                "kategorial sind). Mit dem kleinsten eps ({e}) bilden genau gleiche Zeilen die Cluster, "
+                                "seltene Kombinationen sind Rauschen.",
+                                pct=share_text(curve["zero_share"]), e=f"{EPS_MIN:g}"))
             if abs(e - float(cfg.eps)) > 0.05 * e:
                 suggest.append((tx("eps = {eps} übernehmen", eps=f"{e:.4g}"), e))
         elif curve:
@@ -2114,6 +2184,10 @@ def threshold_assessment(curve: dict | None, info: dict, cfg: ClusterConfig) -> 
         if curve and curve.get("grid") is None and cfg.curve and n > CURVE_ROWS:
             notes.append(tx("Rauschanteil je eps nur bis {m} Zeilen – DBSCAN müsste für jedes eps neu laufen. Tipp: "
                             "Stichprobe in der Seitenleiste.", m=_n(CURVE_ROWS)))
+        skipped = (curve.get("grid") or {}).get("skipped")
+        if skipped:
+            notes.append(tx("Rauschanteil je eps: eps ab {e} übersprungen – DBSCAN hielte dafür zu viele Nachbarpaare "
+                            "gleichzeitig im Speicher.", e=f"{min(skipped):.4g}"))
     for w in info.get("warnings", []):
         notes.append(tx(":orange[**Hinweis von scikit-learn:**] {w}", w=w))
     return {"notes": notes, "suggest": suggest}
@@ -2302,12 +2376,14 @@ def top_anomalies(prep: PrepResult, score, flag, n: int = 15, labels=None) -> pd
     return pd.DataFrame(rows)
 
 
-def compare_anomalies(flag, score, groups) -> dict | None:
+def compare_anomalies(flag, score, groups, positive=None) -> dict | None:
     """Vergleich mit einer bekannten Einteilung (z. B. Class bei Betrugsdaten) – das Modell kannte sie nicht.
 
     Je Gruppe der Anteil auffälliger Zeilen. Bei genau zwei Gruppen gilt die seltenere als 'positiv' (Anomalien sind
     selten): Precision = Anteil der auffälligen Zeilen, die zu ihr gehören; Recall = Anteil ihrer Zeilen, die als
-    auffällig gemeldet werden; ROC-AUC und Average Precision bewerten den Score unabhängig von der Schwelle."""
+    auffällig gemeldet werden; ROC-AUC und Average Precision bewerten den Score unabhängig von der Schwelle.
+    positive: die positive Gruppe aus dem Training (Schritt 10) – sonst kippte die Bewertung, wenn in den neuen Daten
+    zufällig die andere Gruppe seltener ist (z. B. eine Stichprobe mit vielen Betrugsfällen)."""
     g = pd.Series(groups).reset_index(drop=True).astype(object)
     f = np.asarray(flag, dtype=bool)
     s = np.asarray(score, dtype="float64")
@@ -2323,7 +2399,10 @@ def compare_anomalies(flag, score, groups) -> dict | None:
     out = {"table": table, "values": values, "n": int(mask.sum()), "missing": int((~mask).sum()),
            "share": float(f.mean()), "binary": len(values) == 2}
     if len(values) == 2:
-        pos = min(values, key=lambda v: (int(counts[v]), _natural_key(v)))
+        want = None if positive is None else group_values(pd.Series([positive])).iloc[0]  # wie die Gruppen: 1.0 → '1'
+        known = [v for v in values if want is not None and not pd.isna(want) and str(v) == str(want)]
+        pos = known[0] if known else min(values, key=lambda v: (int(counts[v]), _natural_key(v)))
+        out["positive_source"] = "training" if known else "rarer"
         y = (g == pos).to_numpy()
         finite = np.isfinite(s)
         s_rank = np.where(np.isposinf(s), (s[finite].max() + 1.0) if finite.any() else 1.0, s)  # ∞ (DBSCAN) = höchster
@@ -2798,8 +2877,9 @@ def score_new(model, recipe: dict, df_new: pd.DataFrame):
     res[RESULT_NOTE] = notes.to_numpy()
     cmp = None
     gcol = recipe.get("group_col")
-    if gcol and gcol in d.columns:
-        cmp = compare_anomalies(flag, score, group_values(d[gcol]))
+    if gcol and gcol in d.columns:  # positive Gruppe wie im Training (nicht die in den neuen Daten seltenere)
+        cmp = compare_anomalies(flag, score, group_values(d[gcol]),
+                                positive=(recipe.get("anomaly_metrics") or {}).get("positive"))
     return res, rep, cmp
 
 

@@ -189,7 +189,12 @@ Same steps 1–5 as for K-Means, another **method** in step 6. All three are uns
 * **Comparison with a known grouping** (e.g. *Class* in fraud data): the model never saw it. With two groups the
   rarer one counts as "positive": **precision** (share of real cases among the flagged rows), **recall** (share of the
   real cases that are found); **ROC-AUC** and **average precision** rate the score independently of the threshold
-  (chance: 0.5 or the share of the positive group).
+  (chance: 0.5 or the share of the positive group). In step 10 the positive group stays the one from training – even
+  if the other one is rarer in the new data (e.g. a sample with many fraud cases).
+* **eps (DBSCAN):** the start value in step 6 comes from the k-distance of a sample and is recomputed after a new
+  preparation (e.g. another scaler), another `min_samples` or `metric` – so is a suggestion applied in step 7; an eps
+  typed in by hand stays. With many identical rows (e.g. only categorical features) the k-distance is often 0; step 7
+  then suggests the smallest eps (1e-6): identical rows form the clusters, rare combinations are noise.
 * **Do not clip what you want to monitor.** *Clip values* in step 2 cuts off exactly the extreme values that make an
   anomaly – for anomaly detection only correct impossible values.
 * **Scaling:** LOF and DBSCAN work with distances → StandardScaler in step 4. Isolation Forest splits one feature at
@@ -230,7 +235,7 @@ python tools/bybit_features.py --help
 | `cs_spread_pct` | estimated bid-ask spread in % (Corwin-Schultz from high/low), mean over the window – liquidity stress |
 | `corr_btc`, `excess_z` | correlation with the benchmark (default BTC) in the window; return minus benchmark return as a z-score – a coin's own move |
 | `funding_bp`, `funding_z` | funding rate known at candle close in basis points; as a z-score (perpetuals only) |
-| `oi_chg_pct`, `oi_z` | change of the open interest in %; as a z-score (perpetuals only) |
+| `oi_chg_pct`, `oi_z` | change of the open interest in % over one candle length that ends one open interest interval before the candle close (1h candles: 15 min); as a z-score (perpetuals only, candles of 5 minutes or longer) |
 
 `ret_pct`, `range_pct` and `oi_chg_pct` are for reading; the example configuration uses the other 11 columns as
 features (Isolation Forest, 1 % anomalous). Tip: choose `symbol` as the known grouping in step 4 – step 8 then shows
@@ -247,6 +252,11 @@ flags 5 % of the tokens.
   interest are the values known at candle close, the candle that is still running is left out. The script fetches
   the warm-up for the z-scores in addition, before the start. A test checks it: cut off the data → earlier rows stay
   bit for bit the same.
+* **Open interest, carefully:** Bybit does not document whether the timestamp of an open interest value means the
+  start of its interval or the time of measurement. The script therefore assumes that a value is known only one
+  interval after its timestamp and fetches open interest on a fine grid (at most ¼ of the candle, at least 5 min) –
+  so the change still covers almost the whole candle. With 1- and 3-minute candles open interest is left out (it
+  exists only every 5 minutes).
 * `--split DATE` writes `<name>_train.csv` (before) and `<name>_new.csv` (from then on): train on the first part,
   score the second in step 10 – as in live operation.
 * `<name>_columns.csv` describes the columns – in step 1 under *Optional: load column descriptions*.
@@ -348,10 +358,11 @@ Extending:
 * another method → in `pipeline.py` `MODEL_NAMES`, `MODEL_CLASSES`, `MODEL_VARS`, `MODEL_WHY` and the fields in
   `ClusterConfig`. An anomaly method also in `ANOMALY_MODELS`, `anomaly_params()`, `anomaly_scores()` (score: higher =
   more anomalous) and `anomaly_threshold()` – training, steps 7–10 and saving then run through `train_anomaly()`,
-  `anomaly_curve()` and `score_new()`; new types for safe loading in `SKOPS_TRUSTED`. In `app.py` the parameters in
-  `anomaly_params_ui()` and the explanation in `HOW_ANOMALY`, in `codegen.py` `anomaly_model_code()` and
-  `predict_code()`; `tests/test_anomaly.py` checks that the code computes the same as the app. A clustering method
-  like K-Means: use `make_kmeans()`/`train_kmeans()` and `model_code()` as a template.
+  `anomaly_curve()` and `score_new()`; if the method needs a lot of memory, a limit in `size_problem()`; new types for
+  safe loading in `SKOPS_TRUSTED`. In `app.py` the parameters in `anomaly_params_ui()` and the explanation in
+  `HOW_ANOMALY`, in `codegen.py` `anomaly_model_code()` and `predict_code()`; `tests/test_anomaly.py` checks that the
+  code computes the same as the app. A clustering method like K-Means: use `make_kmeans()`/`train_kmeans()` and
+  `model_code()` as a template.
 * new or changed text → write it in German in `tx("…")` (constants: `N_("…")`) and add the English and Polish
   translation to the matching file in `locales/`; `pytest tests/test_i18n.py` reports missing translations.
 
@@ -359,7 +370,7 @@ Extending:
 
 ```bash
 pip install pytest
-pytest -q                                  # 349 tests, approx. 5 minutes
+pytest -q                                  # 362 tests, approx. 5 minutes
 python tests/synthetic.py                  # synthetic college data (777 rows, not real data)
 ```
 
@@ -373,6 +384,7 @@ python tests/synthetic.py                  # synthetic college data (777 rows, n
 | `tests/test_new_features.py` | year + month, new columns, *clip values*, new columns for new data, saving data, conclusion |
 | `tests/test_audit_regressions.py` … `test_audit4_regressions.py` | regression tests from the four audits of the base app, applied to clustering (numbers, dates, CSV detection, formula limits, configurations, ZIP protection, no code from names in the code shown, language switch, safe loading, only K-Means models) |
 | `tests/test_audit5_regressions.py` | audit 5 (clustering app): export code = app even after removed rows/columns, no unasked comparison group, ID columns as row names, "as in the course" text with the real groups, no Markdown from foreign models, a damaged `preprocessing.json` is refused, empty clusters, note on changed settings |
+| `tests/test_audit6_regressions.py` | audit 6 (anomaly detection, Bybit script): positive group in step 10 as in training, eps start value after a new preparation, eps suggestion never 0, memory protection for DBSCAN and LOF (training and eps table, code = app), identical rows, small data, eps line in the k-distance chart, open interest without look-ahead, fine open interest grid, no open interest with 1-minute candles |
 | `tests/test_app.py` | click test of the interface (all 10 steps as in the course; semicolon CSV, changed settings, unusable values, overwrite protection; new columns, chart errors, export) |
 | `tests/test_app_anomaly.py` | click test of the three anomaly models through steps 4–10 and of the Bybit CSV with its example configuration up to scoring new data |
 | `tests/test_charts.py` | the charts of step 3 and the cluster charts (elbow/silhouette, silhouette plot, sizes, profiles, PCA, cross table) |
@@ -398,3 +410,7 @@ python tests/synthetic.py                  # synthetic college data (777 rows, n
 * LOF and DBSCAN compare every row with its neighbours – with very many rows (from about 50,000) this takes time and
   memory; Isolation Forest stays fast. The k-distance for step 7 uses a sample from 20,000 rows, the eps grid exists
   only up to 20,000 rows.
+* **Memory protection:** DBSCAN (scikit-learn) keeps all neighbourhoods in memory at the same time – with too large
+  an eps or many identical rows this grows with the square of the number of rows. The app estimates the number of
+  neighbour pairs from 400 random rows and refuses training above 40 million pairs (about 1 GB) with a note; in the
+  eps table of step 7 it skips such eps values. The same for LOF when rows × `n_neighbors` exceeds 40 million.

@@ -85,6 +85,9 @@ def test_default_window_and_baseline_follow_the_candle_length():
     assert (bf.default_window(10080), bf.default_baseline(10080)) == (10, 20)  # mindestens 20 zum Vergleich
     assert bf.oi_interval(60) == (60, "1h") and bf.oi_interval(1) == (5, "5min")
     assert bf.oi_interval(720) == (240, "4h") and bf.oi_interval(10080) == (1440, "1d")
+    # series: Raster höchstens ¼ Kerze (der Wert zählt erst ein Raster nach seinem Zeitstempel)
+    assert bf.oi_interval(60, fine=True) == (15, "15min") and bf.oi_interval(240, fine=True) == (60, "1h")
+    assert bf.oi_interval(1440, fine=True) == (240, "4h") and bf.oi_interval(15, fine=True) == (5, "5min")
 
 
 @pytest.mark.parametrize("args", [["--mode", "cross", "--split", "2026-01-01"], ["--mode", "cross", "--keep-ohlcv"],
@@ -116,9 +119,10 @@ def test_paging_follows_the_api_limits():
     f = bf.fetch_funding(fake, "linear", "ETHUSDT", lo, hi)
     assert f["ts"].tolist() == [t for t, _ in fake.fund["ETHUSDT"]] and f["ts"].is_monotonic_increasing
     oi = bf.fetch_open_interest(fake, "linear", "ETHUSDT", "1h", lo, hi)
-    assert oi["ts"].tolist() == [t for t, _ in fake.oi["ETHUSDT"]]
+    hourly = [t for t, _ in fake.oi["ETHUSDT"] if t % HOUR_MS == 0]  # simuliert alle 5 min, angefragt: 1h
+    assert oi["ts"].tolist() == hourly
     oi_pages = [p for path, p in fake.requests if path == "/v5/market/open-interest"]
-    assert len(oi_pages) == -(-len(fake.oi["ETHUSDT"]) // 200) and oi_pages[1]["cursor"] == "200"
+    assert len(oi_pages) == -(-len(hourly) // 200) and oi_pages[1]["cursor"] == "200"
     part = bf.fetch_klines(fake, "linear", "ETHUSDT", "60", int(k["start"][100]), int(k["start"][150]))
     assert part["start"].tolist() == k["start"][100:151].tolist()  # start und end inklusive
 

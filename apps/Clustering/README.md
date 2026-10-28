@@ -193,7 +193,13 @@ Auffällig (`Anomalie = 1`) ist ein Score über der **Schwelle**.
 * **Vergleich mit einer bekannten Einteilung** (z. B. *Class* bei Betrugsdaten): Das Modell hat sie nie gesehen. Bei
   zwei Gruppen gilt die seltenere als „positiv“: **Precision** (Anteil echter Fälle unter den Meldungen), **Recall**
   (Anteil der gefundenen echten Fälle); **ROC-AUC** und **Average Precision** bewerten den Score unabhängig von der
-  Schwelle (Zufall: 0.5 bzw. der Anteil der positiven Gruppe).
+  Schwelle (Zufall: 0.5 bzw. der Anteil der positiven Gruppe). In Schritt 10 bleibt die positive Gruppe die aus dem
+  Training – auch wenn in den neuen Daten (z. B. einer Stichprobe mit vielen Betrugsfällen) die andere seltener ist.
+* **eps (DBSCAN):** Der Startwert in Schritt 6 kommt aus der k-Distanz einer Stichprobe und wird nach einer neuen
+  Vorbereitung (z. B. anderer Scaler), anderem `min_samples` oder `metric` neu berechnet – ebenso ein in Schritt 7
+  übernommener Vorschlag; ein selbst eingegebenes eps bleibt. Bei vielen genau gleichen Zeilen (z. B. nur kategoriale
+  Features) ist die k-Distanz oft 0; dann schlägt Schritt 7 das kleinste eps (1e-6) vor: Gleiche Zeilen bilden die
+  Cluster, seltene Kombinationen sind Rauschen.
 * **Nicht begrenzen, was überwacht werden soll.** *Werte begrenzen* in Schritt 2 schneidet genau die Extremwerte ab,
   die eine Anomalie ausmachen – für die Anomalieerkennung nur unmögliche Werte korrigieren.
 * **Skalierung:** LOF und DBSCAN rechnen mit Abständen → StandardScaler in Schritt 4. Isolation Forest schneidet je
@@ -235,7 +241,7 @@ waren ungewöhnlich?“
 | `cs_spread_pct` | geschätzter Bid-Ask-Spread in % (Corwin-Schultz aus Hoch/Tief), Mittel im Fenster – Liquiditätsstress |
 | `corr_btc`, `excess_z` | Korrelation mit dem Benchmark (Standard BTC) im Fenster; Rendite minus Benchmark-Rendite als z-Wert – eigene Bewegung eines Coins |
 | `funding_bp`, `funding_z` | zum Kerzenschluss bekannte Funding-Rate in Basispunkten; als z-Wert (nur Perpetuals) |
-| `oi_chg_pct`, `oi_z` | Änderung des Open Interest in %; als z-Wert (nur Perpetuals) |
+| `oi_chg_pct`, `oi_z` | Änderung des Open Interest in % über eine Kerzenlänge, die ein OI-Raster vor dem Kerzenschluss endet (1h-Kerzen: 15 min); als z-Wert (nur Perpetuals, ab 5-Minuten-Kerzen) |
 
 `ret_pct`, `range_pct` und `oi_chg_pct` sind zum Lesen da; die Beispiel-Konfiguration nimmt die übrigen 11 Spalten
 als Features (Isolation Forest, 1 % auffällig). Tipp: In Schritt 4 `symbol` als bekannte Einteilung wählen – dann
@@ -252,6 +258,11 @@ Beispiel-Konfiguration meldet 5 % der Tokens.
   Funding und Open Interest sind die zum Kerzenschluss bekannten Werte, die laufende Kerze fehlt. Den Vorlauf für die
   z-Werte holt das Skript zusätzlich vor dem Start. Ein Test prüft das: Daten abschneiden → frühere Zeilen bleiben
   bitgenau gleich.
+* **Open Interest vorsichtig:** Bybit dokumentiert nicht, ob der Zeitstempel eines OI-Werts den Beginn seines Rasters
+  oder den Zeitpunkt der Messung meint. Das Skript nimmt daher an, dass ein Wert erst ein Raster nach seinem
+  Zeitstempel bekannt ist, und holt OI in einem feinen Raster (höchstens ¼ der Kerze, mindestens 5 min) – so deckt die
+  OI-Änderung trotzdem fast die ganze Kerze ab. Bei 1- und 3-Minuten-Kerzen fehlt Open Interest (es gibt ihn nur alle
+  5 Minuten).
 * `--split DATUM` schreibt `<name>_train.csv` (davor) und `<name>_new.csv` (ab dann): auf dem ersten Teil trainieren,
   den zweiten in Schritt 10 bewerten – wie im Live-Betrieb.
 * `<name>_columns.csv` beschreibt die Spalten – in Schritt 1 unter *Optional: Spalten-Beschreibungen laden*.
@@ -354,10 +365,11 @@ Erweitern:
 * weiteres Verfahren → in `pipeline.py` `MODEL_NAMES`, `MODEL_CLASSES`, `MODEL_VARS`, `MODEL_WHY` und die Felder in
   `ClusterConfig`. Ein Anomalie-Verfahren zusätzlich in `ANOMALY_MODELS`, `anomaly_params()`, `anomaly_scores()`
   (Score: höher = auffälliger) und `anomaly_threshold()` – Training, Schritte 7–10 und Speichern laufen dann über
-  `train_anomaly()`, `anomaly_curve()` und `score_new()`; neue Typen fürs sichere Laden in `SKOPS_TRUSTED`. In
-  `app.py` die Parameter in `anomaly_params_ui()` und die Erklärung in `HOW_ANOMALY`, in `codegen.py`
-  `anomaly_model_code()` und `predict_code()`; `tests/test_anomaly.py` prüft, dass der Code dasselbe rechnet wie die
-  App. Ein Clustering-Verfahren wie K-Means: `make_kmeans()`/`train_kmeans()` und `model_code()` als Vorlage.
+  `train_anomaly()`, `anomaly_curve()` und `score_new()`; braucht das Verfahren viel Speicher, eine Grenze in
+  `size_problem()`; neue Typen fürs sichere Laden in `SKOPS_TRUSTED`. In `app.py` die Parameter in
+  `anomaly_params_ui()` und die Erklärung in `HOW_ANOMALY`, in `codegen.py` `anomaly_model_code()` und
+  `predict_code()`; `tests/test_anomaly.py` prüft, dass der Code dasselbe rechnet wie die App. Ein
+  Clustering-Verfahren wie K-Means: `make_kmeans()`/`train_kmeans()` und `model_code()` als Vorlage.
 * neuer oder geänderter Text → auf Deutsch in `tx("…")` schreiben (Konstanten: `N_("…")`) und die englische und
   polnische Übersetzung in der passenden Datei in `locales/` ergänzen; `pytest tests/test_i18n.py` meldet fehlende
   Übersetzungen.
@@ -366,7 +378,7 @@ Erweitern:
 
 ```bash
 pip install pytest
-pytest -q                                  # 349 Tests, ca. 5 Minuten
+pytest -q                                  # 362 Tests, ca. 5 Minuten
 python tests/synthetic.py                  # synthetische College-Daten (777 Zeilen, keine echten Daten)
 ```
 
@@ -380,6 +392,7 @@ python tests/synthetic.py                  # synthetische College-Daten (777 Zei
 | `tests/test_new_features.py` | Jahr + Monat, neue Spalten, *Werte begrenzen*, neue Spalten für neue Daten, Daten speichern, Fazit |
 | `tests/test_audit_regressions.py` … `test_audit4_regressions.py` | Regressionstests aus den vier Audits des Grundgerüsts, übertragen auf Clustering (Zahlen, Datum, CSV-Erkennung, Formel-Grenzen, Konfigurationen, ZIP-Schutz, kein Code aus Namen im angezeigten Code, Sprachwechsel, sicheres Laden, nur K-Means-Modelle) |
 | `tests/test_audit5_regressions.py` | Audit 5 (Clustering-App): Export-Code = App auch nach entfernten Zeilen/Spalten, keine ungefragte Vergleichsgruppe, ID-Spalten als Bezeichnung, Text „Wie im Kurs“ mit den echten Gruppen, kein Markdown aus fremden Modellen, beschädigte `preprocessing.json` wird abgelehnt, leere Cluster, Hinweis auf geänderte Einstellungen |
+| `tests/test_audit6_regressions.py` | Audit 6 (Anomalieerkennung, Bybit-Skript): positive Gruppe in Schritt 10 wie im Training, eps-Startwert nach neuer Vorbereitung, eps-Vorschlag nie 0, Speicherschutz für DBSCAN und LOF (Training und eps-Tabelle, Code = App), gleiche Zeilen, kleine Daten, eps-Linie im k-Distanz-Bild, Open Interest ohne Blick in die Zukunft, feines OI-Raster, kein OI bei 1-Minuten-Kerzen |
 | `tests/test_app.py` | Klick-Test der Oberfläche (alle 10 Schritte wie im Kurs; Semikolon-CSV, geänderte Einstellungen, unbrauchbare Werte, Schutz vor Überschreiben; neue Spalten, Fehler beim Zeichnen, Export) |
 | `tests/test_app_anomaly.py` | Klick-Test der drei Anomalie-Modelle durch die Schritte 4–10 und der Bybit-CSV mit ihrer Beispiel-Konfiguration bis zur Bewertung neuer Daten |
 | `tests/test_charts.py` | Diagramme von Schritt 3 und die Cluster-Diagramme (Elbow/Silhouette, Silhouetten-Diagramm, Größen, Profile, PCA, Kreuztabelle) |
@@ -407,3 +420,7 @@ python tests/synthetic.py                  # synthetische College-Daten (777 Zei
 * LOF und DBSCAN vergleichen jede Zeile mit ihren Nachbarn – bei sehr vielen Zeilen (ab etwa 50 000) dauert das und
   braucht Speicher; Isolation Forest bleibt schnell. Die k-Distanz für Schritt 7 nutzt ab 20 000 Zeilen eine
   Stichprobe, das eps-Raster gibt es nur bis 20 000 Zeilen.
+* **Speicherschutz:** DBSCAN (scikit-learn) hält alle Nachbarschaften gleichzeitig im Speicher – bei zu großem eps
+  oder vielen genau gleichen Zeilen wächst das quadratisch mit der Zeilenzahl. Die App schätzt die Zahl der
+  Nachbarpaare an 400 zufälligen Zeilen und lehnt das Training über 40 Mio. Paaren (etwa 1 GB) mit einem Hinweis ab;
+  in der eps-Tabelle von Schritt 7 überspringt sie solche eps. LOF ebenso ab Zeilen × `n_neighbors` über 40 Mio.

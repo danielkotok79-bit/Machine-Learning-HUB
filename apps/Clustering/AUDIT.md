@@ -289,3 +289,69 @@ aplikacji w launcherze; README w trzech językach.
 349 testów (268 + 81 nowych: 33 w `tests/test_anomaly.py`, 5 w `tests/test_app_anomaly.py`, 39 w
 `tests/test_bybit_features.py`, 4 w `tests/test_i18n.py`) – wszystkie przechodzą (Python 3.13, pandas 3.1,
 scikit-learn 1.9, skops 0.16, Streamlit 1.66). Uruchomienie: `pytest -q` (ok. 5 minut).
+
+---
+
+# Audyt 6 – wykrywanie anomalii i skrypt Bybit (29.10.2026)
+
+**Zakres:** cały kod wersji 2: część anomalii w `pipeline.py` (parametry, wskaźnik, próg, krzywe i ocena w kroku 7,
+profile, porównanie ze znanym podziałem, zapis i odczyt, ocena nowych danych, podsumowanie), strony 6–10 w `app.py`
+dla Isolation Forest, LOF i DBSCAN, generowany kod (`codegen.py`), nowe wykresy (`plots.py`), tłumaczenia, skrypt
+`tools/bybit_features.py`, przykładowe konfiguracje i testy.
+**Metoda:** przegląd każdej nowej funkcji; sondy z nietypowymi danymi (12 wierszy, wszystkie wiersze jednakowe,
+jedna cecha, połowa duplikatów, same kategorie, 3000–20 000 wierszy z dużym eps, nowe dane z odwróconymi proporcjami
+grup, zmiana scalera po treningu); pomiar pamięci DBSCAN, LOF i Isolation Forest w osobnych procesach; przejścia
+kliknięciami (AppTest); skrypt Bybit na symulowanym API z zaostrzonym testem „bez zaglądania w przyszłość”;
+dokumentacja API Bybit (znaczenie znacznika czasu open interest). Każdy potwierdzony błąd jest poprawiony i ma test
+regresyjny (`tests/test_audit6_regressions.py`).
+
+**Wynik:** 9 naprawionych problemów – 4 średnie, 5 drobnych. Poprawki B1–B3 i C1–C5 nie zmieniają wyników przy
+ustawieniach z przykładowych konfiguracji Bybit (Isolation Forest, 1 %, świece 1h); B4 zmienia w CSV ze skryptu
+kolumny `oi_chg_pct` i `oi_z` (okno open interest kończy się 15 min przed zamknięciem świecy 1h).
+
+| # | Waga | Problem | Skutek | Poprawka |
+|---|---|---|---|---|
+| B1 | średnia | Krok 10: przy porównaniu ze znanym podziałem „pozytywna” była grupa rzadsza **w nowych danych** | próbka z wieloma oszustwami (15 oszustw, 5 normalnych) była oceniana względem grupy „normalna”: precision 0, recall 0, ROC-AUC 0.0 – choć model trafił wszystkie oszustwa | grupa pozytywna z treningu (`anomaly_metrics.positive` w `preprocessing.json`); rzadsza grupa tylko, gdy model zapisano bez porównania; w kroku 10 podpis „Pozytywna = '1' – jak w treningu” |
+| B2 | średnia | DBSCAN (scikit-learn) trzyma wszystkie sąsiedztwa jednocześnie w pamięci; LOF – wiersze × `n_neighbors` odległości | przy dużym eps albo wielu identycznych wierszach pamięć rośnie z kwadratem liczby wierszy (pomiar: 15–35 B na parę; 8000 wierszy i eps obejmujące wszystko → 0,8–1,3 GB, 20 000 wierszy → ok. 6–14 GB) – awaria aplikacji bez komunikatu; także w tabeli eps kroku 7 (kwantyl 99 % k-odległości) | `neighbor_pairs` szacuje liczbę par na 400 losowych wierszach (dokładność ok. ±25 %, poniżej √40 mln wierszy bez liczenia); powyżej 40 mln par trening odmawia z wyjaśnieniem i podpowiedzią (mniejsze eps, próbka), tabela eps pomija za duże eps – a pokazywany kod i skrypt z kroku 9 pomijają te same; LOF powyżej 40 mln odległości tak samo |
+| B3 | średnia | Wartość startowa eps (krok 6) liczona tylko raz | po nowym przygotowaniu z innym scalerem eps zostawało: StandardScaler → eps 1.049 (3 klastry, 17 wierszy szumu), po zmianie na MinMaxScaler nadal 1.049 zamiast 0.1649 → **0 wierszy szumu**, bez ostrzeżenia | wartość startowa liczona od nowa po nowym przygotowaniu, zmianie `min_samples` lub `metric`, o ile eps pochodzi z danych (wartość startowa albo propozycja przejęta w kroku 7); wartość wpisana ręcznie zostaje |
+| B4 | średnia | Skrypt Bybit: open interest ze znacznikiem czasu równym zamknięciu świecy był używany dla tej świecy | Bybit nie dokumentuje, czy znacznik oznacza początek interwału, czy moment pomiaru; jeśli początek, wartość jest znana dopiero po interwale → zaglądanie w przyszłość w `oi_chg_pct` / `oi_z` (ważne przy `--split`, jak na żywo) | ostrożnie: wartość znana dopiero jeden interwał po znaczniku (`oi_step_ms`); w trybie series drobniejsza siatka OI (najwyżej ¼ świecy, np. 15 min dla świec 1h), więc zmiana nadal obejmuje prawie całą świecę; zaostrzony test (obcięcie OI o trwający interwał → wcześniejsze wiersze bez zmian) |
+| C1 | niska | Same kategorie → wiele identycznych wierszy, k-odległość 0 | krok 7 proponował „eps = 0 przejmij” (eps musi być > 0; pole w kroku 6 po cichu ustawiało 1e-6) | propozycja co najmniej 1e-6 (także w pokazywanym kodzie) i uwaga „Wiele identycznych wierszy”: przy najmniejszym eps klastry tworzą identyczne wiersze, rzadkie kombinacje są szumem |
+| C2 | niska | Wszystkie wiersze jednakowe po przygotowaniu | Isolation Forest zgłaszał **wszystkie** wiersze jako nietypowe (wskaźnik = próg 0.5, zaokrąglenie), LOF i DBSCAN żadnego | trening odmawia z jasnym komunikatem (wybierz w kroku 4 cechy, które się różnią) |
+| C3 | niska | Poniżej 100 wierszy załamanie krzywej wskaźnika szukane w więcej niż 20 % wierszy (co najmniej 20 punktów) | przy 12 wierszach krok 7 proponował contamination = 50 % (IF i LOF) | załamanie liczy się tylko wśród 20 % najbardziej nietypowych wierszy – w aplikacji i w pokazywanym kodzie |
+| C4 | niska | Wykres k-odległości: gdy eps leżało ponad wszystkimi k-odległościami, oś y kończyła się poniżej eps | brak linii i podpisu „ustawione: eps” – akurat w sytuacji z B3 (eps za duże), przy samych zerach oś do 0.055; ostrzeżenie `tight_layout` | oś y zawsze obejmuje eps |
+| C5 | niska | Skrypt Bybit, świece 1- i 3-minutowe: open interest istnieje tylko co 5 minut | `oi_chg_pct` = 0 w 4 z 5 świec i skok w co piątej – sztuczny wzorzec, który model może uznać za nietypowy | open interest pomijany przy świecach krótszych niż 5 minut, z informacją w konsoli |
+
+## Co sprawdzono i działa poprawnie
+
+* **Dane brzegowe:** 12 wierszy, jedna cecha, połowa duplikatów – trening, kroki 7 i 8 bez błędów; LOF bez żadnej
+  anomalii; DBSCAN z samym szumem (bez punktów rdzeniowych) przez kroki 7, 8, 5, 9 i 10; Isolation Forest nie zgłasza
+  powtarzających się wierszy, gdy stanowią 30–70 % danych.
+* **Zapis i odczyt:** ZIP bez pickle (`.skops`) dla wszystkich trzech modeli, zgodność modelu z rezeptem.
+* **Pamięć Isolation Forest:** ok. 0,1 węzła na wiersz próbki (drzewa mają ograniczoną głębokość) – 100 drzew
+  × 50 000 wierszy → 42 MB; ochrona nie jest potrzebna.
+* **Kod = aplikacja** po poprawkach (wskaźnik, próg, załamanie, propozycja eps, tabela eps z pominiętymi wartościami).
+* **Skrypt Bybit:** stronicowanie, ponawianie, cache, przekrój, spot, nieznane symbole i przykładowe konfiguracje –
+  bez zmian; krach w symulacji nadal na pierwszym miejscu (także po `--split`), spadek open interest nadal w świecy
+  krachu (−15 %).
+
+## Uwagi (bez zmian)
+
+* LOF z `novelty=True`: wskaźnik wierszy treningowych pochodzi z `negative_outlier_factor_` (wiersz bez siebie jako
+  sąsiada), nowych danych z `score_samples` – ten sam wiersz oceniony ponownie w kroku 10 może mieć nieco inny
+  wskaźnik (tak działa scikit-learn).
+* Pole „krzywa dla kroku 7” w kroku 6 jest wspólne dla K-Means (łokieć i Silhouette) i DBSCAN (tabela eps).
+* Skrypt Bybit nie uzupełnia brakujących świec (godziny bez transakcji): wartości z porównują z poprzednimi N
+  wierszami, nie N jednostkami czasu – przy płynnych kontraktach perpetual rzadkie.
+* Szacunek par sąsiadów pochodzi z próbki 400 wierszy (±25 %); limit 40 mln par (ok. 1 GB) ma zapas.
+* Prawdziwe `api.bybit.com` nie było osiągalne ze środowiska testowego – znaczenia znacznika czasu open interest nie
+  dało się sprawdzić na żywych danych, stąd ostrożne założenie w B4.
+
+## Testy (stan po audycie 6)
+
+362 testy (349 + 13 w `tests/test_audit6_regressions.py`) – wszystkie przechodzą (Python 3.13, pandas 3.1,
+scikit-learn 1.9, skops 0.16, Streamlit 1.66); składnia sprawdzona dla Pythona 3.10 i 3.11. Wszystkie 13 nowych
+testów uruchomione na kodzie sprzed audytu kończą się niepowodzeniem (sprawdzone) – 10 odtwarza błędy B1, B3, B4
+i C1–C5, 3 sprawdzają nową ochronę pamięci z B2 (samej awarii z braku pamięci nie da się bezpiecznie odtworzyć
+w teście – zmierzono ją osobno). Symulowane API Bybit (`tests/synthetic.py`) zwraca teraz open interest w żądanym
+interwale (dane co 5 minut, spadek w trakcie świecy krachu); `tests/test_bybit_features.py` sprawdza dodatkowo
+drobną siatkę OI. Uruchomienie: `pytest -q` (ok. 5 minut).

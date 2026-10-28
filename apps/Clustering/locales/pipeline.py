@@ -749,4 +749,44 @@ T = {
     "Anteil auffälliger Zeilen je '{g}': ": (
         "Share of anomalous rows per '{g}': ",
         "Udział nietypowych wierszy wg '{g}': "),
+    # Audit 6
+    "DBSCAN: Bei eps = {eps} liegen im Mittel {m} Zeilen im Umkreis jeder Zeile – zusammen etwa {p} Nachbarpaare, "
+    "die DBSCAN gleichzeitig im Speicher hält (Grenze: {lim}). eps verkleinern (Knick der k-Distanz in Schritt 7) "
+    "oder eine Stichprobe nehmen (Seitenleiste). Viele genau gleiche Zeilen (z. B. nur kategoriale Features) wirken "
+    "wie ein großes eps.": (
+        "DBSCAN: with eps = {eps}, on average {m} rows lie within the radius of every row – together about {p} "
+        "neighbour pairs that DBSCAN keeps in memory at the same time (limit: {lim}). Decrease eps (knee of the "
+        "k-distance in step 7) or take a sample (sidebar). Many identical rows (e.g. only categorical features) act "
+        "like a large eps.",
+        "DBSCAN: przy eps = {eps} w promieniu każdego wiersza leży średnio {m} wierszy – razem ok. {p} par sąsiadów, "
+        "które DBSCAN trzyma jednocześnie w pamięci (limit: {lim}). Zmniejsz eps (załamanie k-odległości w kroku 7) "
+        "albo weź próbkę (pasek boczny). Wiele identycznych wierszy (np. same cechy kategoryczne) działa jak duże "
+        "eps."),
+    "LOF: {n} Zeilen × n_neighbors {k} = {p} Abstände im Speicher (Grenze: {lim}). n_neighbors senken oder eine "
+    "Stichprobe nehmen (Seitenleiste).": (
+        "LOF: {n} rows × n_neighbors {k} = {p} distances in memory (limit: {lim}). Lower n_neighbors or take a "
+        "sample (sidebar).",
+        "LOF: {n} wierszy × n_neighbors {k} = {p} odległości w pamięci (limit: {lim}). Zmniejsz n_neighbors albo "
+        "weź próbkę (pasek boczny)."),
+    "Alle Zeilen sind nach der Vorbereitung gleich – es gibt nichts Auffälliges zu finden. In Schritt 4 Features "
+    "wählen, die sich zwischen den Zeilen unterscheiden.": (
+        "After preparation all rows are identical – there is nothing anomalous to find. In step 4 choose features "
+        "that differ between the rows.",
+        "Po przygotowaniu wszystkie wiersze są jednakowe – nie ma czego wykrywać. W kroku 4 wybierz cechy, które "
+        "różnią się między wierszami."),
+    ":orange[**Viele genau gleiche Zeilen:**] Bei {pct} der Zeilen ist die k-Distanz 0 – sie haben mindestens "
+    "min_samples − 1 genau gleiche Zeilen (typisch, wenn alle Features kategorial sind). Mit dem kleinsten eps ({e}) "
+    "bilden genau gleiche Zeilen die Cluster, seltene Kombinationen sind Rauschen.": (
+        ":orange[**Many identical rows:**] for {pct} of the rows the k-distance is 0 – they have at least "
+        "min_samples − 1 identical rows (typical when all features are categorical). With the smallest eps ({e}) "
+        "identical rows form the clusters and rare combinations are noise.",
+        ":orange[**Wiele identycznych wierszy:**] dla {pct} wierszy k-odległość wynosi 0 – mają co najmniej "
+        "min_samples − 1 identycznych wierszy (typowe, gdy wszystkie cechy są kategoryczne). Przy najmniejszym eps "
+        "({e}) klastry tworzą identyczne wiersze, a rzadkie kombinacje są szumem."),
+    "Rauschanteil je eps: eps ab {e} übersprungen – DBSCAN hielte dafür zu viele Nachbarpaare gleichzeitig im "
+    "Speicher.": (
+        "Noise share per eps: eps from {e} on skipped – DBSCAN would keep too many neighbour pairs in memory at "
+        "the same time.",
+        "Udział szumu dla eps: eps od {e} pominięte – DBSCAN trzymałby jednocześnie w pamięci zbyt wiele par "
+        "sąsiadów."),
 }
