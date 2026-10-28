@@ -1,0 +1,44 @@
+{
+  "template_config": 1,
+  "engine": "scikit-learn",
+  "app": "clustering",
+  "source": "Bybit v5 API · tools/bybit_features.py --mode cross (eine Zeile je Symbol)",
+  "step2": [
+    {
+      "Spalte": "symbol",
+      "Aktion": "behalten",
+      "Parameter": "",
+      "Neuer Name": ""
+    }
+  ],
+  "missing": [],
+  "new_columns": [],
+  "widgets": {
+    "w_group": "(keine)",
+    "w_name_col": "symbol",
+    "w_features": [
+      "ret_window_pct",
+      "vola_ann_pct",
+      "er",
+      "cs_spread_pct",
+      "max_dd_pct",
+      "corr_btc",
+      "beta_btc",
+      "vola_trend",
+      "turnover_log10",
+      "ret_skew",
+      "ret_kurt",
+      "funding_mean_bp",
+      "oi_chg_pct"
+    ],
+    "w_scaler": "StandardScaler",
+    "w_drop_first": false,
+    "w_model": "iforest",
+    "w_contam_auto": false,
+    "w_contam_pct": 5.0,
+    "w_n_estimators": 200,
+    "w_max_samples": 0,
+    "w_seed": 101,
+    "w_curve": true
+  }
+}

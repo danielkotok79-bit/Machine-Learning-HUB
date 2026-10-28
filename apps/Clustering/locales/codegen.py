@@ -162,4 +162,94 @@ T = {
         "working copy for the clustering – df (data after step 2) stays unchanged",
         "kopia robocza do klastrowania – df (dane po kroku 2) pozostaje bez zmian"),
     "Zeilen, die ins Clustering gingen": ("rows that went into the clustering", "wiersze, które trafiły do klastrowania"),
+    # --- Anomalieerkennung (Isolation Forest, LOF, DBSCAN) ---
+    "Knick einer sortierten Kurve: größter Abstand zur Geraden vom ersten zum letzten Punkt (Achsen auf 0 … 1).": (
+        "Knee of a sorted curve: largest distance to the straight line from the first to the last point (axes "
+        "scaled to 0 … 1).",
+        "Załamanie posortowanej krzywej: największa odległość od prostej od pierwszego do ostatniego punktu (osie "
+        "przeskalowane do 0 … 1)."),
+    "daten_mit_anomalien": ("data_with_anomalies", "dane_z_anomaliami"),
+    "Unsupervised: kein y – das Modell lernt nur, wie die Zeilen normalerweise aussehen": (
+        "Unsupervised: no y – the model only learns what the rows normally look like",
+        "Unsupervised: brak y – model uczy się tylko, jak zwykle wyglądają wiersze"),
+    "min_samples Nachbarn – die Zeile selbst zählt mit (wie bei DBSCAN)": (
+        "min_samples neighbours – the row itself counts too (as in DBSCAN)",
+        "min_samples sąsiadów – sam wiersz też się liczy (jak w DBSCAN)"),
+    "k-Distanz: Kernpunkt, wenn sie höchstens eps ist": (
+        "k-distance: core point if it is at most eps",
+        "k-odległość: punkt rdzeniowy, gdy wynosi najwyżej eps"),
+    "False = normal, True = auffällig": ("False = normal, True = anomalous", "False = normalny, True = nietypowy"),
+    "Profile: Mittelwerte normal gegen auffällig in Originaleinheiten (Dummies: Anteil)": (
+        "Profiles: means of normal vs. anomalous rows in original units (dummies: share)",
+        "Profile: średnie wierszy normalnych i nietypowych w jednostkach oryginalnych (dummy: udział)"),
+    "Die auffälligsten Zeilen und ihre stärksten Abweichungen vom Durchschnitt (z)": (
+        "The most anomalous rows and their strongest deviations from the average (z)",
+        "Najbardziej nietypowe wiersze i ich największe odchylenia od średniej (z)"),
+    "PCA auf 2 Dimensionen – nur zur Darstellung (das Modell nutzt alle Features)": (
+        "PCA to 2 dimensions – for display only (the model uses all features)",
+        "PCA do 2 wymiarów – tylko do wykresu (model używa wszystkich cech)"),
+    "Anomalie-Score: höher = auffälliger (um 0.5 normal, nahe 1 sehr auffällig)": (
+        "anomaly score: higher = more anomalous (around 0.5 normal, close to 1 very anomalous)",
+        "wskaźnik anomalii: wyższy = bardziej nietypowy (ok. 0.5 normalny, blisko 1 bardzo nietypowy)"),
+    "True = auffällig (Score über der Schwelle)": (
+        "True = anomalous (score above the threshold)",
+        "True = nietypowy (wskaźnik powyżej progu)"),
+    "Schwelle auf der Skala des Scores": ("threshold on the score scale", "próg na skali wskaźnika"),
+    "Schwelle:": ("Threshold:", "Próg:"),
+    "Anomalien:": ("Anomalies:", "Anomalie:"),
+    "Anteil auffälliger Zeilen (contamination)": (
+        "share of anomalous rows (contamination)",
+        "udział nietypowych wierszy (contamination)"),
+    "Schwelle je Anteil": ("threshold per share", "próg dla każdego udziału"),
+    "die auffälligsten 20 % der Zeilen, absteigend sortiert": (
+        "the most anomalous 20 % of the rows, sorted descending",
+        "najbardziej nietypowe 20 % wierszy, malejąco"),
+    "Stichprobe – k-Distanz nur für diese Zeilen (Nachbarn aus allen Zeilen)": (
+        "sample – k-distance only for these rows (neighbours from all rows)",
+        "próbka – k-odległość tylko dla tych wierszy (sąsiedzi ze wszystkich wierszy)"),
+    "Knick der k-Distanz – eps etwa:": ("Knee of the k-distance – eps about:", "Załamanie k-odległości – eps około:"),
+    "Anteil Kernpunkte bei eps =": ("Share of core points at eps =", "Udział punktów rdzeniowych przy eps ="),
+    "Anteil Rauschen": ("share of noise", "udział szumu"),
+    "k-Distanz (aufsteigend sortiert)": ("k-distance (sorted ascending)", "k-odległość (rosnąco)"),
+    "Abstand zum min_samples-ten Nachbarn": (
+        "distance to the min_samples-th neighbour",
+        "odległość do min_samples-tego sąsiada"),
+    "auffällig × Gruppe": ("anomalous × group", "nietypowy × grupa"),
+    "7) Schwelle bzw. eps": ("7) Threshold or eps", "7) Próg albo eps"),
+    "8) Auswertung der Anomalien": ("8) Evaluation of the anomalies", "8) Ocena anomalii"),
+    "LOF der Trainingszeilen: ≈ 1 normal, deutlich über 1 auffällig": (
+        "LOF of the training rows: ≈ 1 normal, clearly above 1 anomalous",
+        "LOF wierszy treningowych: ≈ 1 normalny, wyraźnie powyżej 1 nietypowy"),
+    "True = auffällig": ("True = anomalous", "True = nietypowy"),
+    "Cluster je Zeile, -1 = Rauschen (Anomalie)": (
+        "cluster per row, -1 = noise (anomaly)",
+        "klaster dla każdego wiersza, -1 = szum (anomalia)"),
+    "Score: Abstand zum nächsten Kernpunkt in Vielfachen von eps": (
+        "score: distance to the nearest core point in multiples of eps",
+        "wskaźnik: odległość do najbliższego punktu rdzeniowego w wielokrotnościach eps"),
+    "über 1 = Rauschen": ("above 1 = noise", "powyżej 1 = szum"),
+    "kein Kernpunkt – eps ist zu klein": (
+        "no core point – eps is too small",
+        "brak punktu rdzeniowego – eps jest za małe"),
+    "Knick der Score-Kurve – contamination etwa:": (
+        "Knee of the score curve – contamination about:",
+        "Załamanie krzywej wskaźnika – contamination około:"),
+    "Score-Kurve (absteigend)": ("Score curve (descending)", "Krzywa wskaźnika (malejąco)"),
+    "Rang": ("Rank", "Pozycja"),
+    "Vergleich mit der bekannten Einteilung '{g}' – das Modell hat sie nie gesehen": (
+        "Comparison with the known grouping '{g}' – the model never saw it",
+        "Porównanie ze znanym podziałem '{g}' – model nigdy go nie widział"),
+    "die seltenere Gruppe – Anomalien sind selten": (
+        "the rarer group – anomalies are rare",
+        "rzadsza grupa – anomalie są rzadkie"),
+    "1 = auffällig": ("1 = anomalous", "1 = nietypowy"),
+    "Cluster:": ("Clusters:", "Klastry:"),
+    "∞ (kein Kernpunkt in der Nähe) = höchster Score": (
+        "∞ (no core point nearby) = highest score",
+        "∞ (brak punktu rdzeniowego w pobliżu) = najwyższy wskaźnik"),
+    "Cluster, -1 = Rauschen": ("cluster, -1 = noise", "klaster, -1 = szum"),
+    "Anomalie (1 = auffällig), Anomalie-Score, Hinweis": (
+        "anomaly (1 = anomalous), anomaly score, note",
+        "anomalia (1 = nietypowy), wskaźnik anomalii, uwaga"),
+    "anomalien.csv": ("anomalies.csv", "anomalie.csv"),
 }

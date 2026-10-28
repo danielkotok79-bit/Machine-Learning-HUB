@@ -234,3 +234,58 @@ scikit-learn 1.9, skops 0.16, Streamlit 1.66); składnia sprawdzona dla Pythona 
 testów uruchomione na kodzie sprzed audytu kończą się niepowodzeniem (sprawdzone) – 19 odtwarza błędy B1–B3
 i C1–C6, 2 sprawdzają nowe funkcje pomocnicze (`rows_var`, `looks_like_id`). W `tests/test_new_features.py` jeden test
 uwzględnia teraz escapowane nazwy kolumn w podsumowaniu. Uruchomienie: `pytest -q` (ok. 3 minuty).
+
+---
+
+# Wersja 2 – wykrywanie anomalii (Isolation Forest, LOF, DBSCAN) i skrypt Bybit (28.10.2026)
+
+**Zakres:** w kroku 6 obok K-Means trzy nowe metody – **Isolation Forest**, **Local Outlier Factor** (zawsze
+`novelty=True`) i **DBSCAN** (szum = anomalia); kroki 5, 7, 8, 9 i 10 dopasowują się do wybranego modelu; generowany
+kod (`codegen.py`), wykresy (`plots.py`), ok. 230 nowych tekstów EN/PL; skrypt `tools/bybit_features.py` (publiczne
+dane rynkowe Bybit → CSV ze wskaźnikami) z dwiema przykładowymi konfiguracjami (szereg czasowy, przekrój); karta
+aplikacji w launcherze; README w trzech językach.
+
+## Decyzje metodyczne
+
+| Temat | Decyzja |
+|---|---|
+| Wskaźnik | jedna skala dla wszystkich metod – wyższy = bardziej nietypowy: IF `−score_samples` (0 … 1), LOF wartość LOF (≈ 1 normalny), DBSCAN odległość do najbliższego punktu rdzeniowego / eps (powyżej 1 = szum) |
+| Próg | `contamination = auto` (IF 0.5, LOF 1.5) albo stały udział; DBSCAN 1 (= eps). Próg i udział nietypowych wierszy są zapisane w `preprocessing.json` i w kroku 10 używane bez zmian |
+| LOF | `novelty=True`: wskaźnik wierszy treningowych z `negative_outlier_factor_` (każdy wiersz bez siebie jako sąsiada), nowe dane przez `score_samples` / `predict` |
+| DBSCAN, nowe dane | klaster najbliższego punktu rdzeniowego, jeśli leży najwyżej o eps – inaczej −1 (jak definicja punktu brzegowego) |
+| Krok 7 | IF/LOF: próg dla udziałów 0.1–10 % i załamanie (uproszczony Kneedle) krzywej 20 % najbardziej nietypowych wierszy → propozycja contamination. DBSCAN: k-odległość (k = min_samples, wiersz liczy się sam) z załamaniem → propozycja eps; udział szumu i liczba klastrów dla kwantyli k-odległości (do 20 000 wierszy) |
+| Krok 8 | najbardziej nietypowe wiersze z odchyleniami z (wgląd w dane, nie w model), profil nietypowe/normalne, PCA z anomaliami zawsze na wykresie, porównanie ze znanym podziałem (precision, recall, ROC-AUC, average precision; rzadsza grupa = pozytywna) |
+| Skrypt Bybit | bez zaglądania w przyszłość: wartości z względem *poprzednich* świec, okna kończą się na świecy, funding i open interest znane na zamknięciu świecy, trwająca świeca pominięta, rozbieg pobierany przed startem. Stronicowanie wstecz tylko z `end` / `endTime` (niezależne od kolejności sortowania API), open interest przez kursor; limit 600 zapytań / 5 s, ponawianie przy 10006 i 5xx, przy 403 koniec z jasnym komunikatem |
+
+## Znalezione w trakcie budowy (poprawione)
+
+| # | Problem | Poprawka |
+|---|---|---|
+| N1 | LOF nie wykrywał wartości odstających, które same tworzą małą grupę (24 podobne „oszustwa” przy `n_neighbors = 20`) – ich sąsiadami były one same, LOF ≈ 1 | opis w pomocy `n_neighbors`, w tabeli metod i w README; test z `n_neighbors = 60` |
+| N2 | Oś logarytmiczna w kroku 7 pokazywała `$\mathdefault{10^{2}}$` – aplikacja wyłącza mathtext (`text.parse_math`, ochrona przed `$` w nazwach kolumn) | własny formatter osi (1, 10, 100) + test |
+| N3 | Legenda zasłaniała opis progu na histogramie wskaźnika | próg jako wpis w legendzie |
+| N4 | k-odległość: kilka skrajnych wartości (np. krach) spłaszczało krzywą, załamanie było nieczytelne | oś y obcięta (max z 1.3 × kwantyl 99.5 %, 1.4 × eps, 1.6 × załamanie) z dopiskiem najwyższej wartości; oś od 0 |
+| N5 | Udziały na wykresie DBSCAN zaokrąglane do 0 % / 100 % (przy 0.46 % szumu) | `share_text` (0.46 %, 99.5 %) |
+| N6 | `pca_projection` bez `labels` dla IF/LOF (modele bez `labels_`) kończyła się wyjątkiem | domyślnie same 0 |
+| N7 | `recipe_problem` przepuszczał próg NaN/∞ i udział spoza 0 … 1 w ręcznie zmienionym `preprocessing.json` | kontrola skończoności i zakresu |
+| N8 | Wartości uzupełniające w kroku 10 z szumem zaokrągleń (0.17886999999999997) | `format_value` z 12 cyframi znaczącymi |
+
+## Co sprawdzono
+
+* **Kod = aplikacja** dla IF, LOF i DBSCAN (wskaźnik, anomalie, próg, progi dla udziałów, załamanie, k-odległość,
+  siatka eps, profile, odchylenia z, porównanie, eksport, krok 10 bez aplikacji, cały skrypt z kroku 9) – także
+  z kategoriami, lukami, MinMaxScaler, próbką i metryką manhattan.
+* **Skrypt Bybit** na symulowanym API (prawdziwe `api.bybit.com` nie było osiągalne ze środowiska testowego):
+  limity stron, ponawianie, 403, cache/offline, brak zaglądania w przyszłość (obcięte dane → wcześniejsze wiersze co do
+  bitu takie same), wskaźniki przeliczone niezależnie, wbudowany krach jako najbardziej nietypowy wiersz (IF, 1 %) –
+  także po `--split` w kroku 10.
+* **Składnia** zmienionych plików i generowanego kodu sprawdzona dla Pythona 3.10 i 3.11.
+* **Test w przeglądarce** (Playwright, prawdziwy serwer, po polsku i angielsku): dane Bybit → przykładowa
+  konfiguracja → Isolation Forest → kroki 7, 8, 9 i 10 – bez błędów, wykresy czytelne; krach na pierwszym miejscu
+  w kroku 10.
+
+## Testy (stan wersji 2)
+
+349 testów (268 + 81 nowych: 33 w `tests/test_anomaly.py`, 5 w `tests/test_app_anomaly.py`, 39 w
+`tests/test_bybit_features.py`, 4 w `tests/test_i18n.py`) – wszystkie przechodzą (Python 3.13, pandas 3.1,
+scikit-learn 1.9, skops 0.16, Streamlit 1.66). Uruchomienie: `pytest -q` (ok. 5 minut).

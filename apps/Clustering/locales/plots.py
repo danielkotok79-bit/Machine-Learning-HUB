@@ -95,4 +95,40 @@ T = {
     "tatsächliche Gruppe": ("Actual group", "Rzeczywista grupa"),
     "neue Daten": ("new data", "nowe dane"),
     "Verteilung auf die Cluster": ("Distribution across the clusters", "Rozkład na klastry"),
+    # --- Anomalieerkennung (Isolation Forest, LOF, DBSCAN) ---
+    "Anomalien in 2D (PCA)": ("Anomalies in 2D (PCA)", "Anomalie w 2D (PCA)"),
+    "Verteilung des Anomalie-Scores": ("Distribution of the anomaly score", "Rozkład wskaźnika anomalii"),
+    "eingestellt: eps = {v}": ("set: eps = {v}", "ustawione: eps = {v}"),
+    "Zeilen, nach k-Distanz sortiert": ("Rows, sorted by k-distance", "Wiersze posortowane wg k-odległości"),
+    "Abstand zum {k}. Nachbarn": ("Distance to neighbour no. {k}", "Odległość do {k}. sąsiada"),
+    "k-Distanz – Kernpunkt, wenn höchstens eps": (
+        "k-distance – core point if at most eps",
+        "k-odległość – punkt rdzeniowy, gdy najwyżej eps"),
+    "auffällig in % (gestrichelt: alle Zeilen)": (
+        "anomalous in % (dashed: all rows)",
+        "nietypowe w % (przerywana: wszystkie wiersze)"),
+    "Anteil auffälliger Zeilen je {g}": ("Share of anomalous rows per {g}", "Udział nietypowych wierszy wg {g}"),
+    "DBSCAN: Cluster und Rauschen": ("DBSCAN: clusters and noise", "DBSCAN: klastry i szum"),
+    "Keine endlichen Scores.": ("No finite scores.", "Brak skończonych wskaźników."),
+    "Anomalie-Score (höher = auffälliger)": (
+        "Anomaly score (higher = more anomalous)",
+        "Wskaźnik anomalii (wyższy = bardziej nietypowy)"),
+    "Anzahl (log)": ("Count (log)", "Liczność (log)"),
+    "Rang (1 = auffälligste Zeile)": ("Rank (1 = most anomalous row)", "Pozycja (1 = najbardziej nietypowy wiersz)"),
+    "Anomalie-Score": ("Anomaly score", "Wskaźnik anomalii"),
+    "Score-Kurve der auffälligsten Zeilen": (
+        "Score curve of the most anomalous rows",
+        "Krzywa wskaźnika najbardziej nietypowych wierszy"),
+    "Knick: eps ≈ {v}": ("Knee: eps ≈ {v}", "Załamanie: eps ≈ {v}"),
+    "Rauschen in % (Zahl am Punkt = Cluster)": (
+        "Noise in % (number at the point = clusters)",
+        "Szum w % (liczba przy punkcie = klastry)"),
+    "Rauschanteil je eps": ("Noise share per eps", "Udział szumu dla eps"),
+    "Rauschen": ("Noise", "Szum"),
+    "normal": ("normal", "normalne"),
+    "Schwelle {v}": ("threshold {v}", "próg {v}"),
+    "Knick: {n} Zeilen": ("Knee: {n} rows", "Załamanie: {n} wierszy"),
+    "Rauschen (Anomalie)": ("Noise (anomaly)", "Szum (anomalia)"),
+    "auffällig": ("anomalous", "nietypowe"),
+    "abgeschnitten – höchster Wert {v}": ("cut off – highest value {v}", "obcięto – najwyższa wartość {v}"),
 }

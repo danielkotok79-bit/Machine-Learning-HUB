@@ -1,5 +1,6 @@
 """
-plots.py – Diagramme (matplotlib/seaborn) für die Schritte 3, 7, 8 und 10 (K-Means, scikit-learn).
+plots.py – Diagramme (matplotlib/seaborn) für die Schritte 3, 7, 8 und 10 (K-Means und die Anomalie-Modelle
+Isolation Forest, LOF, DBSCAN – scikit-learn).
 
 Jede Funktion gibt eine matplotlib-Figure zurück:
     Streamlit:  st.pyplot(fig)        Jupyter:  fig   (oder fig.savefig("bild.png"))
@@ -18,9 +19,10 @@ import pandas as pd
 import seaborn as sns
 from cycler import cycler
 from matplotlib.colors import LinearSegmentedColormap, to_hex
+from matplotlib.ticker import FuncFormatter, NullFormatter
 
 from i18n import N_, tx  # Beschriftungen in der gewählten Sprache
-from pipeline import cluster_label  # 'Cluster 2' bzw. '2 · Name' – überall gleich
+from pipeline import cluster_label, share_text  # 'Cluster 2' bzw. '2 · Name' – überall gleich
 
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
 SURFACE, INK, INK2, MUTED = "#fcfcfb", "#0b0b0b", "#52514e", "#898781"
@@ -588,20 +590,21 @@ def fig_sizes(sizes, names=None):
     return fig
 
 
-def fig_profile(z: pd.DataFrame, names=None, top: int = 25):
+def fig_profile(z: pd.DataFrame, names=None, top: int = 25, labels: list | None = None, title: str | None = None):
     """Cluster-Profile: Abweichung jedes Features vom Durchschnitt in Standardabweichungen (z) – rot = über,
-    blau = unter dem Durchschnitt. Bei vielen Features die top mit der größten Abweichung."""
+    blau = unter dem Durchschnitt. Bei vielen Features die top mit der größten Abweichung. labels/title: eigene
+    Spaltennamen und Titel (z. B. normal / auffällig bei den Anomalie-Modellen)."""
     zz = z.copy()
     note = ""
     if len(zz) > top:
         zz = zz.loc[zz.abs().max(axis=1).sort_values(ascending=False).index[:top]]
         note = tx(" – die {n} stärksten von {m}", n=top, m=len(z))
-    zz.columns = [cluster_label(int(j), names) for j in zz.columns]
+    zz.columns = list(labels) if labels is not None else [cluster_label(int(j), names) for j in zz.columns]
     zz.index = [str(i) for i in zz.index]
     fig, ax = plt.subplots(figsize=(min(3.2 + 1.25 * zz.shape[1], 14), 1.4 + 0.36 * len(zz)))
     sns.heatmap(zz, annot=True, fmt="+.1f", cmap=DIV, center=0, vmin=-2, vmax=2, linewidths=1, linecolor=SURFACE,
                 cbar_kws={"label": tx("z = Abweichung in Standardabweichungen")}, annot_kws={"size": 9}, ax=ax)
-    ax.set_title(tx("Cluster-Profile: Abweichung vom Durchschnitt (z)") + note)
+    ax.set_title((tx("Cluster-Profile: Abweichung vom Durchschnitt (z)") if title is None else title) + note)
     ax.set_xlabel("")
     ax.set_ylabel("")
     plt.setp(ax.get_yticklabels(), rotation=0)
@@ -755,6 +758,188 @@ def fig_cluster_shares(share_new, share_train=None, names=None):
     _rotate(ax, k + (4 if any(names or []) else 0))
     ax.set_ylabel(tx("Anteil in %"))
     ax.set_title(tx("Verteilung auf die Cluster"))
+    ax.grid(axis="x", visible=False)
+    fig.tight_layout()
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# Anomalie-Modelle (Isolation Forest, LOF, DBSCAN): Schritte 7, 8 und 10
+# ---------------------------------------------------------------------------
+ANOMALY_COLOR, NORMAL_COLOR = "#e34948", "#9ec5f4"  # auffällig rot, normal hellblau (Rauschen bei DBSCAN rot)
+
+
+def _finite(values) -> np.ndarray:
+    v = np.asarray(values, dtype="float64")
+    return v[np.isfinite(v)]
+
+
+def _plain_log_axis(axis):
+    """Log-Achse mit 1, 10, 100 … statt 10² – mathtext ist abgeschaltet (text.parse_math), sonst stünde dort
+    '$\\mathdefault{10^{2}}$'."""
+    axis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:,.0f}".replace(",", " ") if v >= 1 else f"{v:g}"))
+    axis.set_minor_formatter(NullFormatter())
+
+
+def fig_scores(score, threshold: float, curve: dict | None = None, title: str | None = None):
+    """Links die Verteilung des Anomalie-Scores mit der Schwelle (rot), rechts – wenn curve['sorted'] da ist – die
+    absteigend sortierte Score-Kurve der auffälligsten Zeilen mit Knick und Schwelle (wie die Elbow-Methode)."""
+    vals = _finite(score)
+    with_curve = curve is not None and curve.get("sorted") is not None and len(curve["sorted"])
+    fig, axes = plt.subplots(1, 2 if with_curve else 1, figsize=(11.5 if with_curve else 8, 4.2))
+    a1 = axes[0] if with_curve else axes
+    title = tx("Verteilung des Anomalie-Scores") if title is None else title
+    if not len(vals):
+        a1.text(0.5, 0.5, tx("Keine endlichen Scores."), ha="center", va="center", color=MUTED, transform=a1.transAxes)
+        a1.set_title(title)
+        a1.axis("off")
+    else:
+        thr_ok = threshold is not None and np.isfinite(threshold)
+        edges = np.histogram_bin_edges(vals, bins=60)
+        a1.hist(vals[vals <= threshold] if thr_ok else vals, bins=edges, color=NORMAL_COLOR, edgecolor=SURFACE,
+                linewidth=0.4, label=tx("normal"))
+        if thr_ok and (vals > threshold).any():
+            a1.hist(vals[vals > threshold], bins=edges, color=ANOMALY_COLOR, edgecolor=SURFACE, linewidth=0.4,
+                    label=tx("auffällig"))
+        if thr_ok:  # Schwelle in der Legende – eine Beschriftung an der Linie läge oft unter der Legende
+            a1.axvline(threshold, color=INK2, linewidth=1.2, linestyle="--",
+                       label=tx("Schwelle {v}", v=f"{threshold:.4g}"))
+        a1.set_yscale("log")
+        _plain_log_axis(a1.yaxis)
+        a1.set_xlabel(tx("Anomalie-Score (höher = auffälliger)"))
+        a1.set_ylabel(tx("Anzahl (log)"))
+        a1.set_title(title)
+        a1.legend(loc="upper right")
+    if with_curve:
+        desc = np.asarray(curve["sorted"], dtype="float64")
+        x = np.arange(1, len(desc) + 1)
+        a2 = axes[1]
+        a2.plot(x, desc, color=SERIES[0])
+        if threshold is not None and np.isfinite(threshold):
+            a2.axhline(threshold, color=INK2, linewidth=1.2, linestyle="--")
+        knee = curve.get("knee")
+        if knee is not None and knee < len(desc):
+            a2.scatter([knee + 1], [desc[knee]], s=64, color=SERIES[0], edgecolor=SURFACE, linewidth=1.5, zorder=3)
+            a2.annotate(tx("Knick: {n} Zeilen", n=knee + 1), (knee + 1, desc[knee]), xytext=(8, 8),
+                        textcoords="offset points", fontsize=9, color=INK2, bbox=LABEL_BOX, zorder=4)
+        a2.set_xlabel(tx("Rang (1 = auffälligste Zeile)"))
+        a2.set_ylabel(tx("Anomalie-Score"))
+        a2.set_title(tx("Score-Kurve der auffälligsten Zeilen"))
+    fig.tight_layout()
+    return fig
+
+
+def fig_kdist(curve: dict, eps: float):
+    """DBSCAN, Schritt 7: links die aufsteigend sortierte k-Distanz mit eps (gestrichelt) und Knick, rechts – wenn
+    berechnet – der Anteil Rauschen und die Zahl der Cluster je eps."""
+    kd = np.asarray(curve["kdist"], dtype="float64")
+    grid = curve.get("grid")
+    fig, axes = plt.subplots(1, 2 if grid else 1, figsize=(11.5 if grid else 8, 4.2))
+    a1 = axes[0] if grid else axes
+    a1.plot(np.arange(len(kd)), kd, color=SERIES[0])
+    finite = kd[np.isfinite(kd)]
+    knee = curve.get("knee")
+    if len(finite):  # wenige extreme Ausreißer würden den Knick ganz unten zusammendrücken → oben abschneiden
+        top = max(float(np.quantile(finite, 0.995)) * 1.3, float(eps) * 1.4,
+                  float(kd[knee]) * 1.6 if knee is not None and knee < len(kd) else 0.0)
+        a1.set_ylim(bottom=0)  # Abstände sind nie negativ
+        if finite.max() > top:
+            a1.set_ylim(0, top)
+            a1.annotate(tx("abgeschnitten – höchster Wert {v}", v=f"{finite.max():.4g}"), (1, 1),
+                        xycoords="axes fraction", xytext=(-4, -14), textcoords="offset points", ha="right",
+                        fontsize=8, color=MUTED)
+    a1.axhline(eps, color=INK2, linewidth=1.2, linestyle="--")
+    a1.annotate(tx("eingestellt: eps = {v}", v=f"{eps:.4g}"), (0, eps), xycoords=("axes fraction", "data"),
+                xytext=(4, 6), textcoords="offset points", fontsize=9, color=INK2, bbox=LABEL_BOX)
+    if knee is not None and knee < len(kd):
+        a1.scatter([knee], [kd[knee]], s=64, color=SERIES[1], edgecolor=SURFACE, linewidth=1.5, zorder=3)
+        a1.annotate(tx("Knick: eps ≈ {v}", v=f"{kd[knee]:.4g}"), (knee, kd[knee]), xytext=(-8, 10),
+                    textcoords="offset points", ha="right", fontsize=9, color=INK2, bbox=LABEL_BOX, zorder=4)
+    a1.set_xlabel(tx("Zeilen, nach k-Distanz sortiert"))
+    a1.set_ylabel(tx("Abstand zum {k}. Nachbarn", k=curve.get("k", "")))
+    a1.set_title(tx("k-Distanz – Kernpunkt, wenn höchstens eps"))
+    if grid:
+        a2 = axes[1]
+        e = np.asarray(grid["eps"], dtype="float64")
+        noise = np.asarray(grid["noise"], dtype="float64") * 100
+        a2.plot(e, noise, color=ANOMALY_COLOR, marker="o", markersize=4)
+        for xv, yv, c in zip(e, noise, grid["clusters"]):
+            a2.annotate(str(c), (xv, yv), xytext=(0, 7), textcoords="offset points", ha="center", fontsize=8,
+                        color=INK2)
+        a2.axvline(eps, color=INK2, linewidth=1.2, linestyle="--")
+        a2.set_xlabel("eps")
+        a2.set_ylabel(tx("Rauschen in % (Zahl am Punkt = Cluster)"))
+        a2.set_title(tx("Rauschanteil je eps"))
+    fig.tight_layout()
+    return fig
+
+
+def fig_anomaly_pca(proj: dict, flag_rows, dbscan: bool = False):
+    """Die Zeilen in 2D (PCA) – nur zur Darstellung. Normal hellblau, auffällig rot und obenauf. Bei DBSCAN die
+    Cluster in ihren Farben, Rauschen rot. flag_rows = Anomalie ja/nein in der Reihenfolge von proj['rows']."""
+    xy = np.asarray(proj["coords"])
+    flag = np.asarray(flag_rows, dtype=bool)
+    fig, ax = plt.subplots(figsize=(8.6, 5.6))
+    if dbscan:
+        lab = np.asarray(proj["labels"], dtype=int)
+        k = int(lab.max()) + 1 if (lab >= 0).any() else 0
+        colors = cluster_colors(k) if k else []
+        for j in range(k):
+            m = lab == j
+            ax.scatter(xy[m, 0], xy[m, 1], s=12, alpha=0.6, color=colors[j], edgecolor=SURFACE, linewidth=0.3,
+                       label=cluster_label(j))
+    else:
+        ax.scatter(xy[~flag, 0], xy[~flag, 1], s=10, alpha=0.55, color=NORMAL_COLOR, edgecolor=SURFACE, linewidth=0.2,
+                   label=tx("normal"))
+    ax.scatter(xy[flag, 0], xy[flag, 1], s=26, alpha=0.9, color=ANOMALY_COLOR, edgecolor=INK, linewidth=0.4,
+               marker="X" if dbscan else "o", label=tx("Rauschen (Anomalie)") if dbscan else tx("auffällig"), zorder=4)
+    ev = proj["explained"]
+    ax.set_xlabel(tx("PC1 ({pct} der Streuung)", pct=f"{ev[0]:.0%}"))
+    ax.set_ylabel(tx("PC2 ({pct} der Streuung)", pct=f"{ev[1]:.0%}"))
+    title = tx("Anomalien in 2D (PCA)")
+    if len(xy) < proj.get("n", len(xy)):
+        title += tx(" ({n} Punkte, Stichprobe)", n=len(xy))
+    ax.set_title(title)
+    ax.legend(loc="upper left", bbox_to_anchor=(1, 1), markerscale=1.3)
+    fig.tight_layout()
+    return fig
+
+
+def fig_anomaly_groups(table: pd.DataFrame, overall: float, group_title: str = ""):
+    """Anteil auffälliger Zeilen je Gruppe der bekannten Einteilung (z. B. Class) – Linie = Anteil insgesamt."""
+    t = table.copy()
+    t["Gruppe"] = t["Gruppe"].astype(str)
+    fig, ax = plt.subplots(figsize=(8, 0.42 * len(t) + 1.5))
+    ax.barh(t["Gruppe"][::-1], (t["Anteil auffällig"] * 100)[::-1], color=ANOMALY_COLOR, height=0.6)
+    for y, (v, k, n) in enumerate(zip(t["Anteil auffällig"][::-1], t["auffällig"][::-1], t["Zeilen"][::-1])):
+        ax.text(v * 100, y, f"  {v:.1%} ({k}/{n})", va="center", fontsize=9, color=INK2)
+    ax.axvline(overall * 100, color=INK2, linewidth=1, linestyle="--")
+    ax.set_xlim(0, max(float(t["Anteil auffällig"].max()) * 100 * 1.35, overall * 100 * 1.2, 1))
+    ax.set_xlabel(tx("auffällig in % (gestrichelt: alle Zeilen)"))
+    ax.set_ylabel(group_title)
+    ax.set_title(tx("Anteil auffälliger Zeilen je {g}", g=group_title))
+    ax.grid(axis="y", visible=False)
+    fig.tight_layout()
+    return fig
+
+
+def fig_dbscan_sizes(sizes, n_noise: int):
+    """DBSCAN: Zeilen je Cluster und Rauschen (rot)."""
+    sizes = [int(v) for v in sizes]
+    labels = [cluster_label(j) for j in range(len(sizes))] + [tx("Rauschen")]
+    values = sizes + [int(n_noise)]
+    colors = list(cluster_colors(len(sizes))) + [ANOMALY_COLOR]
+    total = max(sum(values), 1)
+    fig, ax = plt.subplots(figsize=(min(max(6.0, 0.95 * len(values) + 3), 14), 3.8))
+    ax.bar(range(len(values)), values, color=colors, width=0.65)
+    for j, v in enumerate(values):
+        ax.text(j, v, f"{v:,}".replace(",", " ") + f"\n{share_text(v / total)}", ha="center", va="bottom",
+                fontsize=9, color=INK2)
+    ax.set_xticks(range(len(values)), labels)
+    _rotate(ax, len(values))
+    ax.set_ylim(0, max(max(values), 1) * 1.3)
+    ax.set_ylabel(tx("Anzahl Zeilen"))
+    ax.set_title(tx("DBSCAN: Cluster und Rauschen"))
     ax.grid(axis="x", visible=False)
     fig.tight_layout()
     return fig

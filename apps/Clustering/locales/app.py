@@ -462,12 +462,6 @@ T = {
     "4 · Aufbereitung 2 – Clustering-Daten": (
         "4 · Preparation 2 – clustering data",
         "4 · Przygotowanie 2 – dane do klastrowania"),
-    "6 · Modell & Training (K-Means)": ("6 · Model & training (K-Means)", "6 · Model i trening (K-Means)"),
-    "7 · Wahl von K (Elbow & Silhouette)": (
-        "7 · Choosing K (elbow & silhouette)",
-        "7 · Wybór K (łokieć i Silhouette)"),
-    "8 · Cluster-Auswertung": ("8 · Cluster evaluation", "8 · Ocena klastrów"),
-    "10 · Neue Daten zuordnen": ("10 · Assign new data", "10 · Przypisz nowe dane"),
     "scikit-learn rechnet auf der CPU – {n} Kerne; K-Means nutzt sie automatisch alle.": (
         "scikit-learn computes on the CPU – {n} cores; K-Means uses all of them automatically.",
         "scikit-learn liczy na CPU – {n} rdzeni; K-Means automatycznie używa wszystkich."),
@@ -501,15 +495,6 @@ T = {
     "4 · Datenaufbereitung 2 – Clustering-Daten (Features, Lücken, Skalierung)": (
         "4 · Data preparation 2 – clustering data (features, gaps, scaling)",
         "4 · Przygotowanie danych 2 – dane do klastrowania (cechy, braki, skalowanie)"),
-    "**Unsupervised Learning:** K-Means bekommt keine Antwort – kein Label, kein y. Es sucht Gruppen von Zeilen, "
-    "die sich in den Features ähneln. Eine bekannte Einteilung (im Kurs die Spalte *Private*) geht nicht ins "
-    "Modell; sie dient nur dem Vergleich in Schritt 8.": (
-        "**Unsupervised learning:** K-Means is never given an answer – no label, no y. It looks for groups of "
-        "rows that are similar in the features. A known grouping (in the course the column *Private*) does not "
-        "go into the model; it is only used for the comparison in step 8.",
-        "**Uczenie nienadzorowane:** K-Means nie dostaje odpowiedzi – brak etykiety, brak y. Szuka grup wierszy "
-        "podobnych pod względem cech. Znany podział (w kursie kolumna *Private*) nie trafia do modelu; służy "
-        "tylko do porównania w kroku 8."),
     "Vergleichsgruppe & Bezeichnung (optional)": (
         "Comparison group & row name (optional)",
         "Grupa porównawcza i nazwa wiersza (opcjonalnie)"),
@@ -537,10 +522,6 @@ T = {
         "course) in step 2 instead of dropping it; then it can be chosen here as the row name.",
         "Wskazówka: kolumnę z nazwami (np. 'Unnamed: 0' – pierwsza kolumna College_Data, w kursie index_col=0) w "
         "kroku 2 zachowaj zamiast usuwać; wtedy można ją tu wybrać jako nazwę wiersza."),
-    "Features (X) – daraus berechnet K-Means die Ähnlichkeit": (
-        "Features (X) – K-Means computes the similarity from these",
-        "Cechy (X) – z nich K-Means liczy podobieństwo"),
-    "Features für K-Means": ("Features for K-Means", "Cechy dla K-Means"),
     "{leak} stammt aus derselben CSV-Spalte wie die Vergleichsgruppe – K-Means kennt die Antwort dann schon, der "
     "Vergleich in Schritt 8 wäre geschönt.": (
         "{leak} comes from the same CSV column as the comparison group – K-Means would then already know the "
@@ -587,10 +568,6 @@ T = {
         "categories consider MinMaxScaler.",
         "Uwaga: kolumny dummy (0/1) też są skalowane – rzadkie kategorie dostają przez to dużą wagę. Przy wielu "
         "rzadkich kategoriach rozważ MinMaxScaler."),
-    "Daten für K-Means vorbereiten": ("Prepare data for K-Means", "Przygotuj dane dla K-Means"),
-    "Die Einstellungen oben wurden seit dem Vorbereiten geändert → erneut **Daten für K-Means vorbereiten**.": (
-        "The settings above have changed since preparing → **Prepare data for K-Means** again.",
-        "Ustawienia powyżej zmieniły się od przygotowania → ponownie **Przygotuj dane dla K-Means**."),
     "Fertig: X {shape} – {n} Zeilen, {n2} Features → {n3} Spalten (Modell-Eingänge)": (
         "Done: X {shape} – {n} rows, {n2} features → {n3} columns (model inputs)",
         "Gotowe: X {shape} – {n} wierszy, {n2} cech → {n3} kolumn (wejścia modelu)"),
@@ -606,17 +583,11 @@ T = {
         "Każda kategoria staje się osobną kolumną 0/1, np. Region → Region_North, Region_South … Z drop_first "
         "pierwsza kategoria odpada – rozpoznaje się ją po tym, że wszystkie inne są 0. Nieznane wartości w "
         "nowych danych → wszystkie 0."),
-    "**X nach {type} (erste Zeilen) – so sieht K-Means die Daten**": (
-        "**X after {type} (first rows) – this is how K-Means sees the data**",
-        "**X po {type} (pierwsze wiersze) – tak K-Means widzi dane**"),
     "Clustering-Daten nach Schritt 4 – Lücken gefüllt, Dummies; Bezeichnung und Vergleichsgruppe als "
     "Zusatzspalten": (
         "Clustering data after step 4 – gaps filled, dummies; row name and comparison group as extra columns",
         "Dane do klastrowania po kroku 4 – braki uzupełnione, dummy; nazwa wiersza i grupa porównawcza jako "
         "dodatkowe kolumny"),
-    "wie zuvor, zusätzlich skaliert – genau diese Zahlen sieht K-Means": (
-        "as above, additionally scaled – exactly these numbers are what K-Means sees",
-        "jak wyżej, dodatkowo skalowane – dokładnie te liczby widzi K-Means"),
     "Daten nach Schritt 2 mit Cluster-Nummer, Cluster-Name und Abstand zum Zentrum (nach Schritt 6)": (
         "Data after step 2 with cluster number, cluster name and distance to the centre (after step 6)",
         "Dane po kroku 2 z numerem klastra, nazwą klastra i odległością od centrum (po kroku 6)"),
@@ -626,9 +597,6 @@ T = {
         "with the cluster number of each row.",
         "Zapisz przygotowane dane jako plik CSV – do dalszej pracy w Excelu lub innym programie, po treningu "
         "także z numerem klastra każdego wiersza."),
-    "Für die Clustering-Daten zuerst Schritt 4 ausführen (**Daten für K-Means vorbereiten**).": (
-        "For the clustering data run step 4 first (**Prepare data for K-Means**).",
-        "Aby uzyskać dane do klastrowania, najpierw wykonaj krok 4 (**Przygotuj dane dla K-Means**)."),
     "Für die Cluster-Nummer je Zeile zuerst in Schritt 6 trainieren.": (
         "For the cluster number of each row, train in step 6 first.",
         "Aby uzyskać numer klastra dla każdego wiersza, najpierw wytrenuj model w kroku 6."),
@@ -644,13 +612,6 @@ T = {
         "preparation itself.",
         "Do przypisania nowych danych (krok 10) użyj **oryginalnego** pliku CSV, nie tego pliku – zapisany model "
         "sam powtarza przygotowanie."),
-    "6 · Modell & Training – K-Means": ("6 · Model & training – K-Means", "6 · Model i trening – K-Means"),
-    "Bitte zuerst Schritt 4 ausführen (Daten für K-Means vorbereiten).": (
-        "Please run step 4 first (prepare data for K-Means).",
-        "Najpierw wykonaj krok 4 (przygotuj dane dla K-Means)."),
-    "**K-Means** · {n} Zeilen · {p} Features (Modell-Eingänge) · Skalierung: {scaler}": (
-        "**K-Means** · {n} rows · {p} features (model inputs) · scaling: {scaler}",
-        "**K-Means** · {n} wierszy · {p} cech (wejścia modelu) · skalowanie: {scaler}"),
     "So arbeitet K-Means": ("How K-Means works", "Jak działa K-Means"),
     "K (n_clusters)": ("K (n_clusters)", "K (n_clusters)"),
     "Anzahl der Cluster – wie im Kurs KMeans(n_clusters=2). Welches K passt, zeigt Schritt 7 (Elbow-Methode und "
@@ -945,19 +906,6 @@ T = {
     "Confusion Matrix und classification_report nach der Zuordnung": (
         "Confusion matrix and classification_report after the mapping",
         "Macierz pomyłek i classification_report po przypisaniu"),
-    "Gespeichert werden **zwei Dateien** in `models/<name>/`: das K-Means-Modell (`model.skops` oder "
-    "`model.joblib`, mit den Cluster-Zentren) und `preprocessing.json` – das Rezept aus Schritt 2 und 4 "
-    "(Spalten-Aktionen, Füllwerte, Kategorien/Dummy-Spalten, Scaler) mit den Einstellungen aus Schritt 6, den "
-    "Cluster-Namen aus Schritt 8 und den Kennzahlen. Ohne das Rezept lassen sich neue Daten nicht korrekt "
-    "zuordnen.": (
-        "**Two files** are saved in `models/<name>/`: the K-Means model (`model.skops` or `model.joblib`, with "
-        "the cluster centres) and `preprocessing.json` – the recipe from steps 2 and 4 (column actions, fill "
-        "values, categories/dummy columns, scaler) with the settings from step 6, the cluster names from step 8 "
-        "and the metrics. Without the recipe new data cannot be assigned correctly.",
-        "Zapisywane są **dwa pliki** w `models/<name>/`: model K-Means (`model.skops` lub `model.joblib`, z "
-        "centrami klastrów) oraz `preprocessing.json` – receptura z kroków 2 i 4 (akcje kolumn, wartości "
-        "uzupełniające, kategorie/kolumny dummy, scaler) z ustawieniami z kroku 6, nazwami klastrów z kroku 8 i "
-        "miarami. Bez receptury nowych danych nie da się poprawnie przypisać."),
     "Cluster-Namen: {v}": ("Cluster names: {v}", "Nazwy klastrów: {v}"),
     " – noch keine Namen (Schritt 8: Cluster benennen)": (
         " – no names yet (step 8: name the clusters)",
@@ -1008,7 +956,6 @@ T = {
     "Clustering-Daten: X {shape}": ("Clustering data: X {shape}", "Dane do klastrowania: X {shape}"),
     "Clustering-Daten vorbereitet": ("Clustering data prepared", "Dane do klastrowania przygotowane"),
     "K-Means trainiert (K = {k})": ("K-Means trained (K = {k})", "K-Means wytrenowany (K = {k})"),
-    "K-Means trainiert": ("K-Means trained", "K-Means wytrenowany"),
     "**So arbeitet K-Means**\n\n1. **K Startzentren** wählen – mit *k-means++* gut verteilt, mit *random* "
     "zufällige Zeilen.\n2. **Zuordnen:** Jede Zeile kommt zum nächsten Zentrum (euklidischer Abstand in den "
     "skalierten Features).\n3. **Verschieben:** Jedes Zentrum wandert in den Mittelwert seiner Zeilen. Schritt 2 "
@@ -1066,4 +1013,456 @@ T = {
         "wszystkich klastrów*.\n4. **Interpretacja i podsumowanie:** rozkład na klastry w porównaniu z "
         "treningiem, wartości odstające i przypisania na\n   granicy – a jeśli nowe dane zawierają znany podział "
         "(np. Private), porównanie z przypisaniem klaster → grupa z\n   treningu.\n"),
+    # --- Anomalieerkennung (Isolation Forest, LOF, DBSCAN) ---
+    "\n**So werden neue Daten bewertet**\n\n1. **Nichts neu fitten.** Neue Daten werden mit dem *gespeicherten "
+    "Rezept* aufbereitet (gleiche Spalten-Aktionen und\n   neue Spalten, gleiche Füllwerte, gleiche "
+    "Dummy-Spalten, gleicher Scaler) und mit dem Modell aus dem Training bewertet\n   – mit **derselben "
+    "Schwelle** wie im Training.\n2. **Gleiche Rohspalten wie im Training.** Die Tabelle unten zeigt, welche "
+    "CSV-Spalten nötig sind (Vorlage zum\n   Download). Fehlen Spalten → klare Fehlermeldung. Zusätzliche "
+    "Spalten werden ignoriert.\n3. **Ergebnis je Zeile:** *Anomalie* (1 = Score über der Schwelle), "
+    "*Anomalie-Score* (höher = auffälliger) und bei\n   DBSCAN der *Cluster* des nächsten Kernpunkts (−1 = "
+    "Rauschen). *Hinweis* nennt ergänzte Lücken, unbekannte Kategorien\n   und Werte außerhalb des "
+    "Trainingsbereichs.\n4. **Fazit:** Anteil auffälliger Zeilen im Vergleich zum Training, die auffälligsten "
+    "Zeilen – und wenn die neuen Daten\n   die bekannte Einteilung enthalten, wie gut die Anomalien sie "
+    "treffen.\n\n**Zeitreihen:** In Schritt 4–6 auf einem ruhigen Zeitraum trainieren und hier spätere Daten "
+    "bewerten. Häufen sich die\nAnomalien in einem Zeitraum, ist das eher ein neues Regime als lauter "
+    "Einzelfälle.\n": (
+        "\n**How new data are scored**\n\n1. **Nothing is fitted again.** New data are prepared with the *saved "
+        "recipe* (same column actions and\n   new columns, same fill values, same dummy columns, same scaler) and "
+        "scored with the model from training\n   – with **the same threshold** as in training.\n2. **Same raw "
+        "columns as in training.** The table below shows which CSV columns are needed (template to\n   download). "
+        "Missing columns → clear error message. Additional columns are ignored.\n3. **Result per row:** *Anomaly* "
+        "(1 = score above the threshold), *Anomaly score* (higher = more anomalous) and, for\n   DBSCAN, the "
+        "*cluster* of the nearest core point (−1 = noise). *Note* lists filled gaps, unknown categories\n   and "
+        "values outside the training range.\n4. **Conclusion:** share of anomalous rows compared with training, the "
+        "most anomalous rows – and, if the new\n   data contain the known grouping, how well the anomalies match "
+        "it.\n\n**Time series:** train on a calm period in steps 4–6 and score later data here. If the anomalies "
+        "pile up in\none period, that is more likely a new regime than many single cases.\n",
+        "\n**Jak oceniane są nowe dane**\n\n1. **Nic nie jest dopasowywane od nowa.** Nowe dane są przygotowywane "
+        "*zapisaną recepturą* (te same akcje kolumn i\n   nowe kolumny, te same wartości uzupełniające, te same "
+        "kolumny dummy, ten sam scaler) i oceniane modelem z treningu\n   – z **tym samym progiem** co w "
+        "treningu.\n2. **Te same surowe kolumny co w treningu.** Tabela poniżej pokazuje, które kolumny CSV są "
+        "potrzebne (szablon do\n   pobrania). Brakujące kolumny → jasny komunikat błędu. Dodatkowe kolumny są "
+        "pomijane.\n3. **Wynik dla każdego wiersza:** *Anomalia* (1 = wskaźnik powyżej progu), *Wskaźnik anomalii* "
+        "(wyższy = bardziej nietypowy)\n   oraz przy DBSCAN *klaster* najbliższego punktu rdzeniowego (−1 = szum). "
+        "*Uwaga* wymienia uzupełnione braki,\n   nieznane kategorie i wartości poza zakresem treningowym.\n4. "
+        "**Podsumowanie:** udział nietypowych wierszy w porównaniu z treningiem, najbardziej nietypowe wiersze – a "
+        "jeśli\n   nowe dane zawierają znany podział, jak dobrze anomalie go trafiają.\n\n**Szeregi czasowe:** w "
+        "krokach 4–6 trenuj na spokojnym okresie, a tutaj oceniaj późniejsze dane. Jeśli anomalie\nskupiają się w "
+        "jednym okresie, to raczej nowy reżim niż wiele pojedynczych przypadków.\n"),
+    "Anomalie": ("Anomaly", "Anomalia"),
+    "Zeile": ("Row", "Wiersz"),
+    "größte Abweichungen (z)": ("largest deviations (z)", "największe odchylenia (z)"),
+    "Anteil auffällig": ("Share anomalous", "Udział nietypowych"),
+    "Schwelle (Score)": ("Threshold (score)", "Próg (wskaźnik)"),
+    "Zeilen über der Schwelle": ("Rows above the threshold", "Wiersze powyżej progu"),
+    "wie zuvor, zusätzlich skaliert – genau diese Zahlen sieht das Modell": (
+        "as above, additionally scaled – exactly these numbers are what the model sees",
+        "jak wyżej, dodatkowo skalowane – dokładnie te liczby widzi model"),
+    "Daten nach Schritt 2 mit Anomalie (1 = auffällig) und Anomalie-Score – bei DBSCAN auch der Cluster (nach "
+    "Schritt 6)": (
+        "Data after step 2 with anomaly (1 = anomalous) and anomaly score – for DBSCAN also the cluster (after step "
+        "6)",
+        "Dane po kroku 2 z anomalią (1 = nietypowy) i wskaźnikiem anomalii – przy DBSCAN także klaster (po kroku 6)"),
+    "**So arbeitet Isolation Forest**\n\n1. **Viele Zufallsbäume** (*n_estimators*), jeder auf einer Stichprobe "
+    "der Zeilen (*max_samples*, Standard 256).\n2. Jeder Baum **schneidet** die Daten an zufälligen Stellen "
+    "eines zufälligen Features – so lange, bis jede Zeile allein\n   ist.\n3. **Ungewöhnliche Zeilen sind "
+    "schnell allein:** wenige Schnitte = kurzer Pfad = hoher Score (0 … 1, um 0.5 normal).\n4. **Schwelle:** "
+    "*contamination = auto* nimmt Score 0.5 aus dem Original-Paper; ein fester Anteil (z. B. 1 %) macht die\n   "
+    "auffälligsten 1 % der Trainingszeilen zu Anomalien.\n\nIsolation Forest schneidet je Feature und braucht "
+    "deshalb keine Skalierung – sie schadet aber nicht.": (
+        "**How Isolation Forest works**\n\n1. **Many random trees** (*n_estimators*), each on a sample of the rows "
+        "(*max_samples*, default 256).\n2. Every tree **splits** the data at random points of a random feature – "
+        "until every row is on its own.\n3. **Unusual rows are isolated quickly:** few splits = short path = high "
+        "score (0 … 1, around 0.5 normal).\n4. **Threshold:** *contamination = auto* uses score 0.5 from the "
+        "original paper; a fixed share (e.g. 1 %) turns the\n   most anomalous 1 % of the training rows into "
+        "anomalies.\n\nIsolation Forest splits one feature at a time and therefore needs no scaling – but scaling "
+        "does no harm.",
+        "**Jak działa Isolation Forest**\n\n1. **Wiele losowych drzew** (*n_estimators*), każde na próbce wierszy "
+        "(*max_samples*, domyślnie 256).\n2. Każde drzewo **tnie** dane w losowych miejscach losowej cechy – tak "
+        "długo, aż każdy wiersz zostanie sam.\n3. **Nietypowe wiersze szybko zostają same:** mało cięć = krótka "
+        "ścieżka = wysoki wskaźnik (0 … 1, ok. 0.5 normalny).\n4. **Próg:** *contamination = auto* bierze wskaźnik "
+        "0.5 z oryginalnej publikacji; stały udział (np. 1 %) czyni\n   anomaliami najbardziej nietypowe 1 % "
+        "wierszy treningowych.\n\nIsolation Forest tnie po jednej cesze, więc nie potrzebuje skalowania – ale "
+        "skalowanie nie szkodzi."),
+    "**So arbeitet Local Outlier Factor (LOF)**\n\n1. Für jede Zeile die **n_neighbors nächsten Nachbarn** "
+    "(Abstand in den skalierten Features).\n2. **Lokale Dichte:** wie nah liegen die Nachbarn?\n3. **LOF = "
+    "Dichte der Nachbarn / eigene Dichte:** ≈ 1 = so dicht wie die Umgebung (normal), deutlich über 1 = die "
+    "Zeile\n   liegt dünner als ihre Nachbarn – auch direkt neben einer dichten Gruppe (lokaler Ausreißer).\n4. "
+    "**Schwelle:** *contamination = auto* nimmt LOF 1.5; ein fester Anteil macht die auffälligsten "
+    "Trainingszeilen zu\n   Anomalien. *novelty=True*: Das Modell bewertet in Schritt 10 auch neue Daten.": (
+        "**How Local Outlier Factor (LOF) works**\n\n1. For every row the **n_neighbors nearest neighbours** "
+        "(distance in the scaled features).\n2. **Local density:** how close are the neighbours?\n3. **LOF = "
+        "density of the neighbours / own density:** ≈ 1 = as dense as its surroundings (normal), clearly above 1 = "
+        "the row\n   lies more sparsely than its neighbours – even right next to a dense group (local outlier).\n4. "
+        "**Threshold:** *contamination = auto* uses LOF 1.5; a fixed share turns the most anomalous training rows "
+        "into\n   anomalies. *novelty=True*: the model also scores new data in step 10.",
+        "**Jak działa Local Outlier Factor (LOF)**\n\n1. Dla każdego wiersza **n_neighbors najbliższych sąsiadów** "
+        "(odległość w skalowanych cechach).\n2. **Lokalna gęstość:** jak blisko leżą sąsiedzi?\n3. **LOF = gęstość "
+        "sąsiadów / własna gęstość:** ≈ 1 = tak gęsto jak otoczenie (normalny), wyraźnie powyżej 1 = wiersz\n   "
+        "leży rzadziej niż jego sąsiedzi – nawet tuż obok gęstej grupy (lokalna wartość odstająca).\n4. **Próg:** "
+        "*contamination = auto* bierze LOF 1.5; stały udział czyni anomaliami najbardziej nietypowe wiersze\n   "
+        "treningowe. *novelty=True*: model ocenia w kroku 10 także nowe dane."),
+    "**So arbeitet DBSCAN**\n\n1. **Kernpunkt:** mindestens *min_samples* Zeilen (sie selbst eingeschlossen) im "
+    "Umkreis *eps*.\n2. Kernpunkte, die höchstens *eps* voneinander entfernt sind, bilden **einen Cluster**; "
+    "Randpunkte gehören zum Cluster\n   eines nahen Kernpunkts.\n3. **Alles andere ist Rauschen** (Cluster −1) – "
+    "das sind die Anomalien. Die Zahl der Cluster ergibt sich von selbst.\n4. **Score** = Abstand zum nächsten "
+    "Kernpunkt in Vielfachen von eps (über 1 = Rauschen). Neue Daten (Schritt 10)\n   bekommen den Cluster des "
+    "nächsten Kernpunkts – oder −1.\n\neps hängt von der Skalierung und der Zahl der Features ab – welches eps "
+    "passt, zeigt Schritt 7 (k-Distanz).": (
+        "**How DBSCAN works**\n\n1. **Core point:** at least *min_samples* rows (itself included) within the radius "
+        "*eps*.\n2. Core points at most *eps* apart form **one cluster**; border points belong to the cluster of a "
+        "nearby\n   core point.\n3. **Everything else is noise** (cluster −1) – these are the anomalies. The number "
+        "of clusters follows by itself.\n4. **Score** = distance to the nearest core point in multiples of eps "
+        "(above 1 = noise). New data (step 10)\n   get the cluster of the nearest core point – or −1.\n\neps "
+        "depends on the scaling and the number of features – step 7 shows which eps fits (k-distance).",
+        "**Jak działa DBSCAN**\n\n1. **Punkt rdzeniowy:** co najmniej *min_samples* wierszy (łącznie z nim samym) "
+        "w promieniu *eps*.\n2. Punkty rdzeniowe odległe najwyżej o *eps* tworzą **jeden klaster**; punkty "
+        "brzegowe należą do klastra\n   pobliskiego punktu rdzeniowego.\n3. **Wszystko inne to szum** (klaster −1) "
+        "– to są anomalie. Liczba klastrów wynika sama.\n4. **Wskaźnik** = odległość do najbliższego punktu "
+        "rdzeniowego w wielokrotnościach eps (powyżej 1 = szum). Nowe dane\n   (krok 10) dostają klaster "
+        "najbliższego punktu rdzeniowego – albo −1.\n\neps zależy od skalowania i liczby cech – które eps pasuje, "
+        "pokazuje krok 7 (k-odległość)."),
+    "Übernommen: contamination = {pct} – jetzt in Schritt 6 neu trainieren.": (
+        "Applied: contamination = {pct} – now retrain in step 6.",
+        "Przejęto: contamination = {pct} – teraz wytrenuj ponownie w kroku 6."),
+    "Übernommen: eps = {v} – jetzt in Schritt 6 neu trainieren.": (
+        "Applied: eps = {v} – now retrain in step 6.",
+        "Przejęto: eps = {v} – teraz wytrenuj ponownie w kroku 6."),
+    "6 · Modell & Training": ("6 · Model & training", "6 · Model i trening"),
+    "7 · Wahl von K bzw. Schwelle": ("7 · Choosing K or the threshold", "7 · Wybór K albo progu"),
+    "8 · Auswertung": ("8 · Evaluation", "8 · Ocena"),
+    "10 · Neue Daten zuordnen / bewerten": ("10 · Assign / score new data", "10 · Przypisz / oceń nowe dane"),
+    "Bybit-Daten aus tools/bybit_features.py erkannt (Zeitreihe, eine Kerze je Zeile): Die "
+    "Beispiel-Konfiguration stellt Schritt 2, 4 und 6 ein – row als Bezeichnung, alle Feature-Spalten (z-Werte, "
+    "Volatilität, Spread, Funding, Open Interest …), StandardScaler und Isolation Forest mit 1 % auffälligen "
+    "Zeilen.": (
+        "Bybit data from tools/bybit_features.py detected (time series, one candle per row): the example "
+        "configuration sets steps 2, 4 and 6 – row as the row name, all feature columns (z-values, volatility, "
+        "spread, funding, open interest …), StandardScaler and Isolation Forest with 1 % anomalous rows.",
+        "Wykryto dane Bybit z tools/bybit_features.py (szereg czasowy, jedna świeca na wiersz): przykładowa "
+        "konfiguracja ustawia kroki 2, 4 i 6 – row jako nazwa wiersza, wszystkie kolumny cech (wartości z, "
+        "zmienność, spread, funding, open interest …), StandardScaler i Isolation Forest z 1 % nietypowych wierszy."),
+    "Bybit-Daten aus tools/bybit_features.py erkannt (Querschnitt, ein Token je Zeile): Die "
+    "Beispiel-Konfiguration stellt Schritt 2, 4 und 6 ein – symbol als Bezeichnung, alle Kennzahlen als "
+    "Features, StandardScaler und Isolation Forest mit 5 % auffälligen Tokens.": (
+        "Bybit data from tools/bybit_features.py detected (cross-section, one token per row): the example "
+        "configuration sets steps 2, 4 and 6 – symbol as the row name, all metrics as features, StandardScaler and "
+        "Isolation Forest with 5 % anomalous tokens.",
+        "Wykryto dane Bybit z tools/bybit_features.py (przekrój, jeden token na wiersz): przykładowa konfiguracja "
+        "ustawia kroki 2, 4 i 6 – symbol jako nazwa wiersza, wszystkie wskaźniki jako cechy, StandardScaler i "
+        "Isolation Forest z 5 % nietypowych tokenów."),
+    "**Unsupervised Learning:** Die Modelle bekommen keine Antwort – kein Label, kein y. K-Means sucht Gruppen "
+    "von Zeilen, die sich in den Features ähneln; Isolation Forest, LOF und DBSCAN suchen Zeilen, die zu keiner "
+    "Gruppe passen (Anomalien). Eine bekannte Einteilung (im Kurs die Spalte *Private*, bei Betrugsdaten z. B. "
+    "*Class*) geht nicht ins Modell; sie dient nur dem Vergleich in Schritt 8.": (
+        "**Unsupervised learning:** the models get no answer – no label, no y. K-Means looks for groups of rows "
+        "that are similar in the features; Isolation Forest, LOF and DBSCAN look for rows that fit no group "
+        "(anomalies). A known grouping (in the course the column *Private*, in fraud data e.g. *Class*) does not go "
+        "into the model; it is only used for the comparison in step 8.",
+        "**Uczenie nienadzorowane:** modele nie dostają odpowiedzi – brak etykiety, brak y. K-Means szuka grup "
+        "wierszy podobnych w cechach; Isolation Forest, LOF i DBSCAN szukają wierszy, które nie pasują do żadnej "
+        "grupy (anomalii). Znany podział (w kursie kolumna *Private*, w danych o oszustwach np. *Class*) nie "
+        "trafia do modelu; służy tylko do porównania w kroku 8."),
+    "Features (X) – daraus berechnet das Modell Ähnlichkeit und Auffälligkeit": (
+        "Features (X) – the model computes similarity and anomalies from these",
+        "Cechy (X) – z nich model liczy podobieństwo i nietypowość"),
+    "Features für das Modell": ("Features for the model", "Cechy dla modelu"),
+    "Daten fürs Modell vorbereiten": ("Prepare data for the model", "Przygotuj dane dla modelu"),
+    "**X nach {type} (erste Zeilen) – so sieht das Modell die Daten**": (
+        "**X after {type} (first rows) – this is how the model sees the data**",
+        "**X po {type} (pierwsze wiersze) – tak model widzi dane**"),
+    "**{name}** · {n} Zeilen · {p} Features (Modell-Eingänge) · Skalierung: {scaler}": (
+        "**{name}** · {n} rows · {p} features (model inputs) · scaling: {scaler}",
+        "**{name}** · {n} wierszy · {p} cech (wejścia modelu) · skalowanie: {scaler}"),
+    "8 · Auswertung der Anomalien – {name}": (
+        "8 · Evaluation of the anomalies – {name}",
+        "8 · Ocena anomalii – {name}"),
+    "{name} auf {n} Zeilen · {k} auffällig ({pct}) · Schwelle: Score über {thr}": (
+        "{name} on {n} rows · {k} anomalous ({pct}) · threshold: score above {thr}",
+        "{name} na {n} wierszach · nietypowe: {k} ({pct}) · próg: wskaźnik powyżej {thr}"),
+    "Die auffälligsten Zeilen": ("The most anomalous rows", "Najbardziej nietypowe wiersze"),
+    "Nach Score sortiert. 'Zeile' = Nummer der Zeile in den Daten nach Schritt 2 (ab 0). Die Abweichungen (z = "
+    "Standardabweichungen vom Durchschnitt aller Zeilen) zeigen, was eine Zeile ungewöhnlich macht – ein Blick "
+    "in die Daten, nicht ins Modell.": (
+        "Sorted by score. 'Row' = number of the row in the data after step 2 (from 0). The deviations (z = standard "
+        "deviations from the average of all rows) show what makes a row unusual – a look into the data, not into "
+        "the model.",
+        "Posortowane wg wskaźnika. 'Wiersz' = numer wiersza w danych po kroku 2 (od 0). Odchylenia (z = odchylenia "
+        "standardowe od średniej wszystkich wierszy) pokazują, co czyni wiersz nietypowym – wgląd w dane, nie w "
+        "model."),
+    "Profil – was unterscheidet auffällige von normalen Zeilen?": (
+        "Profile – what distinguishes anomalous from normal rows?",
+        "Profil – czym nietypowe wiersze różnią się od normalnych?"),
+    "**PCA nur für das Bild:** Die {p} Spalten werden auf die 2 Richtungen mit der größten Streuung projiziert "
+    "({pct} der Streuung). Das Modell rechnet mit allen Spalten – eine Anomalie kann im Bild mitten in der Wolke "
+    "liegen und trotzdem in einer anderen Richtung ungewöhnlich sein. Auffällige Zeilen sind im Bild immer dabei.": (
+        "**PCA only for the picture:** the {p} columns are projected onto the 2 directions with the largest spread "
+        "({pct} of the spread). The model works with all columns – an anomaly can sit in the middle of the cloud in "
+        "the picture and still be unusual in another direction. Anomalous rows are always included in the picture.",
+        "**PCA tylko do wykresu:** {p} kolumn rzutuje się na 2 kierunki o największym rozrzucie ({pct} rozrzutu). "
+        "Model liczy na wszystkich kolumnach – anomalia może na wykresie leżeć w środku chmury, a mimo to być "
+        "nietypowa w innym kierunku. Nietypowe wiersze są na wykresie zawsze."),
+    "Zufällige Zeile ziehen: Wie auffällig ist sie, und welche Features weichen am stärksten vom Durchschnitt ab?": (
+        "Draw a random row: how anomalous is it, and which features deviate most from the average?",
+        "Wylosuj wiersz: jak bardzo jest nietypowy i które cechy najbardziej odbiegają od średniej?"),
+    "Das Modell hat '{g}' nie gesehen. Gezeigt wird, wie viele Zeilen jeder Gruppe als auffällig gelten – bei "
+    "zwei Gruppen zählt die seltenere als 'positiv' (Anomalien sind selten).": (
+        "The model never saw '{g}'. Shown is how many rows of each group count as anomalous – with two groups the "
+        "rarer one counts as 'positive' (anomalies are rare).",
+        "Model nigdy nie widział '{g}'. Pokazano, ile wierszy każdej grupy uznano za nietypowe – przy dwóch "
+        "grupach rzadsza liczy się jako 'pozytywna' (anomalie są rzadkie)."),
+    "Gespeichert werden **zwei Dateien** in `models/<name>/`: das Modell (`model.skops` oder `model.joblib` – "
+    "K-Means mit den Cluster-Zentren, Isolation Forest, LOF oder DBSCAN) und `preprocessing.json` – das Rezept "
+    "aus Schritt 2 und 4 (Spalten-Aktionen, Füllwerte, Kategorien/Dummy-Spalten, Scaler) mit den Einstellungen "
+    "aus Schritt 6, den Cluster-Namen aus Schritt 8, der Schwelle und den Kennzahlen. Ohne das Rezept lassen "
+    "sich neue Daten nicht korrekt zuordnen oder bewerten.": (
+        "**Two files** are saved in `models/<name>/`: the model (`model.skops` or `model.joblib` – K-Means with the "
+        "cluster centres, Isolation Forest, LOF or DBSCAN) and `preprocessing.json` – the recipe from steps 2 and 4 "
+        "(column actions, fill values, categories/dummy columns, scaler) with the settings from step 6, the cluster "
+        "names from step 8, the threshold and the metrics. Without the recipe, new data cannot be assigned or "
+        "scored correctly.",
+        "Zapisywane są **dwa pliki** w `models/<name>/`: model (`model.skops` albo `model.joblib` – K-Means z "
+        "centrami klastrów, Isolation Forest, LOF albo DBSCAN) i `preprocessing.json` – receptura z kroków 2 i 4 "
+        "(akcje kolumn, wartości uzupełniające, kategorie/kolumny dummy, scaler) z ustawieniami z kroku 6, nazwami "
+        "klastrów z kroku 8, progiem i miarami. Bez receptury nowych danych nie da się poprawnie przypisać ani "
+        "ocenić."),
+    "Python-Code (Bewertung ohne App)": ("Python code (scoring without the app)", "Kod Python (ocena bez aplikacji)"),
+    "Die Einstellungen oben wurden seit dem Vorbereiten geändert → erneut **Daten fürs Modell vorbereiten**.": (
+        "The settings above have changed since preparing → click **Prepare data for the model** again.",
+        "Ustawienia powyżej zmieniły się od przygotowania → ponownie kliknij **Przygotuj dane dla modelu**."),
+    "Für die Clustering-Daten zuerst Schritt 4 ausführen (**Daten fürs Modell vorbereiten**).": (
+        "For the clustering data, run step 4 first (**Prepare data for the model**).",
+        "Dla danych do klastrowania najpierw wykonaj krok 4 (**Przygotuj dane dla modelu**)."),
+    "Anomalie = 1: Score über der Schwelle aus dem Training. Anomalie-Score: höher = auffälliger (Isolation "
+    "Forest 0 … 1, LOF ≈ 1 normal, DBSCAN: Abstand zum nächsten Kernpunkt in Vielfachen von eps).": (
+        "Anomaly = 1: score above the threshold from training. Anomaly score: higher = more anomalous (Isolation "
+        "Forest 0 … 1, LOF ≈ 1 normal, DBSCAN: distance to the nearest core point in multiples of eps).",
+        "Anomalia = 1: wskaźnik powyżej progu z treningu. Wskaźnik anomalii: wyższy = bardziej nietypowy "
+        "(Isolation Forest 0 … 1, LOF ≈ 1 normalny, DBSCAN: odległość do najbliższego punktu rdzeniowego w "
+        "wielokrotnościach eps)."),
+    "contamination = auto": ("contamination = auto", "contamination = auto"),
+    "Anteil auffällig in %": ("Share anomalous in %", "Udział nietypowych w %"),
+    "So arbeitet {name}": ("How {name} works", "Jak działa {name}"),
+    "Bitte zuerst Schritt 4 ausführen (Daten fürs Modell vorbereiten).": (
+        "Please run step 4 first (Prepare data for the model).",
+        "Najpierw wykonaj krok 4 (Przygotuj dane dla modelu)."),
+    "{n} Zeilen: LOF und DBSCAN vergleichen jede Zeile mit ihren Nachbarn – das kann lange dauern und viel "
+    "Speicher brauchen. Tipp: Stichprobe in der Seitenleiste oder Isolation Forest.": (
+        "{n} rows: LOF and DBSCAN compare every row with its neighbours – that can take long and need a lot of "
+        "memory. Tip: sample in the sidebar or Isolation Forest.",
+        "{n} wierszy: LOF i DBSCAN porównują każdy wiersz z sąsiadami – to może długo trwać i zająć dużo pamięci. "
+        "Wskazówka: próbka w pasku bocznym albo Isolation Forest."),
+    "7 · Wahl von eps – DBSCAN (k-Distanz)": (
+        "7 · Choosing eps – DBSCAN (k-distance)",
+        "7 · Wybór eps – DBSCAN (k-odległość)"),
+    "7 · Schwelle für Anomalien – {name}": ("7 · Threshold for anomalies – {name}", "7 · Próg dla anomalii – {name}"),
+    "Kernpunkte": ("Core points", "Punkty rdzeniowe"),
+    "auffällige Zeilen": ("anomalous rows", "nietypowe wiersze"),
+    "Median-Score": ("Median score", "Mediana wskaźnika"),
+    "höchster Score": ("highest score", "najwyższy wskaźnik"),
+    "Cluster und Rauschen": ("Clusters and noise", "Klastry i szum"),
+    "Keine auffällige Zeile – die Schwelle in Schritt 7 prüfen.": (
+        "No anomalous row – check the threshold in step 7.",
+        "Brak nietypowych wierszy – sprawdź próg w kroku 7."),
+    "Anteil '{pos}' insgesamt": ("Share '{pos}' overall", "Udział '{pos}' ogółem"),
+    "Neue Daten bewerten": ("Score new data", "Oceń nowe dane"),
+    "10 · Neue Daten bewerten – {name}": ("10 · Score new data – {name}", "10 · Oceń nowe dane – {name}"),
+    "auto: Schwelle aus dem Verfahren selbst (Isolation Forest: Score 0.5, LOF: 1.5). Aus: ein fester Anteil "
+    "auffälliger Zeilen.": (
+        "auto: threshold from the method itself (Isolation Forest: score 0.5, LOF: 1.5). Off: a fixed share of "
+        "anomalous rows.",
+        "auto: próg z samej metody (Isolation Forest: wskaźnik 0.5, LOF: 1.5). Wyłączone: stały udział nietypowych "
+        "wierszy."),
+    "contamination in Prozent: 1 = die auffälligsten 1 % der Trainingszeilen gelten als Anomalien. Einen "
+    "Vorschlag zeigt Schritt 7 (Knick der Score-Kurve).": (
+        "contamination in percent: 1 = the most anomalous 1 % of the training rows count as anomalies. Step 7 shows "
+        "a suggestion (knee of the score curve).",
+        "contamination w procentach: 1 = najbardziej nietypowe 1 % wierszy treningowych to anomalie. Propozycję "
+        "pokazuje krok 7 (załamanie krzywej wskaźnika)."),
+    "Rauschanteil je eps berechnen (für Schritt 7)": (
+        "Compute the noise share per eps (for step 7)",
+        "Oblicz udział szumu dla eps (dla kroku 7)"),
+    "Ohne Skalierung (Schritt 4) bestimmen Features mit großen Zahlen fast allein die Abstände – LOF und DBSCAN "
+    "rechnen mit Abständen. In Schritt 4 StandardScaler wählen.": (
+        "Without scaling (step 4), features with large numbers almost alone determine the distances – LOF and "
+        "DBSCAN work with distances. Choose StandardScaler in step 4.",
+        "Bez skalowania (krok 4) cechy z dużymi liczbami prawie same wyznaczają odległości – LOF i DBSCAN liczą "
+        "odległości. W kroku 4 wybierz StandardScaler."),
+    "Aktuelles Modell: {name} · trainiert {v} · {seconds} s. Neues Training ersetzt es.": (
+        "Current model: {name} · trained {v} · {seconds} s. A new training replaces it.",
+        "Aktualny model: {name} · wytrenowany {v} · {seconds} s. Nowy trening go zastąpi."),
+    "Zeilen ohne Kernpunkt im Umkreis eps – die Anomalien.": (
+        "Rows without a core point within eps – the anomalies.",
+        "Wiersze bez punktu rdzeniowego w promieniu eps – anomalie."),
+    "Zeilen mit mindestens min_samples Zeilen im Umkreis eps.": (
+        "Rows with at least min_samples rows within eps.",
+        "Wiersze z co najmniej min_samples wierszami w promieniu eps."),
+    "Auffällig ist ein Score über der Schwelle.": (
+        "A score above the threshold is anomalous.",
+        "Nietypowy jest wskaźnik powyżej progu."),
+    "Typischer Score einer normalen Zeile.": (
+        "Typical score of a normal row.",
+        "Typowy wskaźnik normalnego wiersza."),
+    "**So liest man die k-Distanz:** Für jede Zeile der Abstand zu ihrem min_samples-ten Nachbarn, aufsteigend "
+    "sortiert. Flach = dichte Bereiche, am Ende steil = Zeilen weit weg von allen anderen. Ein eps am Knick "
+    "trennt beides: darunter Kernpunkte, darüber meist Rauschen. Rechts: Rauschanteil und Zahl der Cluster für "
+    "andere eps-Werte.": (
+        "**How to read the k-distance:** for every row the distance to its min_samples-th neighbour, sorted "
+        "ascending. Flat = dense regions, steep at the end = rows far from all others. An eps at the knee separates "
+        "the two: below it core points, above it mostly noise. Right: noise share and number of clusters for other "
+        "eps values.",
+        "**Jak czytać k-odległość:** dla każdego wiersza odległość do jego min_samples-tego sąsiada, posortowana "
+        "rosnąco. Płasko = gęste obszary, stromo na końcu = wiersze daleko od wszystkich innych. eps na załamaniu "
+        "rozdziela jedno od drugiego: poniżej punkty rdzeniowe, powyżej zwykle szum. Po prawej: udział szumu i "
+        "liczba klastrów dla innych wartości eps."),
+    "**So liest man die Bilder:** Links die Verteilung des Scores – rot = über der Schwelle. Rechts die "
+    "auffälligsten Zeilen nach Score sortiert: Wo die Kurve abflacht (Knick), unterscheiden sich die Zeilen kaum "
+    "noch – davor liegen die deutlichen Ausreißer. Eine Schwelle ist eine Entscheidung, keine Wahrheit: lieber "
+    "wenige klare Anomalien (z. B. 0.5–2 %) als eine lange Liste.": (
+        "**How to read the charts:** left, the distribution of the score – red = above the threshold. Right, the "
+        "most anomalous rows sorted by score: where the curve flattens (knee), the rows hardly differ any more – "
+        "before it are the clear outliers. A threshold is a decision, not a truth: better a few clear anomalies "
+        "(e.g. 0.5–2 %) than a long list.",
+        "**Jak czytać wykresy:** po lewej rozkład wskaźnika – czerwone = powyżej progu. Po prawej najbardziej "
+        "nietypowe wiersze posortowane wg wskaźnika: gdzie krzywa się wypłaszcza (załamanie), wiersze prawie się "
+        "już nie różnią – przed nim leżą wyraźne wartości odstające. Próg to decyzja, nie prawda: lepiej kilka "
+        "wyraźnych anomalii (np. 0.5–2 %) niż długa lista."),
+    "**Auffällige Zeilen** im Mittel: ": ("**Anomalous rows** on average: ", "**Nietypowe wiersze** średnio: "),
+    "**Mittelwerte in Originaleinheiten** (Dummies: Anteil 0 … 1)": (
+        "**Means in original units** (dummies: share 0 … 1)",
+        "**Średnie w jednostkach oryginalnych** (dummy: udział 0 … 1)"),
+    "Anteil der auffälligen Zeilen, die zu '{pos}' gehören.": (
+        "Share of the anomalous rows that belong to '{pos}'.",
+        "Udział nietypowych wierszy, które należą do '{pos}'."),
+    "Anteil der '{pos}'-Zeilen, die als auffällig gemeldet werden.": (
+        "Share of the '{pos}' rows that are flagged as anomalous.",
+        "Udział wierszy '{pos}', które zostały oznaczone jako nietypowe."),
+    "So hoch wäre die Precision bei zufällig ausgewählten Zeilen.": (
+        "The precision of randomly chosen rows.",
+        "Tyle wyniosłaby precision dla losowo wybranych wierszy."),
+    "Wie gut trennt der Score die Gruppen – unabhängig von der Schwelle: 0.5 = Zufall, 1 = perfekt.": (
+        "How well the score separates the groups – independent of the threshold: 0.5 = chance, 1 = perfect.",
+        "Jak dobrze wskaźnik rozdziela grupy – niezależnie od progu: 0.5 = przypadek, 1 = idealnie."),
+    "Fläche unter der Precision-Recall-Kurve – bei seltenen Gruppen aussagekräftiger als ROC-AUC; Zufall = "
+    "Anteil '{pos}' insgesamt.": (
+        "Area under the precision-recall curve – for rare groups more meaningful than ROC-AUC; chance = share "
+        "'{pos}' overall.",
+        "Pole pod krzywą precision-recall – przy rzadkich grupach bardziej miarodajne niż ROC-AUC; przypadek = "
+        "udział '{pos}' ogółem."),
+    "**Treffer:** {tp} auffällig und '{pos}' · **Fehlalarme:** {fp} auffällig, aber nicht '{pos}' · "
+    "**übersehen:** {fn} '{pos}'-Zeilen ohne Meldung.": (
+        "**Hits:** {tp} anomalous and '{pos}' · **false alarms:** {fp} anomalous but not '{pos}' · **missed:** {fn} "
+        "'{pos}' rows without a flag.",
+        "**Trafienia:** {tp} nietypowe i '{pos}' · **fałszywe alarmy:** {fp} nietypowe, ale nie '{pos}' · "
+        "**przeoczone:** {fn} wierszy '{pos}' bez oznaczenia."),
+    "{name} · Schwelle: Score über {thr} · im Training {pct} auffällig.": (
+        "{name} · threshold: score above {thr} · {pct} anomalous in training.",
+        "{name} · próg: wskaźnik powyżej {thr} · w treningu nietypowe: {pct}."),
+    "**Geladen: {name}** · {model} · im Training {pct} auffällig · {n} Features → {n2} Eingänge · gespeichert {v}": (
+        "**Loaded: {name}** · {model} · {pct} anomalous in training · {n} features → {n2} inputs · saved {v}",
+        "**Wczytano: {name}** · {model} · w treningu nietypowe: {pct} · {n} cech → {n2} wejść · zapisano {v}"),
+    "{n} Zeilen bewertet ({name})": ("{n} rows scored ({name})", "Ocenione wiersze: {n} ({name})"),
+    "im Training auffällig": ("anomalous in training", "nietypowe w treningu"),
+    "**Lesart:** `Anomalie` = 1, wenn der Score über der Schwelle aus dem Training liegt; `Anomalie-Score` – "
+    "höher = auffälliger; bei DBSCAN `Cluster` = Cluster des nächsten Kernpunkts (−1 = Rauschen). `Hinweis` "
+    "nennt ergänzte Lücken, unbekannte Kategorien und Werte außerhalb des Trainingsbereichs.": (
+        "**How to read it:** `Anomaly` = 1 if the score is above the threshold from training; `Anomaly score` – "
+        "higher = more anomalous; for DBSCAN `Cluster` = cluster of the nearest core point (−1 = noise). `Note` "
+        "lists filled gaps, unknown categories and values outside the training range.",
+        "**Jak czytać:** `Anomalia` = 1, gdy wskaźnik jest powyżej progu z treningu; `Wskaźnik anomalii` – wyższy "
+        "= bardziej nietypowy; przy DBSCAN `Klaster` = klaster najbliższego punktu rdzeniowego (−1 = szum). "
+        "`Uwaga` wymienia uzupełnione braki, nieznane kategorie i wartości poza zakresem treningowym."),
+    "Nach Score sortieren (auffälligste zuerst)": (
+        "Sort by score (most anomalous first)",
+        "Sortuj wg wskaźnika (najbardziej nietypowe najpierw)"),
+    "**Was die Bewertung aussagt**": ("**What the scoring means**", "**Co mówi ocena**"),
+    "{name} trainiert ({pct} auffällig)": (
+        "{name} trained ({pct} anomalous)",
+        "{name} wytrenowany (nietypowe: {pct})"),
+    "Anzahl der Zufallsbäume – mehr = stabilerer Score, langsamer (Standard 100).": (
+        "Number of random trees – more = more stable score, slower (default 100).",
+        "Liczba losowych drzew – więcej = stabilniejszy wskaźnik, wolniej (domyślnie 100)."),
+    "Zeilen je Baum: 0 = auto = min(256, Zeilen). Kleine Stichproben isolieren Ausreißer am besten – größere "
+    "Werte selten nötig.": (
+        "Rows per tree: 0 = auto = min(256, rows). Small samples isolate outliers best – larger values are rarely "
+        "needed.",
+        "Wiersze na drzewo: 0 = auto = min(256, wiersze). Małe próbki najlepiej izolują wartości odstające – "
+        "większe wartości rzadko są potrzebne."),
+    "Gleicher Seed = gleiche Bäume = gleiches Ergebnis.": (
+        "Same seed = same trees = same result.",
+        "Ten sam seed = te same drzewa = ten sam wynik."),
+    "DBSCAN läuft zusätzlich für einige eps-Werte (Quantile der k-Distanz) – Schritt 7 zeigt dann Rauschanteil "
+    "und Zahl der Cluster je eps. Nur bis {m} Zeilen.": (
+        "DBSCAN also runs for a few eps values (quantiles of the k-distance) – step 7 then shows the noise share "
+        "and number of clusters per eps. Only up to {m} rows.",
+        "DBSCAN działa dodatkowo dla kilku wartości eps (kwantyle k-odległości) – krok 7 pokazuje wtedy udział "
+        "szumu i liczbę klastrów dla każdego eps. Tylko do {m} wierszy."),
+    "DBSCAN fertig: {c} Cluster, {k} Zeilen Rauschen ({pct}) → weiter mit Schritt 7 (eps) und 8 (Auswertung).": (
+        "DBSCAN done: {c} clusters, {k} rows of noise ({pct}) → continue with step 7 (eps) and 8 (evaluation).",
+        "DBSCAN gotowy: klastry: {c}, szum: {k} wierszy ({pct}) → dalej krok 7 (eps) i 8 (ocena)."),
+    "{name} fertig: {k} von {n} Zeilen auffällig ({pct}) · Schwelle {thr} → weiter mit Schritt 7 (Schwelle) und "
+    "8 (Auswertung).": (
+        "{name} done: {k} of {n} rows anomalous ({pct}) · threshold {thr} → continue with step 7 (threshold) and 8 "
+        "(evaluation).",
+        "{name} gotowy: nietypowe {k} z {n} wierszy ({pct}) · próg {thr} → dalej krok 7 (próg) i 8 (ocena)."),
+    "Rauschanteil je eps wurde nicht berechnet (Schritt 6, nur bis {m} Zeilen).": (
+        "The noise share per eps was not computed (step 6, only up to {m} rows).",
+        "Udziału szumu dla eps nie obliczono (krok 6, tylko do {m} wierszy)."),
+    "contamination = Anteil auffälliger Zeilen → die passende Schwelle auf dem Score.": (
+        "contamination = share of anomalous rows → the matching threshold on the score.",
+        "contamination = udział nietypowych wierszy → odpowiadający mu próg wskaźnika."),
+    "liegen nahe am Durchschnitt aller Zeilen": (
+        "are close to the average of all rows",
+        "są blisko średniej wszystkich wierszy"),
+    "ja": ("yes", "tak"),
+    "nein": ("no", "nie"),
+    "Schwelle: {thr} – auffällig ist ein Score darüber.": (
+        "Threshold: {thr} – a score above it is anomalous.",
+        "Próg: {thr} – nietypowy jest wskaźnik powyżej."),
+    "1 = die auffälligste Zeile.": ("1 = the most anomalous row.", "1 = najbardziej nietypowy wiersz."),
+    "Cluster: **{v}**": ("Cluster: **{v}**", "Klaster: **{v}**"),
+    "Stärkste Abweichungen dieser Zeile": ("Strongest deviations of this row", "Największe odchylenia tego wiersza"),
+    "z = Abweichung vom Durchschnitt in Standardabweichungen": (
+        "z = deviation from the average in standard deviations",
+        "z = odchylenie od średniej w odchyleniach standardowych"),
+    "{name} · {model} · {pct} auffällig · {n} Features · {v}": (
+        "{name} · {model} · {pct} anomalous · {n} features · {v}",
+        "{name} · {model} · nietypowe: {pct} · {n} cech · {v}"),
+    "'{g}' ist enthalten → Vergleich mit den Anomalien ({n} Zeilen)": (
+        "'{g}' is included → comparison with the anomalies ({n} rows)",
+        "'{g}' jest w danych → porównanie z anomaliami ({n} wierszy)"),
+    "anomalien_{stem}.csv": ("anomalies_{stem}.csv", "anomalie_{stem}.csv"),
+    "Modell trainiert": ("Model trained", "Model wytrenowany"),
+    "Anzahl der Nachbarn: klein = sehr lokale Ausreißer, groß = Vergleich mit einer größeren Umgebung (Standard "
+    "20). Bilden Ausreißer selbst eine kleine Gruppe, muss n_neighbors größer sein als diese Gruppe – sonst gelten "
+    "sie untereinander als normal.": (
+        "Number of neighbours: small = very local outliers, large = comparison with a wider neighbourhood (default "
+        "20). If outliers form a small group of their own, n_neighbors must be larger than that group – otherwise "
+        "they look normal to each other.",
+        "Liczba sąsiadów: mała = bardzo lokalne wartości odstające, duża = porównanie z szerszym otoczeniem "
+        "(domyślnie 20). Jeśli wartości odstające same tworzą małą grupę, n_neighbors musi być większe niż ta grupa "
+        "– inaczej uchodzą między sobą za normalne."),
+    "Abstandsmaß: euclidean = Luftlinie (Standard) · manhattan = Summe der Abstände je Feature": (
+        "Distance: euclidean = straight line (default) · manhattan = sum of the distances per feature",
+        "Miara odległości: euclidean = w linii prostej (domyślnie) · manhattan = suma odległości dla każdej cechy"),
+    "Radius der Nachbarschaft in den skalierten Features. Startwert: Knick der k-Distanz einer Stichprobe – "
+    "Schritt 7 zeigt, welches eps passt.": (
+        "Radius of the neighbourhood in the scaled features. Starting value: knee of the k-distance of a sample – "
+        "step 7 shows which eps fits.",
+        "Promień sąsiedztwa w skalowanych cechach. Wartość startowa: załamanie k-odległości z próbki – krok 7 "
+        "pokazuje, które eps pasuje."),
+    "So viele Zeilen (sie selbst eingeschlossen) müssen im Radius eps liegen, damit eine Zeile Kernpunkt ist. "
+    "Faustregel: 2 × Zahl der Features (hier {v}).": (
+        "This many rows (itself included) must lie within eps for a row to be a core point. Rule of thumb: 2 × "
+        "number of features (here {v}).",
+        "Tyle wierszy (łącznie z nim samym) musi leżeć w promieniu eps, aby wiersz był punktem rdzeniowym. Reguła "
+        "kciuka: 2 × liczba cech (tutaj {v})."),
+    "Profil: Abweichung vom Durchschnitt (z)": (
+        "Profile: deviation from the average (z)",
+        "Profil: odchylenie od średniej (z)"),
+    "Bereite neue Daten auf und bewerte …": (
+        "Preparing and scoring new data …",
+        "Przygotowanie i ocena nowych danych …"),
+    "Anomalie-Score der neuen Daten": ("Anomaly score of the new data", "Wskaźnik anomalii nowych danych"),
 }

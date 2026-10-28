@@ -20,7 +20,7 @@ zum Lernen.
 | App | Art des Lernens | Modelle | Beispieldaten |
 |---|---|---|---|
 | 📊 [**Überwachtes Lernen**](apps/Supervised) | überwacht – Klassifikation und Regression | Gradient Boosting, Decision Tree + Random Forest, SVM, logistische Regression, KNN, lineare Regression; Split zufällig oder zeitlich, Vergleich mit Elo | LendingClub, NBA/Tennis |
-| 🔵 [**Clustering**](apps/Clustering) | unüberwacht | K-Means (Ellbogen, Silhouette, Cluster-Profile, PCA-Karte) | College-Daten |
+| 🔵 [**Clustering**](apps/Clustering) | unüberwacht | K-Means (Ellbogen, Silhouette, Cluster-Profile, PCA-Karte) · Anomalieerkennung: Isolation Forest, LOF, DBSCAN | College-Daten · Kryptomarkt-Daten von Bybit (Skript dabei) |
 | 📝 [**NLP – Textklassifikation**](apps/NLP) | überwacht, Text | Bag of Words / TF-IDF + Naive Bayes, logistische Regression, lineare SVM | Yelp-Bewertungen, SMS-Spam |
 | 🧠 [**Deep Learning**](apps/Deeplearning) | überwacht – Klassifikation und Regression | Keras Sequential (Dense) mit TensorFlow, EarlyStopping | LendingClub |
 
@@ -37,8 +37,8 @@ Alle vier Apps folgen denselben zehn Schritten:
 9. **Modell speichern & laden** – `.skops` (sicher) oder `.joblib` + `preprocessing.json`, ZIP-Download, die ganze Pipeline als Python-Skript
 10. **Neue Daten vorhersagen** – dieselbe Aufbereitung wird automatisch angewendet, dann Vorhersage, Erklärung und Fazit
 
-Clustering und NLP passen die Schritte 4–10 an ihre Aufgabe an (z. B. Wahl von K und Cluster-Profile bzw. die
-wichtigsten Wörter je Klasse). Details stehen im README der jeweiligen App (DE · EN · PL).
+Clustering und NLP passen die Schritte 4–10 an ihre Aufgabe an (z. B. Wahl von K und Cluster-Profile, Schwelle und
+die auffälligsten Zeilen bei Anomalien bzw. die wichtigsten Wörter je Klasse). Details stehen im README der jeweiligen App (DE · EN · PL).
 
 ![Überwachtes Lernen – Schritt 8: Modellbewertung](docs/screenshots/supervised-evaluation.png)
 *Überwachtes Lernen, Schritt 8: Bewertung eines Random Forest auf synthetischen, LendingClub-ähnlichen Daten (siehe [Ausprobieren ohne eigene Daten](#ausprobieren-ohne-eigene-daten)).*
@@ -83,7 +83,7 @@ Spalten und Formaten wie der Originaldatensatz erzeugen – so lässt sich alles
 | App | Befehl (im App-Ordner) | Erzeugt |
 |---|---|---|
 | Supervised | `python tests/synthetic.py` | `demo_lending_club_synthetisch.csv` (20 000 Zeilen) |
-| Clustering | `python tests/synthetic.py` | `demo_college_synthetisch.csv` (777 Zeilen) |
+| Clustering | `python tests/synthetic.py` · `python tools/bybit_features.py --top 10 --days 60` | `demo_college_synthetisch.csv` (777 Zeilen) · echte Krypto-Kennzahlen aus öffentlichen Bybit-Daten (Internet nötig) |
 | NLP | `python tests/synthetic.py` · `python tests/synthetic.py --sms` | `demo_yelp_synthetisch.csv` (10 000 Bewertungen) · `demo_sms_synthetisch.txt` |
 | Deep Learning | `python tests/synthetic.py` | `demo_lending_club_synthetisch.csv` (20 000 Zeilen) |
 
@@ -107,7 +107,7 @@ polnische, dann der deutsche Teil).
 
 ## Tests
 
-**956 automatische Tests** (pytest, darunter Tests der gesamten Oberfläche mit Streamlit `AppTest`) – je App:
+**1037 automatische Tests** (pytest, darunter Tests der gesamten Oberfläche mit Streamlit `AppTest`) – je App:
 
 ```bash
 pip install pytest
@@ -118,7 +118,7 @@ pytest -q
 | App | Tests |
 |---|---|
 | Supervised | 310 |
-| Clustering | 268 |
+| Clustering | 349 |
 | NLP | 188 |
 | Deep Learning | 190 |
 
@@ -136,7 +136,7 @@ Fehler, ihre Korrektur und die Regressionstests, die sie abdecken.
 ├── docs/screenshots/
 └── apps/
     ├── Supervised/      📊 scikit-learn – sechs Modelle des überwachten Lernens
-    ├── Clustering/      🔵 K-Means
+    ├── Clustering/      🔵 K-Means · Isolation Forest · LOF · DBSCAN
     ├── NLP/             📝 Textklassifikation
     └── Deeplearning/    🧠 Keras / TensorFlow
 ```

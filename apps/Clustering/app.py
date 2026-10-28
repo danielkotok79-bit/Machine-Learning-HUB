@@ -1,18 +1,19 @@
 """
-app.py – DATA-Analysis-Clustering: Datenanalyse und Cluster-Analyse mit K-Means (scikit-learn) für CSV-Daten
+app.py – DATA-Analysis-Clustering: Cluster-Analyse mit K-Means und Anomalieerkennung mit Isolation Forest, LOF und
+DBSCAN (scikit-learn) für CSV-Daten
 ===========================================================================================================
 
 Start:   streamlit run app.py
 
 Schritte (Navigation links)
-    1  Daten laden & Bibliotheken           6  Modell & Training (K-Means)
-    2  Aufbereitung 1 – Spalten, neue Sp.   7  Wahl von K (Elbow-Methode & Silhouette)
-    3  Analyse & Visualisierung             8  Cluster-Auswertung (Profile, PCA, Vergleich)
+    1  Daten laden & Bibliotheken           6  Modell & Training (K-Means, Isolation Forest, LOF, DBSCAN)
+    2  Aufbereitung 1 – Spalten, neue Sp.   7  Wahl von K (Elbow & Silhouette) bzw. Schwelle / eps
+    3  Analyse & Visualisierung             8  Auswertung (Cluster-Profile bzw. Anomalien, PCA, Vergleich)
     4  Aufbereitung 2 – Clustering-Daten    9  Modell speichern & laden
-    5  Daten speichern (CSV)               10  Neue Daten den Clustern zuordnen + Fazit
+    5  Daten speichern (CSV)               10  Neue Daten zuordnen bzw. bewerten + Fazit
     Stichprobe für langsame Rechner: Option in der Seitenleiste
 
-Unsupervised Learning: K-Means bekommt keine Antwort (kein Label). Eine bekannte Einteilung (im Kurs: die Spalte
+Unsupervised Learning: Die Modelle bekommen keine Antwort (kein Label). Eine bekannte Einteilung (im Kurs: die Spalte
 Private der Hochschulen) geht nicht ins Modell – sie dient nur dem Vergleich in Schritt 8.
 
 Die Rechenlogik steckt in pipeline.py, die Diagramme in plots.py, der angezeigte
@@ -210,7 +211,8 @@ def trc(df, values=()):
     return out.rename(columns=lambda c: tx(c) if isinstance(c, str) else c)
 
 
-RESULT_COLUMNS = (N_("Cluster"), N_("Cluster-Name"), N_("Abstand"), N_("Hinweis"))  # = pl.RESULT_* (intern deutsch)
+RESULT_COLUMNS = (N_("Cluster"), N_("Cluster-Name"), N_("Abstand"), N_("Anomalie"), N_("Anomalie-Score"),
+                  N_("Hinweis"))  # = pl.RESULT_* (intern deutsch)
 TABLE_HEADERS = (  # Spaltennamen der Anzeige-Tabellen – hier nur für den Übersetzungskatalog, übersetzt in trc()
     N_("Spalte"), N_("Typ"), N_("Eindeutig"), N_("Fehlend"), N_("Fehlend %"), N_("Beispiel"), N_("Neue Spalte"),
     N_("Art"), N_("Definition"), N_("Aktion"), N_("Parameter"), N_("Wirkung"), N_("Anzahl"), N_("Anteil"),
@@ -218,12 +220,16 @@ TABLE_HEADERS = (  # Spaltennamen der Anzeige-Tabellen – hier nur für den Üb
     N_("weggelassen (drop_first)"), N_("neue 0/1-Spalten"), N_("Beispiele"), N_("Feature"), N_("Gruppe"),
     N_("Zeilen"), N_("Name"), N_("typische Vertreter"), N_("Randfälle (weit vom Zentrum)"), N_("Wert"),
     N_("Silhouette"), N_("Alle"), N_("Ladung"),
+    # Anomalie-Modelle
+    N_("Rang"), N_("Zeile"), N_("Bezeichnung"), N_("größte Abweichungen (z)"), N_("auffällig"), N_("Anteil auffällig"),
+    N_("normal"), N_("Schwelle (Score)"), N_("Zeilen über der Schwelle"), N_("Rauschen"),
 )
 
 
 def export_columns() -> dict:
-    """Namen der neuen Spalten (Cluster, Cluster-Name, Abstand) im Export – in der gewählten Sprache."""
-    return {c: tx(c) for c in (pl.RESULT_CLUSTER, pl.RESULT_NAME, pl.RESULT_DIST)}
+    """Namen der neuen Spalten (Cluster, Cluster-Name, Abstand, Anomalie, Anomalie-Score) im Export – in der gewählten
+    Sprache."""
+    return {c: tx(c) for c in (pl.RESULT_CLUSTER, pl.RESULT_NAME, pl.RESULT_DIST, pl.RESULT_ANOMALY, pl.RESULT_SCORE)}
 
 
 def result_view(res):
@@ -244,7 +250,12 @@ def result_view(res):
 def replaced_columns(columns, recipe):
     """Spalten der neuen Daten, die das Ergebnis aus Schritt 10 ersetzt (gleicher Name wie eine Ergebnisspalte –
     intern oder in der gewählten Sprache, z. B. aus einem früheren Export)."""
-    made = [pl.RESULT_CLUSTER, pl.RESULT_DIST, pl.RESULT_NOTE]
+    key = pl.recipe_model(recipe)
+    if pl.is_anomaly(key):
+        made = [pl.RESULT_ANOMALY, pl.RESULT_SCORE, pl.RESULT_NOTE] + ([pl.RESULT_CLUSTER] if key == pl.MODEL_DBSCAN
+                                                                        else [])
+    else:
+        made = [pl.RESULT_CLUSTER, pl.RESULT_DIST, pl.RESULT_NOTE]
     if any(recipe.get("cluster_names") or []):
         made.append(pl.RESULT_NAME)
     names = set(made) | {tx(c) for c in made}
@@ -414,6 +425,8 @@ def load_data(source, name):
 WIDGET_KEYS = [  # Einstellungen, die exportiert/importiert werden
     "w_viz_cols", "w_group", "w_name_col", "w_features", "w_scaler", "w_drop_first", "w_k", "w_init", "w_n_init",
     "w_max_iter", "w_algorithm", "w_seed", "w_curve", "w_k_max",
+    "w_model", "w_contam_auto", "w_contam_pct", "w_n_estimators", "w_max_samples", "w_n_neighbors", "w_eps",
+    "w_min_samples", "w_metric",
 ]
 
 
@@ -765,6 +778,23 @@ def new_columns_section():
         c2.button(tx("Entfernen"), icon=":material/delete:", disabled=not rm, on_click=on_remove_new_columns)
 
 
+EXAMPLES = [  # (Spalten, die der Datensatz haben muss, Beispiel-Konfiguration in configs/, Hinweis)
+    ({"Private", "Apps", "Accept", "Enroll", "Outstate", "Grad.Rate"}, "college_beispiel.json",
+     N_("College-Datensatz aus dem K-Means-Kurs erkannt: Die Beispiel-Konfiguration stellt Schritt 2, 4 und "
+        "6 wie im Kurs ein – Name der Hochschule als Bezeichnung, Grad.Rate auf 100 begrenzt, 17 Features, "
+        "Private nur zum Vergleich, K = 2. Anders als im Kurs mit StandardScaler; für den direkten Vergleich "
+        "in Schritt 4 'keiner' wählen.")),
+    ({"row", "symbol", "time", "ret_z", "range_z", "turnover_z"}, "bybit_zeitreihe_beispiel.json",
+     N_("Bybit-Daten aus tools/bybit_features.py erkannt (Zeitreihe, eine Kerze je Zeile): Die Beispiel-Konfiguration "
+        "stellt Schritt 2, 4 und 6 ein – row als Bezeichnung, alle Feature-Spalten (z-Werte, Volatilität, Spread, "
+        "Funding, Open Interest …), StandardScaler und Isolation Forest mit 1 % auffälligen Zeilen.")),
+    ({"symbol", "vola_ann_pct", "er", "max_dd_pct"}, "bybit_querschnitt_beispiel.json",
+     N_("Bybit-Daten aus tools/bybit_features.py erkannt (Querschnitt, ein Token je Zeile): Die Beispiel-Konfiguration "
+        "stellt Schritt 2, 4 und 6 ein – symbol als Bezeichnung, alle Kennzahlen als Features, StandardScaler und "
+        "Isolation Forest mit 5 % auffälligen Tokens.")),
+]
+
+
 def page_prep1():
     st.header(tx("2 · Datenaufbereitung 1 – Spalten umwandeln (object → Zahl / Kategorie)"))
     if not ready("df_raw", tx("Bitte zuerst in Schritt 1 eine CSV laden.")):
@@ -776,15 +806,12 @@ def page_prep1():
                 "Hochschule) behalten und in Schritt 4 als Bezeichnung wählen. Unmögliche Werte und Ausreißer "
                 "verschieben die Cluster-Zentren – z. B. Grad.Rate 118 % mit *Werte begrenzen* auf 100 setzen. "
                 "Text-Spalten mit *behalten* werden in Schritt 4 zu Dummies."))
-    college_cols = {"Private", "Apps", "Accept", "Enroll", "Outstate", "Grad.Rate"}
-    example_cfg = CONFIG_DIR / "college_beispiel.json"
-    if college_cols <= set(df.columns) and example_cfg.exists():
+    example = next(((CONFIG_DIR / file, text) for cols, file, text in EXAMPLES
+                    if cols <= set(df.columns) and (CONFIG_DIR / file).exists()), None)
+    if example:
         c1, c2 = st.columns([4, 1])
-        c1.info(tx("College-Datensatz aus dem K-Means-Kurs erkannt: Die Beispiel-Konfiguration stellt Schritt 2, 4 und "
-                   "6 wie im Kurs ein – Name der Hochschule als Bezeichnung, Grad.Rate auf 100 begrenzt, 17 Features, "
-                   "Private nur zum Vergleich, K = 2. Anders als im Kurs mit StandardScaler; für den direkten Vergleich "
-                   "in Schritt 4 'keiner' wählen."))
-        c2.button(tx("Beispiel-Konfiguration laden"), on_click=on_example_config, args=(str(example_cfg),))
+        c1.info(tx(example[1]))
+        c2.button(tx("Beispiel-Konfiguration laden"), on_click=on_example_config, args=(str(example[0]),))
         if ss.pop("_example_msg", None):
             st.success(tx("Beispiel-Konfiguration geladen (Schritt 2, 4 und 6) – jetzt unten **Übernehmen** klicken."))
 
@@ -1216,9 +1243,10 @@ def page_prep2():
     cols = list(df.columns)
     lin = ss.get("lineage", {})
     nun = cached("_nunique", ss.viz_token, df.nunique)
-    st.markdown(tx("**Unsupervised Learning:** K-Means bekommt keine Antwort – kein Label, kein y. Es sucht Gruppen von "
-                   "Zeilen, die sich in den Features ähneln. Eine bekannte Einteilung (im Kurs die Spalte *Private*) "
-                   "geht nicht ins Modell; sie dient nur dem Vergleich in Schritt 8."))
+    st.markdown(tx("**Unsupervised Learning:** Die Modelle bekommen keine Antwort – kein Label, kein y. K-Means sucht "
+                   "Gruppen von Zeilen, die sich in den Features ähneln; Isolation Forest, LOF und DBSCAN suchen Zeilen, "
+                   "die zu keiner Gruppe passen (Anomalien). Eine bekannte Einteilung (im Kurs die Spalte *Private*, bei "
+                   "Betrugsdaten z. B. *Class*) geht nicht ins Modell; sie dient nur dem Vergleich in Schritt 8."))
 
     st.subheader(tx("Vergleichsgruppe & Bezeichnung (optional)"))
     groups = group_candidates(df, nun)
@@ -1244,7 +1272,7 @@ def page_prep2():
                       "index_col=0) in Schritt 2 behalten statt entfernen; dann lässt sie sich hier als Bezeichnung "
                       "wählen."))
 
-    st.subheader(tx("Features (X) – daraus berechnet K-Means die Ähnlichkeit"))
+    st.subheader(tx("Features (X) – daraus berechnet das Modell Ähnlichkeit und Auffälligkeit"))
     special = {c for c in (group, name_col) if c}
     candidates = [c for c in cols if c not in special]
     leak = [c for c in candidates if group and shares_source(c, group)]
@@ -1260,7 +1288,7 @@ def page_prep2():
         else:  # fehlt oder unbrauchbar → Vorschlag verwenden
             ss.pop("w_features", None)
         ss._features_for_group = (group, name_col)
-    features = ms(tx("Features für K-Means"), candidates, "w_features", default=default)
+    features = ms(tx("Features für das Modell"), candidates, "w_features", default=default)
     if set(leak) & set(features):
         st.warning(tx("{leak} stammt aus derselben CSV-Spalte wie die Vergleichsgruppe – K-Means kennt die Antwort dann "
                       "schon, der Vergleich in Schritt 8 wäre geschönt.",
@@ -1356,7 +1384,7 @@ def page_prep2():
 
     if "model" in ss:
         st.warning(tx("Neu vorbereiten verwirft das trainierte Modell – vorher in Schritt 9 speichern."))
-    if st.button(tx("Daten für K-Means vorbereiten"), type="primary", disabled=not features):
+    if st.button(tx("Daten fürs Modell vorbereiten"), type="primary", disabled=not features):
         missing_cfg = {}
         if miss_table is not None:
             missing_cfg = {r["Spalte"]: {"strategy": r["Strategie"], "param": pl._clean(r["Parameter"])}
@@ -1384,7 +1412,7 @@ def page_prep2():
     if (used != set(features) or (r.get("group_requested"), r.get("name_col")) != (group, name_col)
             or r["scaler"]["type"] != ss.get("w_scaler") or r["drop_first"] != bool(ss.get("w_drop_first"))
             or r.get("missing_config", {}) != now_missing):
-        st.info(tx("Die Einstellungen oben wurden seit dem Vorbereiten geändert → erneut **Daten für K-Means "
+        st.info(tx("Die Einstellungen oben wurden seit dem Vorbereiten geändert → erneut **Daten fürs Modell "
                    "vorbereiten**."))
     st.success(tx("Fertig: X {shape} – {n} Zeilen, {n2} Features → {n3} Spalten (Modell-Eingänge)",
                   shape=p.X.shape, n=fmt_int(p.X.shape[0]), n2=len(r["features"]), n3=len(r["feature_columns"])))
@@ -1421,7 +1449,7 @@ def page_prep2():
                           "sind. Unbekannte Werte in neuen Daten → alle 0."))
     st.markdown(tx("**X nach Dummy-Kodierung (unskaliert, erste Zeilen)**"))
     st.dataframe(p.X_preview)
-    st.markdown(tx("**X nach {type} (erste Zeilen) – so sieht K-Means die Daten**", type=tx(r['scaler']['type'])))
+    st.markdown(tx("**X nach {type} (erste Zeilen) – so sieht das Modell die Daten**", type=tx(r['scaler']['type'])))
     st.dataframe(pd.DataFrame(p.X[:5], columns=r["feature_columns"]).round(4))
     code(cg.step4_code(r))
 
@@ -1433,16 +1461,27 @@ EXPORTS = {
     "step2": N_("Daten nach Schritt 2 – alle Änderungen und neuen Spalten (lesbar, z. B. für Excel)"),
     "ml": N_("Clustering-Daten nach Schritt 4 – Lücken gefüllt, Dummies; Bezeichnung und Vergleichsgruppe als "
              "Zusatzspalten"),
-    "ml_scaled": N_("wie zuvor, zusätzlich skaliert – genau diese Zahlen sieht K-Means"),
+    "ml_scaled": N_("wie zuvor, zusätzlich skaliert – genau diese Zahlen sieht das Modell"),
     "clusters": N_("Daten nach Schritt 2 mit Cluster-Nummer, Cluster-Name und Abstand zum Zentrum (nach Schritt 6)"),
+    "anomalies": N_("Daten nach Schritt 2 mit Anomalie (1 = auffällig) und Anomalie-Score – bei DBSCAN auch der Cluster "
+                    "(nach Schritt 6)"),
 }
 FORMATS = {"intl": N_("CSV international (Komma, Dezimalpunkt)"),  # Excel: Format der gewählten Sprache/Region
            "excel": N_("CSV für deutsches Excel (Semikolon, Dezimalkomma)")}
 
 
+def trained_model() -> str | None:
+    """Modell der Sitzung (kmeans, iforest, lof, dbscan) – None, solange nichts trainiert ist."""
+    return ss.model_cfg.model if "model" in ss and "model_cfg" in ss else None
+
+
 def export_frame(what):
     if what == "step2":
         return ss.df_viz
+    if what == "anomalies":
+        h = ss.history
+        return pl.anomalies_frame(ss.df_viz, ss.prep, h["flag"], h["score"],
+                                  h["labels"] if trained_model() == pl.MODEL_DBSCAN else None, export_columns())
     if what == "clusters":
         return pl.clusters_frame(ss.df_viz, ss.prep, ss.model.labels_, ss.history["dist"], current_names(),
                                  export_columns())
@@ -1455,10 +1494,12 @@ def page_export():
         return
     st.markdown(tx("Die bearbeiteten Daten als CSV-Datei speichern – zum Weiterarbeiten in Excel oder einem anderen "
                 "Programm, nach dem Training auch mit der Cluster-Nummer je Zeile."))
-    what = rd(tx("Was speichern?"), list(EXPORTS), "w_exp_what", format_func=lambda k: tx(EXPORTS[k]))
+    model = trained_model()
+    options = ["step2", "ml", "ml_scaled", "anomalies" if pl.is_anomaly(model) else "clusters"]
+    what = rd(tx("Was speichern?"), options, "w_exp_what", format_func=lambda k: tx(EXPORTS[k]))
     fmt = rd(tx("Format"), list(FORMATS), "w_exp_fmt", format_func=lambda k: tx(FORMATS[k]), horizontal=True)
     if what in ("ml", "ml_scaled") and "prep" not in ss:
-        st.info(tx("Für die Clustering-Daten zuerst Schritt 4 ausführen (**Daten für K-Means vorbereiten**)."))
+        st.info(tx("Für die Clustering-Daten zuerst Schritt 4 ausführen (**Daten fürs Modell vorbereiten**)."))
         return
     if what == "clusters" and "model" not in ss:
         st.info(tx("Für die Cluster-Nummer je Zeile zuerst in Schritt 6 trainieren."))
@@ -1469,11 +1510,15 @@ def page_export():
     if what == "clusters":
         st.caption(tx("Die Cluster-Nummern sind willkürlich (0 … K−1). Abstand = euklidischer Abstand zum eigenen "
                       "Zentrum in den skalierten Features – groß = untypisch für den Cluster."))
+    if what == "anomalies":
+        st.caption(tx("Anomalie = 1: Score über der Schwelle aus dem Training. Anomalie-Score: höher = auffälliger "
+                      "(Isolation Forest 0 … 1, LOF ≈ 1 normal, DBSCAN: Abstand zum nächsten Kernpunkt in Vielfachen von "
+                      "eps)."))
     excel = i18n.get_lang() if fmt == "excel" else None  # 'de'/'pl': ; und Dezimalkomma · 'en': , und Punkt
     names = current_names() if "model" in ss else []
     # Sprache im Schlüssel: nach einem Sprachwechsel neu erstellen – sonst bliebe der Dateiname in der alten Sprache
     key = (what, fmt, excel, i18n.get_lang(), ss.viz_token, ss.get("prep_token") if what != "step2" else None,
-           (ss.get("model_token"), tuple(names)) if what == "clusters" else None)
+           (ss.get("model_token"), tuple(names)) if what in ("clusters", "anomalies") else None)
     name = f"{Path(ss.source['name']).stem}_{tx(cg.EXPORT_FILES[what])}.csv"
     if st.button(tx("CSV erstellen"), type="primary", icon=":material/table_view:"):
         with st.spinner(tx("Erstelle CSV …")):
@@ -1512,11 +1557,12 @@ def page_export():
                          "Formel ausführt."))
         st.caption(" ".join(notes))
     recipe = ss.prep.recipe if "prep" in ss else None
-    code(cg.export_code(what, recipe, excel, names, export_columns(), list(ss.df_viz.columns)))
+    code(cg.export_code(what, recipe, excel, names, export_columns(), list(ss.df_viz.columns),
+                        model=model or pl.MODEL_KMEANS))
 
 
 # ===========================================================================
-# Seite 6 – Modell & Training (K-Means)
+# Seite 6 – Modell & Training (K-Means, Isolation Forest, LOF, DBSCAN)
 # ===========================================================================
 HOW_KMEANS = N_("""**So arbeitet K-Means**
 
@@ -1530,13 +1576,52 @@ HOW_KMEANS = N_("""**So arbeitet K-Means**
 K-Means findet eher runde, ähnlich große Gruppen. K gibt man vor – welches K zu den Daten passt, zeigt Schritt 7.""")
 
 
+HOW_ANOMALY = {
+    pl.MODEL_IFOREST: N_("""**So arbeitet Isolation Forest**
+
+1. **Viele Zufallsbäume** (*n_estimators*), jeder auf einer Stichprobe der Zeilen (*max_samples*, Standard 256).
+2. Jeder Baum **schneidet** die Daten an zufälligen Stellen eines zufälligen Features – so lange, bis jede Zeile allein
+   ist.
+3. **Ungewöhnliche Zeilen sind schnell allein:** wenige Schnitte = kurzer Pfad = hoher Score (0 … 1, um 0.5 normal).
+4. **Schwelle:** *contamination = auto* nimmt Score 0.5 aus dem Original-Paper; ein fester Anteil (z. B. 1 %) macht die
+   auffälligsten 1 % der Trainingszeilen zu Anomalien.
+
+Isolation Forest schneidet je Feature und braucht deshalb keine Skalierung – sie schadet aber nicht."""),
+    pl.MODEL_LOF: N_("""**So arbeitet Local Outlier Factor (LOF)**
+
+1. Für jede Zeile die **n_neighbors nächsten Nachbarn** (Abstand in den skalierten Features).
+2. **Lokale Dichte:** wie nah liegen die Nachbarn?
+3. **LOF = Dichte der Nachbarn / eigene Dichte:** ≈ 1 = so dicht wie die Umgebung (normal), deutlich über 1 = die Zeile
+   liegt dünner als ihre Nachbarn – auch direkt neben einer dichten Gruppe (lokaler Ausreißer).
+4. **Schwelle:** *contamination = auto* nimmt LOF 1.5; ein fester Anteil macht die auffälligsten Trainingszeilen zu
+   Anomalien. *novelty=True*: Das Modell bewertet in Schritt 10 auch neue Daten."""),
+    pl.MODEL_DBSCAN: N_("""**So arbeitet DBSCAN**
+
+1. **Kernpunkt:** mindestens *min_samples* Zeilen (sie selbst eingeschlossen) im Umkreis *eps*.
+2. Kernpunkte, die höchstens *eps* voneinander entfernt sind, bilden **einen Cluster**; Randpunkte gehören zum Cluster
+   eines nahen Kernpunkts.
+3. **Alles andere ist Rauschen** (Cluster −1) – das sind die Anomalien. Die Zahl der Cluster ergibt sich von selbst.
+4. **Score** = Abstand zum nächsten Kernpunkt in Vielfachen von eps (über 1 = Rauschen). Neue Daten (Schritt 10)
+   bekommen den Cluster des nächsten Kernpunkts – oder −1.
+
+eps hängt von der Skalierung und der Zahl der Features ab – welches eps passt, zeigt Schritt 7 (k-Distanz)."""),
+}
+
+
 def model_config() -> pl.ClusterConfig:
     """Einstellungen aus den Widgets von Schritt 6 → ClusterConfig (nicht angezeigte Widgets = Standardwerte)."""
     d, g = pl.ClusterConfig(), ss.get
+    model = g("w_model", d.model)
+    metric = g("w_metric", d.metric)
     return pl.ClusterConfig(
+        model=model if model in pl.MODEL_NAMES else d.model,
         n_clusters=int(g("w_k", d.n_clusters)), init=g("w_init", d.init), n_init=int(g("w_n_init", d.n_init)),
         max_iter=int(g("w_max_iter", d.max_iter)), algorithm=g("w_algorithm", d.algorithm), seed=int(g("w_seed", d.seed)),
-        curve=bool(g("w_curve", d.curve)), k_max=int(g("w_k_max", d.k_max)))
+        curve=bool(g("w_curve", d.curve)), k_max=int(g("w_k_max", d.k_max)),
+        contamination=0.0 if g("w_contam_auto", True) else float(g("w_contam_pct", 1.0)) / 100,
+        n_estimators=int(g("w_n_estimators", d.n_estimators)), max_samples=int(g("w_max_samples", d.max_samples)),
+        n_neighbors=int(g("w_n_neighbors", d.n_neighbors)), eps=float(g("w_eps", d.eps)),
+        min_samples=int(g("w_min_samples", d.min_samples)), metric=metric if metric in pl.METRICS else d.metric)
 
 
 def fmt_score(v, digits=3) -> str:
@@ -1544,18 +1629,8 @@ def fmt_score(v, digits=3) -> str:
     return f"{v:.{digits}f}" if np.isfinite(v) else "–"
 
 
-def page_train():
-    st.header(tx("6 · Modell & Training – K-Means"))
-    if not ready("prep", tx("Bitte zuerst Schritt 4 ausführen (Daten für K-Means vorbereiten).")):
-        return
-    p = ss.prep
-    r = p.recipe
-    n, n_feat = p.X.shape
-    st.info(tx("**K-Means** · {n} Zeilen · {p} Features (Modell-Eingänge) · Skalierung: {scaler}",
-               n=fmt_int(n), p=n_feat, scaler=tx(r["scaler"]["type"])))
-    with st.expander(tx("So arbeitet K-Means"), icon=":material/info:"):
-        st.markdown(tx(HOW_KMEANS))
-
+def kmeans_params_ui(n):
+    """Schritt 6: Parameter von K-Means und die Kurve für Schritt 7."""
     st.subheader(tx("Parameter"))
     c1, c2, c3, c4, c5, c6 = st.columns([1.3, 1.4, 1, 1.1, 1.2, 1.3])
     with c1:
@@ -1595,25 +1670,129 @@ def page_train():
     with c2:
         init("w_k_max", pl.K_MAX_DEFAULT)
         st.number_input("k_max", 3, 30, step=1, key="w_k_max", disabled=not curve_on)
+
+
+def contamination_ui():
+    """Schritt 6 (Isolation Forest, LOF): Schwelle – 'auto' oder fester Anteil auffälliger Zeilen."""
+    c1, c2, _ = st.columns([1.6, 1.4, 3])
+    with c1:
+        init("w_contam_auto", True)
+        auto = st.checkbox(tx("contamination = auto"), key="w_contam_auto",
+                           help=tx("auto: Schwelle aus dem Verfahren selbst (Isolation Forest: Score 0.5, LOF: 1.5). "
+                                   "Aus: ein fester Anteil auffälliger Zeilen."))
+    with c2:
+        init("w_contam_pct", 1.0)
+        st.number_input(tx("Anteil auffällig in %"), 0.1, 50.0, step=0.1, format="%.2f", key="w_contam_pct",
+                        disabled=auto,
+                        help=tx("contamination in Prozent: 1 = die auffälligsten 1 % der Trainingszeilen gelten als "
+                                "Anomalien. Einen Vorschlag zeigt Schritt 7 (Knick der Score-Kurve)."))
+
+
+def anomaly_params_ui(key, p, n, n_feat):
+    """Schritt 6: Parameter von Isolation Forest, LOF oder DBSCAN."""
+    with st.expander(tx("So arbeitet {name}", name=pl.model_name(key)), icon=":material/info:"):
+        st.markdown(tx(HOW_ANOMALY[key]))
+    st.subheader(tx("Parameter"))
+    if key == pl.MODEL_IFOREST:
+        c1, c2, c3, _ = st.columns([1.2, 1.4, 1.3, 2])
+        with c1:
+            init("w_n_estimators", 100)
+            st.number_input("n_estimators", 10, 2000, step=50, key="w_n_estimators",
+                            help=tx("Anzahl der Zufallsbäume – mehr = stabilerer Score, langsamer (Standard 100)."))
+        with c2:
+            init("w_max_samples", 0)
+            st.number_input("max_samples", 0, 10_000_000, step=64, key="w_max_samples",
+                            help=tx("Zeilen je Baum: 0 = auto = min(256, Zeilen). Kleine Stichproben isolieren "
+                                    "Ausreißer am besten – größere Werte selten nötig."))
+        with c3:
+            init("w_seed", pl.RANDOM_STATE)
+            st.number_input(tx("Seed (random_state)"), 0, 1_000_000, step=1, key="w_seed",
+                            help=tx("Gleicher Seed = gleiche Bäume = gleiches Ergebnis."))
+        contamination_ui()
+    elif key == pl.MODEL_LOF:
+        c1, c2, _ = st.columns([1.2, 1.4, 3])
+        with c1:
+            init("w_n_neighbors", 20)
+            st.number_input("n_neighbors", 2, 500, step=1, key="w_n_neighbors",
+                            help=tx("Anzahl der Nachbarn: klein = sehr lokale Ausreißer, groß = Vergleich mit einer "
+                                    "größeren Umgebung (Standard 20). Bilden Ausreißer selbst eine kleine Gruppe, muss "
+                                    "n_neighbors größer sein als diese Gruppe – sonst gelten sie untereinander als "
+                                    "normal."))
+        with c2:
+            sb("metric", pl.METRICS, "w_metric", default="euclidean",
+               help=tx("Abstandsmaß: euclidean = Luftlinie (Standard) · manhattan = Summe der Abstände je Feature"))
+        contamination_ui()
+    else:
+        init("w_min_samples", int(min(max(5, 2 * n_feat), 50)))
+        if "w_eps" not in ss:  # Startwert aus der k-Distanz einer Stichprobe – genauer misst Schritt 7
+            ss.w_eps = cached("_eps_start", (ss.get("prep_token"), int(ss.w_min_samples), ss.get("w_metric")),
+                              lambda: pl.suggest_eps(p.X, ss.w_min_samples, ss.get("w_metric", "euclidean")))
+        c1, c2, c3, _ = st.columns([1.2, 1.2, 1.4, 2])
+        with c1:
+            st.number_input("eps", 1e-6, 1e9, step=0.05, format="%.4g", key="w_eps",
+                            help=tx("Radius der Nachbarschaft in den skalierten Features. Startwert: Knick der "
+                                    "k-Distanz einer Stichprobe – Schritt 7 zeigt, welches eps passt."))
+        with c2:
+            st.number_input("min_samples", 2, 1000, step=1, key="w_min_samples",
+                            help=tx("So viele Zeilen (sie selbst eingeschlossen) müssen im Radius eps liegen, damit eine "
+                                    "Zeile Kernpunkt ist. Faustregel: 2 × Zahl der Features (hier {v}).",
+                                    v=int(min(max(5, 2 * n_feat), 50))))
+        with c3:
+            sb("metric", pl.METRICS, "w_metric", default="euclidean",
+               help=tx("Abstandsmaß: euclidean = Luftlinie (Standard) · manhattan = Summe der Abstände je Feature"))
+        init("w_curve", True)
+        st.checkbox(tx("Rauschanteil je eps berechnen (für Schritt 7)"), key="w_curve",
+                    help=tx("DBSCAN läuft zusätzlich für einige eps-Werte (Quantile der k-Distanz) – Schritt 7 zeigt "
+                            "dann Rauschanteil und Zahl der Cluster je eps. Nur bis {m} Zeilen.", m=fmt_int(pl.CURVE_ROWS)))
+
+
+def page_train():
+    st.header(tx("6 · Modell & Training"))
+    if not ready("prep", tx("Bitte zuerst Schritt 4 ausführen (Daten fürs Modell vorbereiten).")):
+        return
+    p = ss.prep
+    r = p.recipe
+    n, n_feat = p.X.shape
+    key = rd(tx("Methode"), list(pl.MODEL_NAMES), "w_model", default=pl.MODEL_KMEANS, horizontal=True,
+             format_func=pl.model_name)
+    st.info(tx("**{name}** · {n} Zeilen · {p} Features (Modell-Eingänge) · Skalierung: {scaler}",
+               name=pl.model_name(key), n=fmt_int(n), p=n_feat, scaler=tx(r["scaler"]["type"])))
+    st.caption(tx(pl.MODEL_WHY[key]))
+    if key == pl.MODEL_KMEANS:
+        with st.expander(tx("So arbeitet K-Means"), icon=":material/info:"):
+            st.markdown(tx(HOW_KMEANS))
+        kmeans_params_ui(n)
+    else:
+        anomaly_params_ui(key, p, n, n_feat)
     cfg = model_config()
-    too_big = cfg.n_clusters >= n
+    too_big = key == pl.MODEL_KMEANS and cfg.n_clusters >= n
     if too_big:
         st.error(tx("K = {k} ist zu groß für {n} Zeilen.", k=cfg.n_clusters, n=n))
-    if r["scaler"]["type"] == "keiner":
+    if r["scaler"]["type"] == "keiner" and key == pl.MODEL_KMEANS:
         st.warning(tx("Ohne Skalierung (Schritt 4) bestimmen Features mit großen Zahlen fast allein die Abstände – und "
                       "damit die Cluster. In Schritt 4 StandardScaler wählen."))
-    if n > 100_000 and (cfg.n_init >= 10 or cfg.curve):
+    elif r["scaler"]["type"] == "keiner" and key in (pl.MODEL_LOF, pl.MODEL_DBSCAN):
+        st.warning(tx("Ohne Skalierung (Schritt 4) bestimmen Features mit großen Zahlen fast allein die Abstände – LOF "
+                      "und DBSCAN rechnen mit Abständen. In Schritt 4 StandardScaler wählen."))
+    if key == pl.MODEL_KMEANS and n > 100_000 and (cfg.n_init >= 10 or cfg.curve):
         st.info(tx("{n} Zeilen: K-Means mit n_init = {i} kann einige Minuten dauern (die Kurve für Schritt 7 nutzt eine "
                    "Stichprobe von {s} Zeilen). Tipp: n_init senken oder Stichprobe in der Seitenleiste.",
                    n=fmt_int(n), i=cfg.n_init, s=fmt_int(pl.CURVE_ROWS)))
+    if key in (pl.MODEL_LOF, pl.MODEL_DBSCAN) and n > 50_000:
+        st.info(tx("{n} Zeilen: LOF und DBSCAN vergleichen jede Zeile mit ihren Nachbarn – das kann lange dauern und viel "
+                   "Speicher brauchen. Tipp: Stichprobe in der Seitenleiste oder Isolation Forest.", n=fmt_int(n)))
 
     st.subheader(tx("scikit-learn-Code mit diesen Einstellungen"))
     st.code(cg.model_code(cfg, n), language="python")
 
     if "model" in ss:
-        ti = ss.train_info
-        st.info(tx("Aktuelles Modell: K-Means mit K = {k} · trainiert {v} · {seconds} s. Neues Training ersetzt es.",
-                   k=ti["k"], v=ti["trained_at"][11:], seconds=ti["seconds"]))
+        ti, mc = ss.train_info, ss.model_cfg
+        if pl.is_anomaly(mc.model):
+            st.info(tx("Aktuelles Modell: {name} · trainiert {v} · {seconds} s. Neues Training ersetzt es.",
+                       name=pl.model_name(mc.model), v=ti["trained_at"][11:], seconds=ti["seconds"]))
+        else:
+            st.info(tx("Aktuelles Modell: K-Means mit K = {k} · trainiert {v} · {seconds} s. Neues Training ersetzt es.",
+                       k=ti["k"], v=ti["trained_at"][11:], seconds=ti["seconds"]))
     st.caption(tx("Während des Trainings nichts anklicken – jede Eingabe bricht das Training ab."))
     if st.button(tx("Training starten"), type="primary", icon=":material/rocket_launch:", disabled=too_big):
         bar = st.progress(0.0, text=tx("Starte Training …"))
@@ -1636,7 +1815,10 @@ def page_train():
                         c2.line_chart(sil, color=plots.SERIES[2], height=220)
 
         try:
-            model, hist, info = pl.train_kmeans(cfg, p, progress)
+            if key == pl.MODEL_KMEANS:
+                model, hist, info = pl.train_kmeans(cfg, p, progress)
+            else:
+                model, hist, info = pl.train_anomaly(cfg, p, progress)
         except Exception as exc:  # noqa: BLE001
             st.error(tx("Training fehlgeschlagen: {exc}", exc=exc))
             return
@@ -1644,9 +1826,18 @@ def page_train():
         invalidate_from("model")
         ss.model, ss.history, ss.train_info, ss.model_cfg = model, hist, info, cfg
         ss.model_token = uuid.uuid4().hex  # eindeutig je Training (id() kann nach dem Löschen wiederverwendet werden)
-        st.success(tx("K-Means fertig: K = {k} · Silhouette {s} · Inertia {i} · {it} Iterationen → weiter mit "
-                      "Schritt 7.",
-                      k=info["k"], s=fmt_score(info["silhouette"]), i=fmt_num(info["inertia"]), it=info["n_iter"]))
+        if key == pl.MODEL_KMEANS:
+            st.success(tx("K-Means fertig: K = {k} · Silhouette {s} · Inertia {i} · {it} Iterationen → weiter mit "
+                          "Schritt 7.",
+                          k=info["k"], s=fmt_score(info["silhouette"]), i=fmt_num(info["inertia"]), it=info["n_iter"]))
+        elif key == pl.MODEL_DBSCAN:
+            st.success(tx("DBSCAN fertig: {c} Cluster, {k} Zeilen Rauschen ({pct}) → weiter mit Schritt 7 (eps) und 8 "
+                          "(Auswertung).", c=info["k"], k=fmt_int(info["n_anomalies"]), pct=pl.share_text(info["share"])))
+        else:
+            st.success(tx("{name} fertig: {k} von {n} Zeilen auffällig ({pct}) · Schwelle {thr} → weiter mit Schritt 7 "
+                          "(Schwelle) und 8 (Auswertung).",
+                          name=pl.model_name(key), k=fmt_int(info["n_anomalies"]), n=fmt_int(info["n_rows"]),
+                          pct=pl.share_text(info["share"]), thr=pl.score_text(info["threshold"])))
     if "model" in ss:
         info = ss.train_info
         if not info.get("converged", True):
@@ -1666,7 +1857,95 @@ def on_apply_k(k):
     ss._k_msg = tx("Übernommen: K = {k} – jetzt in Schritt 6 neu trainieren.", k=int(k))
 
 
+@with_lang
+def on_apply_contamination(c):
+    ss.w_contam_auto = False
+    ss.w_contam_pct = round(float(c) * 100, 2)
+    ss._k_msg = tx("Übernommen: contamination = {pct} – jetzt in Schritt 6 neu trainieren.", pct=pl.share_text(c))
+
+
+@with_lang
+def on_apply_eps(e):
+    ss.w_eps = float(e)
+    ss._k_msg = tx("Übernommen: eps = {v} – jetzt in Schritt 6 neu trainieren.", v=f"{float(e):.4g}")
+
+
+def page_threshold():
+    """Schritt 7 für Isolation Forest und LOF (Schwelle des Scores) bzw. DBSCAN (eps aus der k-Distanz)."""
+    info, cfg, hist = ss.train_info, ss.model_cfg, ss.history
+    curve = hist.get("curve") or {}
+    key = cfg.model
+    if key == pl.MODEL_DBSCAN:
+        st.header(tx("7 · Wahl von eps – DBSCAN (k-Distanz)"))
+    else:
+        st.header(tx("7 · Schwelle für Anomalien – {name}", name=pl.model_name(key)))
+    a = pl.threshold_assessment(curve, info, cfg)
+    m = st.columns(4)
+    if key == pl.MODEL_DBSCAN:
+        m[0].metric(tx("Cluster"), info["k"])
+        m[1].metric(tx("Rauschen"), f"{fmt_int(info['n_anomalies'])} · {pl.share_text(info['share'])}",
+                    help=tx("Zeilen ohne Kernpunkt im Umkreis eps – die Anomalien."))
+        m[2].metric(tx("Kernpunkte"), fmt_int(info["n_core"]),
+                    help=tx("Zeilen mit mindestens min_samples Zeilen im Umkreis eps."))
+        m[3].metric("eps", f"{info['eps']:.4g}")
+    else:
+        m[0].metric(tx("auffällige Zeilen"), f"{fmt_int(info['n_anomalies'])} · {pl.share_text(info['share'])}")
+        m[1].metric(tx("Schwelle (Score)"), pl.score_text(info["threshold"]),
+                    help=tx("Auffällig ist ein Score über der Schwelle."))
+        m[2].metric(tx("Median-Score"), pl.score_text(info["score_median"]),
+                    help=tx("Typischer Score einer normalen Zeile."))
+        m[3].metric(tx("höchster Score"), pl.score_text(info["score_max"]))
+    with chart_guard():
+        if key == pl.MODEL_DBSCAN:
+            show(plots.fig_kdist(curve, float(cfg.eps)))
+        else:
+            show(plots.fig_scores(hist["score"], info["threshold"], curve))
+    c1, c2 = st.columns([3, 2])
+    with c1:
+        st.markdown("\n\n".join(a["notes"]))
+    with c2:
+        if key == pl.MODEL_DBSCAN:
+            st.markdown(tx("**So liest man die k-Distanz:** Für jede Zeile der Abstand zu ihrem min_samples-ten Nachbarn, "
+                           "aufsteigend sortiert. Flach = dichte Bereiche, am Ende steil = Zeilen weit weg von allen "
+                           "anderen. Ein eps am Knick trennt beides: darunter Kernpunkte, darüber meist Rauschen. Rechts: "
+                           "Rauschanteil und Zahl der Cluster für andere eps-Werte."))
+        else:
+            st.markdown(tx("**So liest man die Bilder:** Links die Verteilung des Scores – rot = über der Schwelle. Rechts "
+                           "die auffälligsten Zeilen nach Score sortiert: Wo die Kurve abflacht (Knick), unterscheiden sich "
+                           "die Zeilen kaum noch – davor liegen die deutlichen Ausreißer. Eine Schwelle ist eine "
+                           "Entscheidung, keine Wahrheit: lieber wenige klare Anomalien (z. B. 0.5–2 %) als eine lange "
+                           "Liste."))
+        for label, value in a["suggest"]:
+            if key == pl.MODEL_DBSCAN:
+                st.button(label, icon=":material/tune:", on_click=on_apply_eps, args=(value,), key=f"apply_eps_{value}")
+            else:
+                st.button(label, icon=":material/tune:", on_click=on_apply_contamination, args=(value,),
+                          key=f"apply_c_{value}")
+        msg = ss.pop("_k_msg", None)
+        if msg:
+            st.success(msg)
+    with st.expander(tx("Tabelle")):
+        if key == pl.MODEL_DBSCAN:
+            grid = curve.get("grid")
+            if grid:
+                st.dataframe(trc(pd.DataFrame({"eps": grid["eps"], "Cluster": grid["clusters"],
+                                               "Rauschen": [pl.share_text(v) for v in grid["noise"]]})),
+                             hide_index=True)
+            else:
+                st.caption(tx("Rauschanteil je eps wurde nicht berechnet (Schritt 6, nur bis {m} Zeilen).",
+                              m=fmt_int(pl.CURVE_ROWS)))
+        elif curve:
+            st.dataframe(trc(pd.DataFrame({"Anteil auffällig": [pl.share_text(c) for c in curve["levels"]],
+                                           "Schwelle (Score)": [pl.score_text(t) for t in curve["thresholds"]],
+                                           "Zeilen über der Schwelle": curve["counts"]})), hide_index=True)
+            st.caption(tx("contamination = Anteil auffälliger Zeilen → die passende Schwelle auf dem Score."))
+    code(cg.curve_code(cfg, info["n_rows"]))
+
+
 def page_k():
+    if "model" in ss and pl.is_anomaly(ss.model_cfg.model):
+        page_threshold()
+        return
     st.header(tx("7 · Wahl von K – Elbow-Methode & Silhouette"))
     if not ready("model", tx("Bitte zuerst in Schritt 6 trainieren.")):
         return
@@ -1730,8 +2009,8 @@ def page_k():
 # Seite 8 – Cluster-Auswertung
 # ===========================================================================
 def current_names():
-    """Namen der Cluster aus Schritt 8 ('' = nicht benannt) – nur für das aktuelle Modell."""
-    if "train_info" not in ss:
+    """Namen der Cluster aus Schritt 8 ('' = nicht benannt) – nur für das aktuelle K-Means-Modell."""
+    if "train_info" not in ss or pl.is_anomaly(ss.train_info.get("model")):
         return []
     k = ss.train_info["k"]
     table = editor_value("ed_names")
@@ -1761,7 +2040,143 @@ def describe_line(d, sizes, names) -> str:
     return head + ": " + ("; ".join(parts) if parts else tx("liegt nahe am Durchschnitt aller Zeilen"))
 
 
+def page_anomalies():
+    """Schritt 8 für Isolation Forest, LOF und DBSCAN: die auffälligsten Zeilen, Profil, PCA-Bild, Vergleich."""
+    p, model, info, cfg = ss.prep, ss.model, ss.train_info, ss.model_cfg
+    r, key, token, h = p.recipe, cfg.model, ss.model_token, ss.history
+    score, flag, labels = h["score"], h["flag"], h["labels"]
+    st.header(tx("8 · Auswertung der Anomalien – {name}", name=pl.model_name(key)))
+    st.caption(tx("{name} auf {n} Zeilen · {k} auffällig ({pct}) · Schwelle: Score über {thr}",
+                  name=pl.model_name(key), n=fmt_int(info["n_rows"]), k=fmt_int(info["n_anomalies"]),
+                  pct=pl.share_text(info["share"]), thr=pl.score_text(info["threshold"])))
+    if key == pl.MODEL_DBSCAN:
+        st.subheader(tx("Cluster und Rauschen"))
+        c1, _ = st.columns([3, 2])
+        with c1:
+            show(plots.fig_dbscan_sizes(info["sizes"], info["n_anomalies"]))
+
+    st.subheader(tx("Die auffälligsten Zeilen"))
+    st.caption(tx("Nach Score sortiert. 'Zeile' = Nummer der Zeile in den Daten nach Schritt 2 (ab 0). Die Abweichungen "
+                  "(z = Standardabweichungen vom Durchschnitt aller Zeilen) zeigen, was eine Zeile ungewöhnlich macht – "
+                  "ein Blick in die Daten, nicht ins Modell."))
+    c1, _ = st.columns([1, 4])
+    with c1:
+        init("w_top_n", 20)
+        n_top = st.number_input(tx("Anzahl"), 5, 500, step=5, key="w_top_n")
+    top = cached("_top", (token, int(n_top)), lambda: pl.top_anomalies(
+        p, score, flag, int(n_top), labels if key == pl.MODEL_DBSCAN else None))
+    st.dataframe(trc(top), hide_index=True)
+
+    st.subheader(tx("Profil – was unterscheidet auffällige von normalen Zeilen?"))
+    if not info["n_anomalies"]:
+        st.info(tx("Keine auffällige Zeile – die Schwelle in Schritt 7 prüfen."))
+    else:
+        prof = cached("_aprof", token, lambda: pl.anomaly_profiles(p, flag))
+        d = pl.describe_clusters(prof["z"][[1]])[0]
+        parts = []
+        if d["high"]:
+            parts.append(tx("über dem Durchschnitt: ") + ", ".join(
+                f"{md_text(f)} (" + f"{z:+.1f}".replace("-", "−") + " σ)" for f, z in d["high"]))
+        if d["low"]:
+            parts.append(tx("unter dem Durchschnitt: ") + ", ".join(
+                f"{md_text(f)} (" + f"{z:+.1f}".replace("-", "−") + " σ)" for f, z in d["low"]))
+        st.markdown(tx("**Auffällige Zeilen** im Mittel: ") + ("; ".join(parts) if parts
+                                                               else tx("liegen nahe am Durchschnitt aller Zeilen")))
+        c1, c2 = st.columns([3, 2])
+        with c1:
+            show(plots.fig_profile(prof["z"], labels=[tx("normal"), tx("auffällig")],
+                                   title=tx("Profil: Abweichung vom Durchschnitt (z)")))
+        with c2:
+            means = prof["means"].copy()
+            means.columns = [tx("Alle"), tx("normal"), tx("auffällig")]
+            st.markdown(tx("**Mittelwerte in Originaleinheiten** (Dummies: Anteil 0 … 1)"))
+            st.dataframe(means.round(3), height=min(35 * (len(means) + 1) + 3, 640))
+
+    st.subheader(tx("Darstellung"))
+    proj = cached("_apca", token, lambda: pl.pca_projection(
+        p, model, seed=cfg.seed, labels=labels if key == pl.MODEL_DBSCAN else flag.astype(int), priority=flag))
+    c1, c2 = st.columns([3, 2])
+    with c1:
+        show(plots.fig_anomaly_pca(proj, flag[proj["rows"]], dbscan=key == pl.MODEL_DBSCAN))
+    c2.markdown(tx("**PCA nur für das Bild:** Die {p} Spalten werden auf die 2 Richtungen mit der größten Streuung "
+                   "projiziert ({pct} der Streuung). Das Modell rechnet mit allen Spalten – eine Anomalie kann im Bild "
+                   "mitten in der Wolke liegen und trotzdem in einer anderen Richtung ungewöhnlich sein. Auffällige "
+                   "Zeilen sind im Bild immer dabei.", p=len(r["feature_columns"]), pct=f"{sum(proj['explained']):.0%}"))
+
+    if p.groups is not None:
+        anomaly_group_comparison(p, flag, score)
+
+    st.subheader(tx("Einzelfall prüfen"))
+    st.caption(tx("Zufällige Zeile ziehen: Wie auffällig ist sie, und welche Features weichen am stärksten vom "
+                  "Durchschnitt ab?"))
+    if st.button(tx("Zufällige Zeile ziehen"), icon=":material/casino:"):
+        ss.case_idx = int(np.random.default_rng().integers(len(p.index)))
+    if "case_idx" in ss and ss.case_idx < len(p.index):
+        i = ss.case_idx
+        show_cols = [c for c in [r.get("name_col"), *r["features"], r.get("group_col")] if c]
+        row = ss.df_viz.loc[p.index[i], list(dict.fromkeys(show_cols))]
+        c1, c2 = st.columns([2, 3])
+        c1.dataframe(row.map(lambda v: "–" if pd.isna(v) else pl.format_value(v)).rename(tx("Wert")).to_frame(),
+                     height=420)
+        with c2:
+            m1, m2, m3 = st.columns(3)
+            m1.metric(tx("Anomalie"), tx("ja") if flag[i] else tx("nein"))
+            m2.metric(tx("Anomalie-Score"), pl.score_text(score[i]),
+                      help=tx("Schwelle: {thr} – auffällig ist ein Score darüber.",
+                              thr=pl.score_text(info["threshold"])))
+            m3.metric(tx("Rang"), f"{int(np.sum(score > score[i])) + 1} / {fmt_int(len(score))}",
+                      help=tx("1 = die auffälligste Zeile."))
+            if key == pl.MODEL_DBSCAN:
+                st.markdown(tx("Cluster: **{v}**", v=tx("Rauschen") if labels[i] < 0 else int(labels[i])))
+            devs = pl.row_deviations(p, [i], top=10)[0]
+            show(plots.fig_bars([f for f, _ in devs], [z for _, z in devs], tx("Stärkste Abweichungen dieser Zeile"),
+                                tx("z = Abweichung vom Durchschnitt in Standardabweichungen"), signed=True))
+    code(cg.eval_code(r, cfg))
+
+
+def anomaly_group_comparison(p, flag, score):
+    """Schritt 8 (Anomalie-Modelle): Vergleich mit der bekannten Einteilung – das Modell kannte sie nicht."""
+    r = p.recipe
+    g = md_text(r["group_col"])
+    st.subheader(tx("Vergleich mit der bekannten Einteilung: {g}", g=g))
+    cmp = cached("_acmp", ss.model_token, lambda: pl.compare_anomalies(flag, score, p.groups))
+    if cmp is None:
+        st.info(tx("Keine Zeile hat einen Wert in '{g}'.", g=g))
+        return
+    st.caption(tx("Das Modell hat '{g}' nie gesehen. Gezeigt wird, wie viele Zeilen jeder Gruppe als auffällig gelten – "
+                  "bei zwei Gruppen zählt die seltenere als 'positiv' (Anomalien sind selten).", g=g))
+    if cmp["binary"]:
+        pos = md_text(cmp["positive"])
+        m = st.columns(5)
+        m[0].metric("Precision", "–" if np.isnan(cmp["precision"]) else pl.share_text(cmp["precision"]),
+                    help=tx("Anteil der auffälligen Zeilen, die zu '{pos}' gehören.", pos=pos))
+        m[1].metric("Recall", pl.share_text(cmp["recall"]),
+                    help=tx("Anteil der '{pos}'-Zeilen, die als auffällig gemeldet werden.", pos=pos))
+        m[2].metric(tx("Anteil '{pos}' insgesamt", pos=pos), pl.share_text(cmp["base_rate"]),
+                    help=tx("So hoch wäre die Precision bei zufällig ausgewählten Zeilen."))
+        m[3].metric("ROC-AUC", f"{cmp['roc_auc']:.3f}",
+                    help=tx("Wie gut trennt der Score die Gruppen – unabhängig von der Schwelle: 0.5 = Zufall, 1 = "
+                            "perfekt."))
+        m[4].metric("Average Precision", f"{cmp['ap']:.3f}",
+                    help=tx("Fläche unter der Precision-Recall-Kurve – bei seltenen Gruppen aussagekräftiger als ROC-AUC; "
+                            "Zufall = Anteil '{pos}' insgesamt.", pos=pos))
+    c1, c2 = st.columns([3, 2])
+    with c1:
+        show(plots.fig_anomaly_groups(cmp["table"], cmp["share"], r["group_col"]))
+    with c2:
+        table = cmp["table"].copy()
+        table["Anteil auffällig"] = table["Anteil auffällig"].map(pl.share_text)
+        st.dataframe(trc(table), hide_index=True)
+        if cmp["binary"]:
+            st.markdown(tx("**Treffer:** {tp} auffällig und '{pos}' · **Fehlalarme:** {fp} auffällig, aber nicht '{pos}' "
+                           "· **übersehen:** {fn} '{pos}'-Zeilen ohne Meldung.", pos=md_text(cmp["positive"]),
+                           tp=fmt_int(cmp["tp"]), fp=fmt_int(cmp["fp"]), fn=fmt_int(cmp["fn"])))
+
+
 def page_profiles():
+    if "model" in ss and pl.is_anomaly(ss.model_cfg.model):
+        page_anomalies()
+        return
     st.header(tx("8 · Cluster-Auswertung – Profile, Darstellung, Vergleich"))
     if not ready("model", tx("Bitte zuerst in Schritt 6 trainieren.")):
         return
@@ -1985,6 +2400,11 @@ def group_comparison(p, labels, k, names):
 def session_recipe():
     """Rezept des aktuellen Modells inkl. Einstellungen, Kennzahlen, Cluster-Namen und Zuordnung zur Vergleichsgruppe."""
     p = ss.prep
+    if pl.is_anomaly(ss.model_cfg.model):
+        h = ss.history
+        cmp = (cached("_acmp", ss.model_token, lambda: pl.compare_anomalies(h["flag"], h["score"], p.groups))
+               if p.groups is not None else None)
+        return pl.finalize_recipe(p.recipe, ss.model_cfg, ss.train_info, None, cmp)
     k = ss.train_info["k"]
     cmp = (cached("_cmp", ss.model_token, lambda: pl.compare_groups(ss.model.labels_, p.groups, k))
            if p.groups is not None else None)
@@ -1993,18 +2413,21 @@ def session_recipe():
 
 def page_save():
     st.header(tx("9 · Modell speichern & laden"))
-    st.markdown(tx("Gespeichert werden **zwei Dateien** in `models/<name>/`: das K-Means-Modell (`model.skops` oder "
-                   "`model.joblib`, mit den Cluster-Zentren) und `preprocessing.json` – das Rezept aus Schritt 2 und 4 "
-                   "(Spalten-Aktionen, Füllwerte, Kategorien/Dummy-Spalten, Scaler) mit den Einstellungen aus Schritt 6, "
-                   "den Cluster-Namen aus Schritt 8 und den Kennzahlen. Ohne das Rezept lassen sich neue Daten nicht "
-                   "korrekt zuordnen."))
+    st.markdown(tx("Gespeichert werden **zwei Dateien** in `models/<name>/`: das Modell (`model.skops` oder "
+                   "`model.joblib` – K-Means mit den Cluster-Zentren, Isolation Forest, LOF oder DBSCAN) und "
+                   "`preprocessing.json` – das Rezept aus Schritt 2 und 4 (Spalten-Aktionen, Füllwerte, "
+                   "Kategorien/Dummy-Spalten, Scaler) mit den Einstellungen aus Schritt 6, den Cluster-Namen aus "
+                   "Schritt 8, der Schwelle und den Kennzahlen. Ohne das Rezept lassen sich neue Daten nicht korrekt "
+                   "zuordnen oder bewerten."))
     st.subheader(tx("Speichern"))
     if "model" not in ss:
         st.info(tx("Noch kein trainiertes Modell in dieser Sitzung (Schritt 6)."))
     else:
         r = ss.prep.recipe
+        anomaly = pl.is_anomaly(ss.model_cfg.model)
         if ss.get("_save_name_for") != ss.get("model_token"):
-            ss.w_save_name = f"kmeans_k{ss.train_info['k']}_{datetime.now():%Y%m%d_%H%M}"
+            ss.w_save_name = (f"{ss.model_cfg.model}_{datetime.now():%Y%m%d_%H%M}" if anomaly else
+                              f"kmeans_k{ss.train_info['k']}_{datetime.now():%Y%m%d_%H%M}")
             ss._save_name_for = ss.get("model_token")
         c1, c2 = st.columns([2, 2])
         with c1:
@@ -2020,8 +2443,15 @@ def page_save():
         # fremdes Modell unter diesem Namen? (das eigene, gerade gespeicherte darf ohne Rückfrage ersetzt werden)
         exists = (target / "preprocessing.json").exists() and ss.get("saved_folder") != str(target)
         names = current_names()
-        st.caption(tx("Cluster-Namen: {v}", v=md_text(", ".join(pl.cluster_label(j, names) for j in range(len(names)))))
-                   + ("" if any(names) else tx(" – noch keine Namen (Schritt 8: Cluster benennen)")))
+        if anomaly:
+            ti = ss.train_info
+            st.caption(tx("{name} · Schwelle: Score über {thr} · im Training {pct} auffällig.",
+                          name=pl.model_name(ss.model_cfg.model), thr=pl.score_text(ti["threshold"]),
+                          pct=pl.share_text(ti["share"])))
+        else:
+            st.caption(tx("Cluster-Namen: {v}", v=md_text(", ".join(pl.cluster_label(j, names)
+                                                                    for j in range(len(names)))))
+                       + ("" if any(names) else tx(" – noch keine Namen (Schritt 8: Cluster benennen)")))
         overwrite = True
         if exists:
             st.warning(tx("Unter `models/{safe}` liegt schon ein Modell – Speichern ersetzt es.", safe=safe))
@@ -2050,7 +2480,7 @@ def page_save():
                                 r, ss.model_cfg, code_folder, ss.w_save_fmt, new_columns=ss.get("new_cols_fitted"))
         st.download_button(tx("Komplette Pipeline als Python-Skript (für Jupyter)"), script.encode("utf-8"),
                            file_name="clustering_pipeline.py", mime="text/x-python", icon=":material/download:")
-        code(cg.save_code(code_folder, ss.w_save_fmt))
+        code(cg.save_code(code_folder, ss.w_save_fmt, pl.MODEL_VARS.get(ss.model_cfg.model, "kmeans")))
 
     st.subheader(tx("Laden"))
     bundles = pl.list_bundles(MODELS_DIR)
@@ -2059,9 +2489,14 @@ def page_save():
         if not bundles:
             st.caption(tx("Noch keine gespeicherten Modelle."))
         else:
-            labels = {b["name"]: tx("{name} · K-Means · K = {k} · {n} Features · {v}",
-                                    name=b['name'], k=b.get("k") or "?", n=b["n_features"],
-                                    v=b['saved_at'][:16].replace('T', ' '))
+            labels = {b["name"]: (tx("{name} · {model} · {pct} auffällig · {n} Features · {v}",
+                                     name=b["name"], model=pl.model_name(b["model"]), n=b["n_features"],
+                                     pct=pl.share_text(b["share"]) if b.get("share") is not None else "?",
+                                     v=b["saved_at"][:16].replace("T", " "))
+                                  if pl.is_anomaly(b.get("model")) else
+                                  tx("{name} · K-Means · K = {k} · {n} Features · {v}",
+                                     name=b['name'], k=b.get("k") or "?", n=b["n_features"],
+                                     v=b['saved_at'][:16].replace('T', ' ')))
                       for b in bundles}
             sel = sb(tx("Gespeicherte Modelle"), list(labels), "w_bundle_sel", format_func=labels.get)
             if st.button(tx("Laden"), key="btn_load_bundle"):
@@ -2093,13 +2528,21 @@ def page_save():
         b = ss.bundle
         r = b["recipe"]
         training = r.get("training") or {}
-        k = int(training.get("n_clusters") or len(b["model"].cluster_centers_))
-        names = pl.clean_names(r.get("cluster_names"), k)
-        st.markdown(tx("**Geladen: {name}** · K-Means · K = {k} · {n} Features → {n2} Eingänge · gespeichert {v}",
-                       name=md_text(b['name']), k=k, n=len(r['features']), n2=len(r['feature_columns']),
-                       v=md_text(str(r.get('saved_at', '?')).replace('T', ' '))))
-        if any(names):
-            st.markdown(tx("Cluster: ") + " · ".join(md_text(pl.cluster_label(j, names)) for j in range(k)))
+        key = pl.recipe_model(r)
+        if pl.is_anomaly(key):
+            share = (r.get("train_info") or {}).get("share")
+            st.markdown(tx("**Geladen: {name}** · {model} · im Training {pct} auffällig · {n} Features → {n2} Eingänge · "
+                           "gespeichert {v}", name=md_text(b["name"]), model=pl.model_name(key),
+                           pct=pl.share_text(share) if share is not None else "?", n=len(r["features"]),
+                           n2=len(r["feature_columns"]), v=md_text(str(r.get("saved_at", "?")).replace("T", " "))))
+        else:
+            k = int(training.get("n_clusters") or len(b["model"].cluster_centers_))
+            names = pl.clean_names(r.get("cluster_names"), k)
+            st.markdown(tx("**Geladen: {name}** · K-Means · K = {k} · {n} Features → {n2} Eingänge · gespeichert {v}",
+                           name=md_text(b['name']), k=k, n=len(r['features']), n2=len(r['feature_columns']),
+                           v=md_text(str(r.get('saved_at', '?')).replace('T', ' '))))
+            if any(names):
+                st.markdown(tx("Cluster: ") + " · ".join(md_text(pl.cluster_label(j, names)) for j in range(k)))
         c1, c2 = st.columns(2)
         c1.markdown(tx("**Kennzahlen (Training)**"))
         c1.json(r.get("metrics", {}))
@@ -2126,11 +2569,28 @@ HOW_TO_10 = N_("""
    Zuordnungen – und wenn die neuen Daten die bekannte Einteilung enthalten (z. B. Private), der Vergleich mit der
    Zuordnung Cluster → Gruppe aus dem Training.
 """)
+HOW_TO_10_ANOMALY = N_("""
+**So werden neue Daten bewertet**
+
+1. **Nichts neu fitten.** Neue Daten werden mit dem *gespeicherten Rezept* aufbereitet (gleiche Spalten-Aktionen und
+   neue Spalten, gleiche Füllwerte, gleiche Dummy-Spalten, gleicher Scaler) und mit dem Modell aus dem Training bewertet
+   – mit **derselben Schwelle** wie im Training.
+2. **Gleiche Rohspalten wie im Training.** Die Tabelle unten zeigt, welche CSV-Spalten nötig sind (Vorlage zum
+   Download). Fehlen Spalten → klare Fehlermeldung. Zusätzliche Spalten werden ignoriert.
+3. **Ergebnis je Zeile:** *Anomalie* (1 = Score über der Schwelle), *Anomalie-Score* (höher = auffälliger) und bei
+   DBSCAN der *Cluster* des nächsten Kernpunkts (−1 = Rauschen). *Hinweis* nennt ergänzte Lücken, unbekannte Kategorien
+   und Werte außerhalb des Trainingsbereichs.
+4. **Fazit:** Anteil auffälliger Zeilen im Vergleich zum Training, die auffälligsten Zeilen – und wenn die neuen Daten
+   die bekannte Einteilung enthalten, wie gut die Anomalien sie treffen.
+
+**Zeitreihen:** In Schritt 4–6 auf einem ruhigen Zeitraum trainieren und hier spätere Daten bewerten. Häufen sich die
+Anomalien in einem Zeitraum, ist das eher ein neues Regime als lauter Einzelfälle.
+""")
 LEVEL_ICON = {pl.LEVEL_OK: ":green[:material/check_circle:]", pl.LEVEL_WARN: ":orange[:material/warning:]",
               pl.LEVEL_BAD: ":red[:material/error:]"}
 
 
-def render_fazit(fz):
+def render_fazit(fz, meaning_title=None):
     st.subheader(tx("Fazit"))
     with st.container(border=True):
         st.markdown(tx("**Datenqualität: {v} {level}**", v=LEVEL_ICON[fz['level']], level=tx(fz['level'])))
@@ -2140,21 +2600,143 @@ def render_fazit(fz):
             lines += [f"    - {d}" for d in q["details"][:12]]
         st.markdown("\n".join(lines))
         if fz["meaning"]:
-            st.markdown(tx("**Was die Zuordnung aussagt**"))
+            st.markdown(meaning_title or tx("**Was die Zuordnung aussagt**"))
             st.markdown("\n".join(f"- {t}" for t in fz["meaning"]))
         if fz["advice"]:
             st.markdown(tx("**Empfehlung**"))
             st.markdown("\n".join(f"- {t}" for t in fz["advice"]))
 
 
+def required_section(recipe):
+    """Schritt 10: benötigte Rohspalten und die CSV-Vorlage."""
+    st.subheader(tx("Benötigte Spalten"))
+    st.dataframe(pl.required_columns(recipe), hide_index=True)
+    st.download_button(tx("CSV-Vorlage (nur Kopfzeile)"), pl.template_csv(recipe), tx("vorlage_neue_daten.csv"),
+                       mime="text/csv", icon=":material/download:")
+
+
+def single_case_form(recipe, src, submit_label):
+    """Schritt 10: ein Datensatz über ein Formular (vorbelegt mit Median bzw. häufigstem Wert aus dem Training).
+    Rückgabe: (abgeschickt?, Werte)."""
+    st.caption(tx("Werte eingeben (vorbelegt mit Median bzw. häufigstem Wert aus dem Training). Eingegeben wird "
+               "die Form nach Schritt 2."))
+    with st.form("single_case"):
+        values = {}
+        grid = st.columns(3)
+        for i, f in enumerate(recipe["features"]):
+            with grid[i % 3]:
+                fb = recipe["fallback_fill"].get(f)
+                if f in recipe["numeric_features"]:
+                    values[f] = st.number_input(md_text(f), value=float(fb), format="%g", key=f"form_{src}_{f}")
+                else:
+                    cats = recipe["categories"][f]
+                    values[f] = st.selectbox(md_text(f), cats, index=cats.index(fb) if fb in cats else 0,
+                                             key=f"form_{src}_{f}")
+        submitted = st.form_submit_button(submit_label, type="primary")
+    return submitted, values
+
+
+def assign_anomalies(model, recipe, model_id, key, src):
+    """Schritt 10 für Isolation Forest, LOF und DBSCAN: neue Daten bewerten (score_new) – nichts wird neu gelernt."""
+    with st.expander(tx("So funktioniert Schritt 10"), icon=":material/info:"):
+        st.markdown(tx(HOW_TO_10_ANOMALY))
+    required_section(recipe)
+    ti = recipe.get("train_info") or {}
+    thr = ti.get("threshold", 1.0 if key == pl.MODEL_DBSCAN else float("nan"))
+    mode = rd(tx("Eingabe"), [N_("CSV-Datei"), N_("Einzelner Datensatz (Formular)")], "w_pred_mode", horizontal=True,
+              format_func=tx)
+    if mode == "CSV-Datei":
+        source, name = csv_source("pred")
+        csv_options()
+        if st.button(tx("Neue Daten bewerten"), type="primary", disabled=source is None):
+            try:
+                with st.spinner(tx("Bereite neue Daten auf und bewerte …")):
+                    df_new, _ = read_source(source)
+                    res, rep, cmp = pl.score_new(model, recipe, df_new)
+            except pl.MissingColumnsError as exc:
+                st.error(tx("{exc}. Die CSV braucht dieselben Rohspalten wie die Trainingsdaten (siehe Tabelle "
+                            "oben / CSV-Vorlage).",
+                            exc=md_text(exc)))
+            except Exception as exc:  # noqa: BLE001
+                st.error(tx("Fehler: {exc}", exc=md_text(exc)))
+            else:
+                ss.pred_result = {"res": res, "rep": rep, "cmp": cmp, "name": name, "model": model_id,
+                                  "cols": list(df_new.columns)}
+        pr = ss.get("pred_result")
+        if pr and pr["model"] == model_id:
+            res, rep, cmp = pr["res"], pr["rep"], pr["cmp"]
+            fz = pl.assess_scoring(recipe, res, rep, cmp)
+            st.success(tx("{n} Zeilen bewertet ({name})", n=fmt_int(len(res)), name=md_text(pr["name"])))
+            flag = np.asarray(rep["flag"], dtype=bool)
+            m = st.columns(3)
+            m[0].metric(tx("auffällige Zeilen"), f"{fmt_int(flag.sum())} · {pl.share_text(flag.mean())}")
+            m[1].metric(tx("im Training auffällig"), pl.share_text(ti["share"]) if ti.get("share") is not None else "–")
+            m[2].metric(tx("Schwelle (Score)"), pl.score_text(thr))
+            c1, c2 = st.columns([3, 2])
+            with c1:
+                with chart_guard():
+                    show(plots.fig_scores(rep["score"], thr, None, title=tx("Anomalie-Score der neuen Daten")))
+            c2.markdown(tx("**Lesart:** `Anomalie` = 1, wenn der Score über der Schwelle aus dem Training liegt; "
+                           "`Anomalie-Score` – höher = auffälliger; bei DBSCAN `Cluster` = Cluster des nächsten "
+                           "Kernpunkts (−1 = Rauschen). `Hinweis` nennt ergänzte Lücken, unbekannte Kategorien und Werte "
+                           "außerhalb des Trainingsbereichs."))
+            if cmp is not None:
+                st.subheader(tx("'{g}' ist enthalten → Vergleich mit den Anomalien ({n} Zeilen)",
+                                g=md_text(recipe.get("group_col")), n=fmt_int(cmp["n"])))
+                if cmp["binary"]:
+                    m = st.columns(4)
+                    m[0].metric("Precision", "–" if np.isnan(cmp["precision"]) else pl.share_text(cmp["precision"]))
+                    m[1].metric("Recall", pl.share_text(cmp["recall"]))
+                    m[2].metric("ROC-AUC", f"{cmp['roc_auc']:.3f}")
+                    m[3].metric("Average Precision", f"{cmp['ap']:.3f}")
+                c1, _ = st.columns([3, 2])
+                with c1:
+                    show(plots.fig_anomaly_groups(cmp["table"], cmp["share"], recipe.get("group_col") or ""))
+            st.subheader(tx("Ergebnis"))
+            replaced = replaced_columns(pr.get("cols", []), recipe)  # je Sprache neu (übersetzte Namen)
+            if replaced:
+                st.info(tx("Die neuen Daten enthalten schon Spalten mit den Namen der Ergebnisspalten – im Ergebnis "
+                           "werden sie ersetzt: {cols}", cols=md_text(", ".join(map(str, replaced)))))
+            init("w_pred_sort", True)
+            by_score = st.checkbox(tx("Nach Score sortieren (auffälligste zuerst)"), key="w_pred_sort")
+            view = result_view(res)
+            shown = view.iloc[np.argsort(-np.asarray(rep["score"], dtype=float), kind="stable")] if by_score else view
+            lead = [c for c in view.columns if c in [tx(n) for n in RESULT_COLUMNS]]
+            st.dataframe(shown[lead + [c for c in view.columns if c not in lead]].head(1000))
+            st.download_button(tx("Ergebnis als CSV"), view.to_csv(index=False).encode("utf-8"),
+                               file_name=tx("anomalien_{stem}.csv", stem=Path(pr['name']).stem), mime="text/csv",
+                               icon=":material/download:")
+            render_fazit(fz, tx("**Was die Bewertung aussagt**"))
+    else:
+        submitted, values = single_case_form(recipe, src, tx("Neue Daten bewerten"))
+        if submitted:
+            try:
+                res, rep, _ = pl.score_new(model, recipe, pd.DataFrame([values]))
+            except Exception as exc:  # noqa: BLE001
+                st.error(tx("Fehler: {exc}", exc=md_text(exc)))
+            else:
+                m1, m2, m3 = st.columns(3)
+                m1.metric(tx("Anomalie"), tx("ja") if int(res[pl.RESULT_ANOMALY].iloc[0]) else tx("nein"))
+                m2.metric(tx("Anomalie-Score"), pl.score_text(rep["score"][0]),
+                          help=tx("Schwelle: {thr} – auffällig ist ein Score darüber.", thr=pl.score_text(thr)))
+                if key == pl.MODEL_DBSCAN:
+                    label = int(res[pl.RESULT_CLUSTER].iloc[0])
+                    m3.metric(tx("Cluster"), tx("Rauschen") if label < 0 else str(label))
+                note = res[pl.RESULT_NOTE].iloc[0]
+                if note:
+                    st.caption(tx("Hinweis: {v}", v="; ".join(tx(part) for part in note.split("; "))))
+    code(cg.predict_code("models/<name>", key), tx("Python-Code (Bewertung ohne App)"))
+
+
 def page_assign():
-    st.header(tx("10 · Neue Daten den Clustern zuordnen"))
+    head = st.empty()  # Überschrift je nach Modell: zuordnen (K-Means) oder bewerten (Anomalien)
     options = {}
     if "model" in ss:
         options["session"] = tx("Aktuelles Modell (diese Sitzung)")
     if "bundle" in ss:
         options["bundle"] = tx("Geladenes Modell: {name}", name=md_text(ss.bundle['name']))
     if not options:
+        head.header(tx("10 · Neue Daten den Clustern zuordnen"))
         st.info(tx("Kein Modell vorhanden – in Schritt 6 trainieren oder in Schritt 9 laden."))
         st.markdown(tx(HOW_TO_10))
         return
@@ -2165,15 +2747,17 @@ def page_assign():
     else:
         model, recipe = ss.bundle["model"], ss.bundle["recipe"]
         model_id = f"bundle-{ss.bundle.get('token')}"
+    key = pl.recipe_model(recipe)
+    if pl.is_anomaly(key):
+        head.header(tx("10 · Neue Daten bewerten – {name}", name=pl.model_name(key)))
+        assign_anomalies(model, recipe, model_id, key, src)
+        return
+    head.header(tx("10 · Neue Daten den Clustern zuordnen"))
     k = len(model.cluster_centers_)
     names = pl.clean_names(recipe.get("cluster_names"), k)
     with st.expander(tx("So funktioniert Schritt 10"), icon=":material/info:"):
         st.markdown(tx(HOW_TO_10))
-
-    st.subheader(tx("Benötigte Spalten"))
-    st.dataframe(pl.required_columns(recipe), hide_index=True)
-    st.download_button(tx("CSV-Vorlage (nur Kopfzeile)"), pl.template_csv(recipe), tx("vorlage_neue_daten.csv"),
-                       mime="text/csv", icon=":material/download:")
+    required_section(recipe)
 
     mode = rd(tx("Eingabe"), [N_("CSV-Datei"), N_("Einzelner Datensatz (Formular)")], "w_pred_mode", horizontal=True,
               format_func=tx)
@@ -2235,21 +2819,7 @@ def page_assign():
                                icon=":material/download:")
             render_fazit(fz)
     else:
-        st.caption(tx("Werte eingeben (vorbelegt mit Median bzw. häufigstem Wert aus dem Training). Eingegeben wird "
-                   "die Form nach Schritt 2."))
-        with st.form("single_case"):
-            values = {}
-            grid = st.columns(3)
-            for i, f in enumerate(recipe["features"]):
-                with grid[i % 3]:
-                    fb = recipe["fallback_fill"].get(f)
-                    if f in recipe["numeric_features"]:
-                        values[f] = st.number_input(md_text(f), value=float(fb), format="%g", key=f"form_{src}_{f}")
-                    else:
-                        cats = recipe["categories"][f]
-                        values[f] = st.selectbox(md_text(f), cats, index=cats.index(fb) if fb in cats else 0,
-                                                 key=f"form_{src}_{f}")
-            submitted = st.form_submit_button(tx("Cluster zuordnen"), type="primary")
+        submitted, values = single_case_form(recipe, src, tx("Cluster zuordnen"))
         if submitted:
             try:
                 res, rep, _ = pl.assign_new(model, recipe, pd.DataFrame([values]))
@@ -2283,11 +2853,11 @@ PAGES = {
     N_("3 · Analyse & Visualisierung"): page_viz,
     N_("4 · Aufbereitung 2 – Clustering-Daten"): page_prep2,
     N_("5 · Daten speichern"): page_export,
-    N_("6 · Modell & Training (K-Means)"): page_train,
-    N_("7 · Wahl von K (Elbow & Silhouette)"): page_k,
-    N_("8 · Cluster-Auswertung"): page_profiles,
+    N_("6 · Modell & Training"): page_train,
+    N_("7 · Wahl von K bzw. Schwelle"): page_k,
+    N_("8 · Auswertung"): page_profiles,
     N_("9 · Modell speichern & laden"): page_save,
-    N_("10 · Neue Daten zuordnen"): page_assign,
+    N_("10 · Neue Daten zuordnen / bewerten"): page_assign,
 }
 
 with st.sidebar:
@@ -2321,8 +2891,12 @@ with st.sidebar:
         status("df_viz" in ss, tx("Aufbereitung 1 übernommen"))
         status("prep" in ss, tx("Clustering-Daten: X {shape}", shape=ss.prep.X.shape) if "prep" in ss
                else tx("Clustering-Daten vorbereitet"))
-        status("model" in ss, tx("K-Means trainiert (K = {k})", k=ss.train_info["k"]) if "model" in ss
-               else tx("K-Means trainiert"))
+        if "model" in ss and pl.is_anomaly(ss.model_cfg.model):
+            status(True, tx("{name} trainiert ({pct} auffällig)", name=pl.model_name(ss.model_cfg.model),
+                            pct=pl.share_text(ss.train_info["share"])))
+        else:
+            status("model" in ss, tx("K-Means trainiert (K = {k})", k=ss.train_info["k"]) if "model" in ss
+                   else tx("Modell trainiert"))
         status("bundle" in ss, tx("Geladen: {name}", name=md_text(ss.bundle['name'])) if "bundle" in ss
                else tx("Modell geladen (Schritt 9)"))
     with st.expander(tx("Konfiguration speichern / laden"), icon=":material/settings:"):

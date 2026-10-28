@@ -8,6 +8,9 @@ college_like():      gleiche Spalten/Formate wie College_Data aus dem K-Means-Ku
 mall_like():         Kundensegmente (5 Gruppen nach Einkommen und Ausgaben) mit Kategorien und Lücken
 lending_club_like(): gleiche Spalten/Formate wie der öffentliche LendingClub-Datensatz – für die Tests von Schritt 2
 iris_like():         Iris aus scikit-learn (3 bekannte Arten)
+anomaly_like():      Transaktionen mit wenigen Ausreißern (Class = 1) – für Isolation Forest, LOF, DBSCAN
+FakeBybit:           simulierte öffentliche Bybit-API v5 (Kerzen, Funding, Open Interest, Ticker) für
+                     tools/bybit_features.py – mit einem eingebauten Kurssturz
 """
 from __future__ import annotations
 
@@ -168,6 +171,120 @@ def iris_like() -> pd.DataFrame:
     df["species"] = np.asarray(data.target_names)[df.pop("target")]
     return df
 
+
+
+def anomaly_like(n: int = 1200, share: float = 0.02, seed: int = 3) -> pd.DataFrame:
+    """Transaktionen wie bei Betrugsdaten: drei normale Muster und wenige Ausreißer (Class = 1, Anteil share).
+    ID = eindeutige ganze Zahl (Bezeichnung), channel = Kategorie, merchant_age mit 2 % Lücken."""
+    rng = np.random.default_rng(seed)
+    k = max(2, int(round(n * share)))
+    m = n - k
+    #               amount  items  hour  merchant_age  distance_km
+    centers = np.array([[45.0, 1.5, 13.0, 6.0, 4.0], [280.0, 3.0, 18.0, 9.0, 12.0], [18.0, 1.0, 9.0, 2.0, 1.5]])
+    spread = np.array([[12.0, 0.6, 2.5, 1.5, 1.5], [60.0, 1.0, 2.0, 2.0, 4.0], [5.0, 0.3, 1.5, 0.7, 0.6]])
+    pick = rng.choice(3, m, p=[0.5, 0.2, 0.3])
+    normal = centers[pick] + rng.normal(size=(m, 5)) * spread[pick]
+    odd = np.column_stack([rng.uniform(900, 2500, k), rng.integers(6, 15, k), rng.uniform(1, 4.5, k),
+                           rng.uniform(0, 0.3, k), rng.uniform(150, 900, k)])
+    X = np.vstack([normal, odd])
+    channel = np.r_[np.array(["online", "store", "atm"])[pick], rng.choice(["online", "atm"], k)]
+    df = pd.DataFrame({"amount": X[:, 0].clip(0.5).round(2), "items": X[:, 1].clip(1).round().astype(int),
+                       "hour": X[:, 2].clip(0, 23.9).round(1), "merchant_age": X[:, 3].clip(0).round(2),
+                       "distance_km": X[:, 4].clip(0).round(1), "channel": channel,
+                       "Class": np.r_[np.zeros(m, dtype=int), np.ones(k, dtype=int)]})
+    df = df.sample(frac=1.0, random_state=seed).reset_index(drop=True)
+    df.loc[rng.random(n) < 0.02, "merchant_age"] = np.nan
+    df.insert(0, "ID", 100_000 + np.arange(n))
+    return df
+
+
+HOUR_MS = 3_600_000
+
+
+class FakeBybit:
+    """Simulierte öffentliche Bybit-API v5 – nur für Tests, keine echten Kurse. Gleiche Antwortformen wie die echte
+    API: Kerzen und Funding die neuesten zuerst, höchstens limit je Seite, start/end inklusive, Open Interest mit
+    nextPageCursor. Die jüngste Kerze läuft noch (now liegt in ihr).
+
+    shock = (Symbol, Kerze): dort ein Kurssturz (−9 %) mit 25-fachem Umsatz, großer Spanne, Funding-Sprung und
+    Rückgang des Open Interest – den soll die Anomalieerkennung finden. Kerze als Index ab dem Ende (−200 = 200
+    Kerzen vor der jüngsten)."""
+
+    def __init__(self, symbols=("BTCUSDT", "ETHUSDT", "SOLUSDT"), minutes: int = 60, n: int = 2400,
+                 now_ms: int = 1_790_000_000_000 + 30 * 60_000, seed: int = 7, shock=("SOLUSDT", -200)):
+        from tools.bybit_features import BybitError  # noqa: PLC0415 – nur bei Bedarf (Pfad setzt der Test)
+
+        self.error = BybitError
+        self.now_ms, self.minutes = now_ms, minutes
+        bar = minutes * 60_000
+        self.bar = bar
+        first = (now_ms // bar) * bar - (n - 1) * bar
+        starts = first + bar * np.arange(n)
+        rng = np.random.default_rng(seed)
+        common = rng.normal(0, 0.006, n)
+        self.kl, self.fund, self.oi, self.shock_start = {}, {}, {}, None
+        f_ts = np.arange(first - first % (8 * HOUR_MS), now_ms + 1, 8 * HOUR_MS)
+        o_ts = np.arange(first - first % HOUR_MS, now_ms + 1, HOUR_MS)
+        for j, sym in enumerate(symbols):
+            r = common * (1.0 + 0.3 * j) + (0 if j == 0 else rng.normal(0, 0.004, n))
+            turn = np.exp(rng.normal(np.log(8e6 / (j + 1)), 0.25, n))
+            wick = np.abs(rng.normal(0, 0.002, n))
+            rate = 1e-4 + rng.normal(0, 1.5e-5, len(f_ts))
+            oi = 2e5 * (j + 1) * np.exp(np.cumsum(rng.normal(0, 0.002, len(o_ts))))
+            if shock and sym == shock[0]:
+                i = shock[1] % n
+                self.shock_start = int(starts[i])
+                r[i], turn[i], wick[i] = -0.09, turn[i] * 25, 0.03
+                rate[f_ts > starts[i]] = rate[f_ts > starts[i]] - 6e-4 * np.exp(
+                    -(f_ts[f_ts > starts[i]] - starts[i]) / (3 * 8 * HOUR_MS))
+                oi[o_ts >= starts[i] + bar] *= 0.85
+            close = 50.0 * (j + 1) * np.exp(np.cumsum(r))
+            open_ = np.r_[close[0] / np.exp(r[0]), close[:-1]]
+            high = np.maximum(open_, close) * (1 + wick)
+            low = np.minimum(open_, close) * (1 - wick)
+            self.kl[sym] = [[str(int(t)), f"{o:.6f}", f"{h:.6f}", f"{lo:.6f}", f"{c:.6f}", f"{v / c:.4f}", f"{v:.2f}"]
+                            for t, o, h, lo, c, v in zip(starts, open_, high, low, close, turn)]
+            self.fund[sym] = [(int(t), float(x)) for t, x in zip(f_ts, rate)]
+            self.oi[sym] = [(int(t), float(x)) for t, x in zip(o_ts, oi)]
+        self.calls = 0
+        self.requests = []
+
+    def get(self, path: str, **p) -> dict:
+        self.calls += 1
+        self.requests.append((path, dict(p)))
+        if path == "/v5/market/tickers":
+            items = [{"symbol": s, "turnover24h": f"{sum(float(x[6]) for x in rows[-24:]):.2f}",
+                      "volume24h": "1"} for s, rows in self.kl.items()]
+            items += [{"symbol": "USDCUSDT", "turnover24h": "9e12", "volume24h": "1"},  # Stablecoin → auslassen
+                      {"symbol": "BTCUSDT-26DEC26", "turnover24h": "9e12", "volume24h": "1"}]  # Future mit Laufzeit
+            return {"category": p.get("category"), "list": items}
+        sym = p.get("symbol")
+        if sym not in self.kl:
+            raise self.error("Bybit error 10001: params error: symbol invalid")
+        limit = int(p.get("limit") or 200)
+        if path == "/v5/market/kline":
+            assert 1 <= limit <= 1000
+            lo, hi = int(p.get("start") or 0), int(p.get("end") or 2**62)
+            rows = sorted((x for x in self.kl[sym] if lo <= int(x[0]) <= hi), key=lambda x: -int(x[0]))
+            return {"category": p.get("category"), "symbol": sym, "list": rows[:limit]}
+        if path == "/v5/market/funding/history":
+            assert 1 <= limit <= 200
+            assert not (p.get("startTime") is not None and p.get("endTime") is None), "nur startTime → API-Fehler"
+            lo, hi = int(p.get("startTime") or 0), int(p.get("endTime") or self.now_ms)
+            rows = sorted((x for x in self.fund[sym] if lo <= x[0] <= hi), key=lambda x: -x[0])[:limit]
+            return {"category": p.get("category"), "list": [{"symbol": sym, "fundingRate": f"{x:.8f}",
+                                                             "fundingRateTimestamp": str(t)} for t, x in rows]}
+        if path == "/v5/market/open-interest":
+            assert 1 <= limit <= 200
+            assert p.get("intervalTime") in ("5min", "15min", "30min", "1h", "4h", "1d")
+            lo, hi = int(p.get("startTime") or 0), int(p.get("endTime") or self.now_ms)
+            rows = sorted((x for x in self.oi[sym] if lo <= x[0] <= hi), key=lambda x: -x[0])
+            off = int(p.get("cursor") or 0)
+            page = rows[off:off + limit]
+            nxt = str(off + limit) if off + limit < len(rows) else ""
+            return {"symbol": sym, "category": p.get("category"), "nextPageCursor": nxt,
+                    "list": [{"openInterest": f"{x:.4f}", "timestamp": str(t)} for t, x in page]}
+        raise AssertionError(f"unbekannter Endpunkt {path}")
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()

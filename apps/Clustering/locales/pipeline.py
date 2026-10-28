@@ -469,18 +469,9 @@ T = {
         ":orange[**Note from scikit-learn:**] {w}",
         ":orange[**Uwaga od scikit-learn:**] {w}"),
     "Cluster {j}": ("Cluster {j}", "Klaster {j}"),
-    "Dieses Modell stammt nicht aus der Clustering-Version (Aufgabe: {task}) – hier lassen sich nur "
-    "K-Means-Modelle laden, die mit dieser App gespeichert wurden.": (
-        "This model does not come from the clustering version (task: {task}) – only K-Means models saved with "
-        "this app can be loaded here.",
-        "Ten model nie pochodzi z wersji do klastrowania (zadanie: {task}) – tutaj można wczytać tylko modele "
-        "K-Means zapisane w tej aplikacji."),
     "Kein scikit-learn-Modell gefunden (model.skops oder model.joblib).": (
         "No scikit-learn model found (model.skops or model.joblib).",
         "Nie znaleziono modelu scikit-learn (model.skops lub model.joblib)."),
-    "Die Modelldatei enthält kein K-Means-Modell ({type}).": (
-        "The model file does not contain a K-Means model ({type}).",
-        "Plik modelu nie zawiera modelu K-Means ({type})."),
     "weit weg von allen Clustern": ("far from all clusters", "daleko od wszystkich klastrów"),
     "zwischen zwei Clustern": ("between two clusters", "między dwoma klastrami"),
     "Lücken in {n} Zeilen ({pct}) mit Werten aus dem Training ergänzt. Ergänzte Werte sind Schätzungen – die "
@@ -581,4 +572,181 @@ T = {
         "provides {m}.",
         "Model i preprocessing.json do siebie nie pasują: model ma {k} klastrów i oczekuje {n} wejść, receptura "
         "dostarcza {m}."),
+    # --- Anomalieerkennung (Isolation Forest, LOF, DBSCAN) ---
+    "Gruppen (Cluster) ähnlicher Zeilen finden – K gibt man vor, Schritt 7 hilft bei der Wahl. Ausreißer zeigt "
+    "Schritt 10: Zeilen weit weg von allen Zentren.": (
+        "Find groups (clusters) of similar rows – you set K, step 7 helps you choose it. Outliers show up in step "
+        "10: rows far from all centres.",
+        "Znajdowanie grup (klastrów) podobnych wierszy – K podajesz sam, krok 7 pomaga je dobrać. Wartości "
+        "odstające pokazuje krok 10: wiersze daleko od wszystkich centrów."),
+    "Anomalien finden: Zufällige Schnitte isolieren jede Zeile – ungewöhnliche Zeilen sind nach wenigen "
+    "Schnitten allein. Schnell, auch bei vielen Zeilen und Features; der Standard für Tabellen.": (
+        "Find anomalies: random splits isolate every row – unusual rows are alone after only a few splits. Fast, "
+        "also with many rows and features; the standard choice for tables.",
+        "Wykrywanie anomalii: losowe cięcia izolują każdy wiersz – nietypowe wiersze zostają same już po kilku "
+        "cięciach. Szybki, także przy wielu wierszach i cechach; standard dla danych tabelarycznych."),
+    "Anomalien finden: vergleicht die Dichte um eine Zeile mit der Dichte um ihre Nachbarn – findet auch lokale "
+    "Ausreißer neben dichten Gruppen. Bei sehr vielen Zeilen langsamer.": (
+        "Find anomalies: compares the density around a row with the density around its neighbours – also finds "
+        "local outliers next to dense groups. Slower with very many rows.",
+        "Wykrywanie anomalii: porównuje gęstość wokół wiersza z gęstością wokół jego sąsiadów – znajduje też "
+        "lokalne wartości odstające obok gęstych grup. Wolniejszy przy bardzo wielu wierszach."),
+    "Cluster beliebiger Form plus Rauschen: Zeilen in dünn besetzten Bereichen sind Rauschen = Anomalien. Kein K "
+    "nötig, dafür eps (Radius) und min_samples – eps zeigt Schritt 7 (k-Distanz).": (
+        "Clusters of any shape plus noise: rows in sparse regions are noise = anomalies. No K needed, but eps "
+        "(radius) and min_samples – step 7 shows a good eps (k-distance).",
+        "Klastry dowolnego kształtu plus szum: wiersze w rzadko obsadzonych obszarach to szum = anomalie. Nie "
+        "trzeba K, za to eps (promień) i min_samples – dobre eps pokazuje krok 7 (k-odległość)."),
+    "**{k} von {n} Zeilen auffällig ({pct})**": (
+        "**{k} of {n} rows anomalous ({pct})**",
+        "**Nietypowe: {k} z {n} wierszy ({pct})**"),
+    "Unbekanntes Modell: {model}": ("Unknown model: {model}", "Nieznany model: {model}"),
+    " – im Training {pct}": (" – in training {pct}", " – w treningu {pct}"),
+    "contamination muss zwischen 0 und 0.5 liegen (Anteil auffälliger Zeilen, z. B. 0.01 = 1 %).": (
+        "contamination must be between 0 and 0.5 (share of anomalous rows, e.g. 0.01 = 1 %).",
+        "contamination musi być między 0 a 0.5 (udział nietypowych wierszy, np. 0.01 = 1 %)."),
+    "eps muss größer als 0 sein.": ("eps must be greater than 0.", "eps musi być większe od 0."),
+    "Trainiere {name} …": ("Training {name} …", "Trenowanie: {name} …"),
+    "{name} fertig – {n} auffällige Zeilen": (
+        "{name} done – {n} anomalous rows",
+        "{name} gotowy – nietypowe wiersze: {n}"),
+    "**{k} von {n} Zeilen auffällig ({pct})** – Schwelle: Score über {thr}.": (
+        "**{k} of {n} rows anomalous ({pct})** – threshold: score above {thr}.",
+        "**Nietypowe: {k} z {n} wierszy ({pct})** – próg: wskaźnik powyżej {thr}."),
+    "**{c} Cluster, {k} Zeilen Rauschen ({pct})** bei eps = {eps} und min_samples = {m}.": (
+        "**{c} clusters, {k} rows of noise ({pct})** at eps = {eps} and min_samples = {m}.",
+        "**Klastry: {c}, szum: {k} wierszy ({pct})** przy eps = {eps} i min_samples = {m}."),
+    "Kernpunkte: {c} von {n} Zeilen ({pct}).": (
+        "Core points: {c} of {n} rows ({pct}).",
+        "Punkty rdzeniowe: {c} z {n} wierszy ({pct})."),
+    "Dieses Modell stammt nicht aus der Clustering-Version (Aufgabe: {task}) – hier lassen sich nur Modelle "
+    "laden, die mit dieser App gespeichert wurden (K-Means, Isolation Forest, LOF, DBSCAN).": (
+        "This model does not come from the clustering version (task: {task}) – only models saved with this app can "
+        "be loaded here (K-Means, Isolation Forest, LOF, DBSCAN).",
+        "Ten model nie pochodzi z wersji do klastrowania (zadanie: {task}) – tutaj można wczytać tylko modele "
+        "zapisane w tej aplikacji (K-Means, Isolation Forest, LOF, DBSCAN)."),
+    "Die Modelldatei enthält kein {name}-Modell ({type}).": (
+        "The model file does not contain a {name} model ({type}).",
+        "Plik modelu nie zawiera modelu {name} ({type})."),
+    "Modell und preprocessing.json passen nicht zusammen: das {name}-Modell erwartet {n} Eingänge, das Rezept "
+    "liefert {m}.": (
+        "Model and preprocessing.json do not match: the {name} model expects {n} inputs, the recipe provides {m}.",
+        "Model i preprocessing.json do siebie nie pasują: model {name} oczekuje {n} wejść, receptura dostarcza {m}."),
+    "Das LOF-Modell wurde ohne novelty=True trainiert – damit lassen sich keine neuen Daten bewerten.": (
+        "The LOF model was trained without novelty=True – it cannot score new data.",
+        "Model LOF wytrenowano bez novelty=True – nie da się nim ocenić nowych danych."),
+    "Anomalie-Modell: neue Daten mit score_new() bewerten (assign_new ist für K-Means).": (
+        "Anomaly model: score new data with score_new() (assign_new is for K-Means).",
+        "Model anomalii: nowe dane oceniaj przez score_new() (assign_new jest dla K-Means)."),
+    "K-Means-Modell: neue Daten mit assign_new() zuordnen (score_new ist für die Anomalie-Modelle).": (
+        "K-Means model: assign new data with assign_new() (score_new is for the anomaly models).",
+        "Model K-Means: nowe dane przypisuj przez assign_new() (score_new jest dla modeli anomalii)."),
+    "; Schwelle aus dem Training: Score über {thr}.": (
+        "; threshold from training: score above {thr}.",
+        "; próg z treningu: wskaźnik powyżej {thr}."),
+    "Keine Zeile liegt über der Schwelle – die neuen Daten sehen aus wie die normalen Trainingsdaten.": (
+        "No row is above the threshold – the new data look like the normal training data.",
+        "Żaden wiersz nie przekracza progu – nowe dane wyglądają jak normalne dane treningowe."),
+    "Deutlich mehr auffällige Zeilen als im Training – die neuen Daten unterscheiden sich (anderer Zeitraum, "
+    "andere Marktphase, andere Quelle) oder es gab echte Ereignisse.": (
+        "Clearly more anomalous rows than in training – the new data differ (another period, another market phase, "
+        "another source) or there were real events.",
+        "Wyraźnie więcej nietypowych wierszy niż w treningu – nowe dane się różnią (inny okres, inna faza rynku, "
+        "inne źródło) albo wydarzyło się coś rzeczywistego."),
+    "Bei Zeitreihen: Häufen sich die Anomalien in einem Zeitraum, ist das eher ein neues Regime als lauter "
+    "Einzelfälle – dann mit neueren Daten neu trainieren (Schritt 4–6).": (
+        "For time series: if the anomalies pile up in one period, that is more likely a new regime than many single "
+        "cases – then retrain with more recent data (steps 4–6).",
+        "Dla szeregów czasowych: jeśli anomalie skupiają się w jednym okresie, to raczej nowy reżim niż wiele "
+        "pojedynczych przypadków – wtedy wytrenuj ponownie na nowszych danych (kroki 4–6)."),
+    "Cluster {j}: {pct}": ("Cluster {j}: {pct}", "Klaster {j}: {pct}"),
+    "Rauschen: {pct}": ("noise: {pct}", "szum: {pct}"),
+    "contamination = {pct}: Die Schwelle ist das passende Quantil der Trainings-Scores – etwa dieser Anteil der "
+    "Zeilen gilt als auffällig.": (
+        "contamination = {pct}: the threshold is the matching quantile of the training scores – about this share of "
+        "rows counts as anomalous.",
+        "contamination = {pct}: próg to odpowiedni kwantyl wskaźników treningowych – mniej więcej taki udział "
+        "wierszy uznaje się za nietypowe."),
+    ":orange[**Keine auffällige Zeile:**] Kein Score liegt über der Schwelle – mit contamination einen festen "
+    "Anteil wählen.": (
+        ":orange[**No anomalous row:**] no score is above the threshold – choose a fixed share with contamination.",
+        ":orange[**Brak nietypowych wierszy:**] żaden wskaźnik nie przekracza progu – wybierz stały udział przez "
+        "contamination."),
+    "**Knick der Score-Kurve:** Nach den auffälligsten {n} Zeilen ({pct}) flacht die Kurve ab – diese Zeilen "
+    "heben sich deutlich vom Rest ab. Ein Kandidat für contamination.": (
+        "**Knee of the score curve:** after the {n} most anomalous rows ({pct}) the curve flattens – these rows "
+        "clearly stand out from the rest. A candidate for contamination.",
+        "**Załamanie krzywej wskaźnika:** po {n} najbardziej nietypowych wierszach ({pct}) krzywa się wypłaszcza – "
+        "te wiersze wyraźnie odstają od reszty. Kandydat na contamination."),
+    ":red[**Kein Kernpunkt:**] eps ist zu klein – alle Zeilen sind Rauschen. eps vergrößern (Knick der "
+    "k-Distanz).": (
+        ":red[**No core point:**] eps is too small – all rows are noise. Increase eps (knee of the k-distance).",
+        ":red[**Brak punktów rdzeniowych:**] eps jest za małe – wszystkie wiersze to szum. Zwiększ eps (załamanie "
+        "k-odległości)."),
+    "**Knick der k-Distanz bei eps ≈ {eps}:** Rechts davon liegen die Zeilen deutlich weiter von ihren Nachbarn "
+    "entfernt – Kandidaten für Rauschen.": (
+        "**Knee of the k-distance at eps ≈ {eps}:** to the right of it, rows lie clearly further from their "
+        "neighbours – candidates for noise.",
+        "**Załamanie k-odległości przy eps ≈ {eps}:** na prawo od niego wiersze leżą wyraźnie dalej od sąsiadów – "
+        "kandydaci na szum."),
+    "k-Distanz für {n} zufällige Zeilen gemessen (Nachbarn aus allen Zeilen).": (
+        "k-distance measured for {n} random rows (neighbours from all rows).",
+        "k-odległość zmierzona dla {n} losowych wierszy (sąsiedzi ze wszystkich wierszy)."),
+    "Rauschanteil je eps nur bis {m} Zeilen – DBSCAN müsste für jedes eps neu laufen. Tipp: Stichprobe in der "
+    "Seitenleiste.": (
+        "Noise share per eps only up to {m} rows – DBSCAN would have to run again for every eps. Tip: sample in the "
+        "sidebar.",
+        "Udział szumu dla eps tylko do {m} wierszy – DBSCAN musiałby działać od nowa dla każdego eps. Wskazówka: "
+        "próbka w pasku bocznym."),
+    "Zeile {i}": ("row {i}", "wiersz {i}"),
+    "Vergleich mit '{g}' ({n} Zeilen): Von den auffälligen Zeilen gehören {prec} zu '{pos}' (Anteil insgesamt "
+    "{base}); erkannt werden {rec} aller '{pos}'-Zeilen. ROC-AUC des Scores: {auc}.": (
+        "Comparison with '{g}' ({n} rows): of the anomalous rows, {prec} belong to '{pos}' (overall share {base}); "
+        "{rec} of all '{pos}' rows are detected. ROC-AUC of the score: {auc}.",
+        "Porównanie z '{g}' ({n} wierszy): spośród nietypowych wierszy {prec} należy do '{pos}' (udział ogółem "
+        "{base}); wykryto {rec} wszystkich wierszy '{pos}'. ROC-AUC wskaźnika: {auc}."),
+    "Rauschanteil je eps: eps = {e} ({i} von {n})": (
+        "Noise share per eps: eps = {e} ({i} of {n})",
+        "Udział szumu dla eps: eps = {e} ({i} z {n})"),
+    ":orange[**Viele auffällige Zeilen ({pct}):**] Für eine Liste der stärksten Ausreißer mit contamination "
+    "einen festen, kleineren Anteil wählen (z. B. 1 %).": (
+        ":orange[**Many anomalous rows ({pct}):**] for a list of the strongest outliers choose a fixed, smaller "
+        "share with contamination (e.g. 1 %).",
+        ":orange[**Dużo nietypowych wierszy ({pct}):**] aby dostać listę najsilniejszych odstających, wybierz "
+        "przez contamination stały, mniejszy udział (np. 1 %)."),
+    "**Score-Kurve ohne deutlichen Knick:** Die Scores sinken gleichmäßig – die Schwelle ist dann eine Frage des "
+    "gewünschten Anteils (Tabelle unten).": (
+        "**Score curve without a clear knee:** the scores fall evenly – the threshold is then a question of the "
+        "share you want (table below).",
+        "**Krzywa wskaźnika bez wyraźnego załamania:** wskaźniki spadają równomiernie – próg jest wtedy kwestią "
+        "pożądanego udziału (tabela poniżej)."),
+    ":orange[**Mehr als die Hälfte ist Rauschen:**] eps ist zu klein oder min_samples zu groß.": (
+        ":orange[**More than half is noise:**] eps is too small or min_samples too large.",
+        ":orange[**Ponad połowa to szum:**] eps jest za małe albo min_samples za duże."),
+    "**k-Distanz ohne deutlichen Knick:** eps nach dem gewünschten Rauschanteil wählen (Tabelle unten).": (
+        "**k-distance without a clear knee:** choose eps by the noise share you want (table below).",
+        "**k-odległość bez wyraźnego załamania:** wybierz eps według pożądanego udziału szumu (tabela poniżej)."),
+    "{n} Zeilen ({pct}) mit Werten außerhalb des Trainingsbereichs – solche Zeilen sind oft auffällig.": (
+        "{n} rows ({pct}) with values outside the training range – such rows are often anomalous.",
+        "{n} wierszy ({pct}) z wartościami poza zakresem treningowym – takie wiersze są często nietypowe."),
+    "Am auffälligsten: ": ("Most anomalous: ", "Najbardziej nietypowe: "),
+    "Verteilung (DBSCAN): ": ("Distribution (DBSCAN): ", "Rozkład (DBSCAN): "),
+    "contamination = auto: Die Schwelle kommt aus dem Verfahren selbst – Score 0.5 wie im Original-Paper zu "
+    "Isolation Forest.": (
+        "contamination = auto: the threshold comes from the method itself – score 0.5 as in the original Isolation "
+        "Forest paper.",
+        "contamination = auto: próg wynika z samej metody – wskaźnik 0.5 jak w oryginalnej publikacji o Isolation "
+        "Forest."),
+    "contamination = auto: Die Schwelle kommt aus dem Verfahren selbst – LOF-Wert 1.5.": (
+        "contamination = auto: the threshold comes from the method itself – LOF value 1.5.",
+        "contamination = auto: próg wynika z samej metody – wartość LOF 1.5."),
+    "contamination = {pct} übernehmen": ("Use contamination = {pct}", "Przejmij contamination = {pct}"),
+    ":orange[**Ein Cluster, fast kein Rauschen:**] eps ist eher zu groß – kaum eine Zeile gilt als Anomalie.": (
+        ":orange[**One cluster, almost no noise:**] eps is probably too large – hardly any row counts as an anomaly.",
+        ":orange[**Jeden klaster, prawie brak szumu:**] eps jest raczej za duże – prawie żaden wiersz nie jest "
+        "anomalią."),
+    "eps = {eps} übernehmen": ("Use eps = {eps}", "Przejmij eps = {eps}"),
+    "Anteil auffälliger Zeilen je '{g}': ": (
+        "Share of anomalous rows per '{g}': ",
+        "Udział nietypowych wierszy wg '{g}': "),
 }

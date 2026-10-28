@@ -1,9 +1,15 @@
-# DATA-Analysis-Clustering (Streamlit + scikit-learn, K-Means)
+# DATA-Analysis-Clustering (Streamlit + scikit-learn: K-Means, Isolation Forest, LOF, DBSCAN)
 
 Aplikacja Streamlit dla tabelarycznych danych CSV: wczytaj, przygotuj, zwizualizuj i podziel na grupy (klastry)
 za pomocą **K-Means** – **uczenie nienadzorowane**: nie ma etykiety, K-Means sam szuka wierszy, które są do siebie
 podobne. Potem aplikacja opisuje klastry (profile, mapa 2D), porównuje je – jeśli jest dostępny – ze znanym podziałem
 i przypisuje nowe dane do klastrów. Do każdego kroku aplikacja pokazuje pasujący kod Python.
+
+**Wykrywanie anomalii:** zamiast szukać grup, aplikacja znajduje za pomocą **Isolation Forest**, **Local Outlier
+Factor (LOF)** albo **DBSCAN** (szum = anomalia) *najbardziej nietypowe wiersze* – ze wskaźnikiem, progiem, cechami,
+które czynią wiersz nietypowym, i porównaniem ze znanym podziałem (np. *Class* w danych o oszustwach). Nowe dane są
+oceniane z tym samym progiem. Dla danych krypto skrypt `tools/bybit_features.py` buduje z publicznych danych rynkowych
+Bybit gotowy plik CSV (zob. [Bybit → CSV](#bybit--csv-toolsbybit_featurespy)).
 
 Wzorem jest projekt K-Means z kursu: **College_Data** – K-Means z K = 2 na wszystkich kolumnach liczbowych; kolumna
 *Private* (Yes/No) jest przy tym pomijana i używana dopiero potem do porównania. Dla tego zbioru jest gotowa
@@ -12,7 +18,8 @@ przykładowa konfiguracja.
 Aplikacja powstała z wersji Supervised (DATA-Analysis-SupervisedLearning): kroki 1–3 (wczytywanie, akcje kolumn,
 nowe kolumny, wykresy), receptura (`preprocessing.json`), zapis/wczytywanie, konfiguracje i języki pozostały bez
 zmian; nowe są krok 4 bez etykiety i bez podziału, K-Means w kroku 6, wybór K w kroku 7, ocena klastrów w kroku 8
-i przypisywanie nowych danych w kroku 10.
+i przypisywanie nowych danych w kroku 10 – później doszły modele anomalii (kroki 6–10 dopasowują się do wybranego
+modelu).
 
 Aplikacja jest dostępna po **niemiecku, angielsku i polsku** – zob. [Języki](#języki).
 (Deutsch: `README.md` · English: `README_EN.md`)
@@ -64,11 +71,29 @@ dziesiętna – zawsze UTF-8 z BOM i z ochroną przed CSV injection (także w ge
 1. **Krok 1:** wczytaj `College_Data` (CSV, pierwsza kolumna = nazwa uczelni)
 2. **Krok 2:** *Wczytaj przykładową konfigurację* → *Zastosuj* (zachowaj nazwę, Grad.Rate 118 → 100)
 3. **Krok 3:** np. wykres punktowy Grad.Rate względem Room.Board z kolorem = Private, histogram wg grup
-4. **Krok 4:** *Przygotuj dane dla K-Means* (17 cech, Private tylko do porównania, StandardScaler)
+4. **Krok 4:** *Przygotuj dane dla modelu* (17 cech, Private tylko do porównania, StandardScaler)
 5. **Krok 6:** *Rozpocznij trening* (K = 2) → krok 7 (wybór K), 8 (profile, porównanie z Private), 9, 10
 
 Dla własnych danych: w kroku 4 wybierz cechy, opcjonalnie znany podział do porównania i kolumnę z nazwami; w kroku 6
 wybierz K – krok 7 pokazuje, które K pasuje. Na wolnym komputerze włącz po lewej **próbkę** (`df.sample(frac=0.1)`).
+
+## Szybki start – anomalie w danych krypto (Bybit)
+
+```bash
+python tools/bybit_features.py --top 20 --interval 1h --days 120 --split 2026-10-01
+```
+
+Skrypt pobiera publiczne dane rynkowe (bez klucza API) i zapisuje `bybit_series_linear_60_train.csv` (przed
+1 października), `bybit_series_linear_60_new.csv` (od tego dnia) i `bybit_series_linear_60_columns.csv` (opisy
+kolumn).
+
+1. **Krok 1:** wczytaj `…_train.csv` (opcjonalnie `…_columns.csv` jako opisy kolumn)
+2. **Krok 2:** aplikacja rozpoznaje dane Bybit → *Wczytaj przykładową konfigurację* → *Zastosuj*
+3. **Krok 4:** *Przygotuj dane dla modelu* (11 wskaźników, `row` = symbol + czas jako nazwa wiersza)
+4. **Krok 6:** ustawiony jest Isolation Forest z 1 % nietypowych wierszy → *Rozpocznij trening*
+5. **Krok 7:** czy próg pasuje (załamanie krzywej wskaźnika)? · **Krok 8:** najbardziej nietypowe godziny i to, co
+   je wyróżnia (np. `turnover_z +9.1 σ · ret_z −7.4 σ`)
+6. **Krok 9:** zapisz · **Krok 10:** oceń `…_new.csv` tym samym modelem i z tym samym progiem
 
 ## Kroki
 
@@ -78,12 +103,12 @@ wybierz K – krok 7 pokazuje, które K pasuje. Na wolnym komputerze włącz po 
 | 2 · Przygotowanie 1 | jedna akcja na kolumnę (zachowaj, usuń, wyodrębnij liczbę, data → rok / miesiąc / rok + miesiąc, pierwsze/ostatnie N znaków, zamień wartości, top N, **ogranicz wartości (min, max)** …) · nowe kolumny: przypisz wartości, formuła, warunek → 0/1, kopia + akcja |
 | 3 · Analiza i wizualizacja | wybór kolumn · przegląd, countplot, histogram, boxplot, scatter, heatmapa, korelacja z jedną kolumną, pairplot, udział wg kategorii, statystyki grup, jointplot, gęstość 2D, lmplot, histogram wg grup |
 | 4 · Przygotowanie 2 – dane do klastrowania | **cechy**, opcjonalnie **znany podział** (tylko do porównania, np. Private) i **nazwa wiersza** (np. nazwa uczelni); brakujące wartości dla każdej kolumny; kolumny dummy i skalowanie (domyślnie StandardScaler, drop_first wyłączone) – wyuczone ze wszystkich wierszy, bez podziału; uwagi o silnie skorelowanych kolumnach i kolumnach bez zmienności. Znany podział jest proponowany tylko dla kolumny o takiej nazwie (Private, species, label, segment …); kolumna z identyfikatorem (np. CustomerID = 1, 2, 3 …) jest proponowana jako nazwa wiersza, nie jako cecha – wybrana jako cecha, wywołuje ostrzeżenie |
-| 5 · Zapis danych | dane po kroku 2, dane do klastrowania po kroku 4 (nieskalowane lub skalowane) albo – po treningu – dane z **numerem klastra, nazwą klastra i odległością** od centrum; międzynarodowo lub dla Excela |
-| 6 · Model i trening | **K-Means**: K (n_clusters), init (k-means++/random), n_init, max_iter, algorithm, seed; opcjonalnie krzywa łokcia i Silhouette dla kroku 7 – pasujący kod scikit-learn jest pokazywany na bieżąco, krzywe rosną w trakcie treningu |
-| 7 · Wybór K | **metoda łokcia** (inercja dla K) i **Silhouette** dla K z oceną i propozycją (*Przejmij K = …*), Davies-Bouldin, Calinski-Harabasz, wyjaśniona zmienność (R²) i **wykres Silhouette** wytrenowanego modelu |
-| 8 · Ocena klastrów | wielkość klastrów, **nazywanie klastrów**, **profile** (średnie w jednostkach oryginalnych, heatmapa odchylenia od średniej w σ, tekst dla każdego klastra), **siła rozdzielania cechy (R²)**, **mapa 2D (PCA)** z kolorem = klaster lub znany podział, dwie cechy względem siebie, **porównanie ze znanym podziałem** (tabela krzyżowa, przypisanie klaster → grupa, trafność, prognoza naiwna, ARI, NMI, macierz pomyłek, classification_report – także porównanie jak w kursie), **typowi przedstawiciele** klastrów, pojedynczy przypadek |
-| 9 · Zapis i wczytanie modelu | `models/<nazwa>/model.skops` (bezpieczny, domyślny) lub `model.joblib` + `preprocessing.json` (receptura, ustawienia, nazwy klastrów, miary, przypisanie do grupy porównawczej), pobranie ZIP, cały pipeline jako skrypt Python |
-| 10 · Przypisz nowe dane | nowy CSV lub formularz → to samo przygotowanie → **najbliższe centrum klastra** (`kmeans.predict`), odległość, uwagi, rozkład w porównaniu z treningiem, porównanie ze znanym podziałem (jeśli jest w danych), pobranie CSV i **podsumowanie** |
+| 5 · Zapis danych | dane po kroku 2, dane do klastrowania po kroku 4 (nieskalowane lub skalowane) albo – po treningu – dane z **numerem klastra, nazwą klastra i odległością** od centrum (K-Means) lub z **anomalią (1 = nietypowy) i wskaźnikiem anomalii** (przy DBSCAN także klaster); międzynarodowo lub dla Excela |
+| 6 · Model i trening | **wybór metody** · **K-Means**: K (n_clusters), init (k-means++/random), n_init, max_iter, algorithm, seed; opcjonalnie krzywa łokcia i Silhouette dla kroku 7 (krzywe rosną w trakcie treningu) · **Isolation Forest**: n_estimators, max_samples, seed, contamination (auto albo stały udział) · **LOF**: n_neighbors, metric, contamination · **DBSCAN**: eps (wartość startowa z k-odległości), min_samples, metric, udział szumu dla eps dla kroku 7 – pasujący kod scikit-learn jest pokazywany na bieżąco |
+| 7 · Wybór K albo progu | K-Means: **metoda łokcia** (inercja dla K) i **Silhouette** dla K z oceną i propozycją (*Przejmij K = …*), Davies-Bouldin, Calinski-Harabasz, wyjaśniona zmienność (R²) i **wykres Silhouette** · Isolation Forest/LOF: **rozkład wskaźnika** z progiem, **krzywa wskaźnika** najbardziej nietypowych wierszy z załamaniem (*Przejmij contamination = …*), próg dla każdego udziału · DBSCAN: **k-odległość** z załamaniem (*Przejmij eps = …*), udział szumu i liczba klastrów dla eps |
+| 8 · Ocena | K-Means: wielkość klastrów, **nazywanie klastrów**, **profile** (średnie w jednostkach oryginalnych, heatmapa odchylenia od średniej w σ, tekst dla każdego klastra), **siła rozdzielania cechy (R²)**, **mapa 2D (PCA)** z kolorem = klaster lub znany podział, dwie cechy względem siebie, **porównanie ze znanym podziałem** (tabela krzyżowa, przypisanie klaster → grupa, trafność, prognoza naiwna, ARI, NMI, macierz pomyłek, classification_report – także porównanie jak w kursie), **typowi przedstawiciele** klastrów, pojedynczy przypadek · modele anomalii: **najbardziej nietypowe wiersze** ze wskaźnikiem i cechami najbardziej odbiegającymi od średniej (z), **profil** nietypowe a normalne, **obraz PCA** (anomalie zawsze na obrazie), klastry DBSCAN, **porównanie ze znanym podziałem** (udział nietypowych w grupie; przy dwóch grupach precision, recall, ROC-AUC, average precision), pojedynczy przypadek |
+| 9 · Zapis i wczytanie modelu | `models/<nazwa>/model.skops` (bezpieczny, domyślny) lub `model.joblib` + `preprocessing.json` (receptura, ustawienia, nazwy klastrów albo próg i udział nietypowych wierszy, miary, przypisanie do grupy porównawczej), pobranie ZIP, cały pipeline jako skrypt Python |
+| 10 · Przypisz / oceń nowe dane | nowy CSV lub formularz → to samo przygotowanie → K-Means: **najbliższe centrum klastra** (`kmeans.predict`), odległość, uwagi, rozkład w porównaniu z treningiem · modele anomalii: **anomalia i wskaźnik z progiem z treningu** (DBSCAN: klaster najbliższego punktu rdzeniowego albo szum), udział nietypowych wierszy w porównaniu z treningiem · porównanie ze znanym podziałem (jeśli jest w danych), pobranie CSV i **podsumowanie** |
 
 Każdy krok ma pole **„Kod Python do tego kroku”** – wszystko można przenieść 1:1 do Jupyter Notebook; kod liczy
 dokładnie to samo co aplikacja (te same klastry, ta sama inercja, te same krzywe). Ustawienia (łącznie z nowymi
@@ -141,6 +166,99 @@ sensownie opisać w kroku 8. Od 20 000 wierszy krzywa jest liczona na stałej pr
   wszystkich kolumnach.
 * **Nazwy** klastrów (np. „mała i prywatna”) są zapisywane z modelem i podawane w kroku 10 oraz w eksporcie.
 
+## Wykrywanie anomalii: Isolation Forest, LOF, DBSCAN
+
+Te same kroki 1–5 co przy K-Means, w kroku 6 inna **metoda**. Wszystkie trzy są nienadzorowane: uczą się, jak
+wiersze *zwykle* wyglądają, i dają każdemu wierszowi **wskaźnik anomalii** – wyższy = bardziej nietypowy. Wiersz jest
+nietypowy (`Anomalia = 1`), gdy jego wskaźnik przekracza **próg**.
+
+| Metoda | Idea | Wskaźnik | Próg | dobre do | uwaga |
+|---|---|---|---|---|---|
+| **Isolation Forest** | losowe drzewa tną dane w losowych miejscach – nietypowe wiersze zostają same już po kilku cięciach | `−score_samples`, 0 … 1 (ok. 0.5 normalny) | contamination = auto → 0.5, inaczej kwantyl dla wybranego udziału | standard dla tabel; szybki, także przy wielu wierszach i cechach; nie wymaga skalowania | znajduje raczej globalne niż lokalne wartości odstające |
+| **Local Outlier Factor (LOF)** | gęstość wokół wiersza w porównaniu z gęstością wokół jego `n_neighbors` sąsiadów | LOF ≈ 1 normalny, wyraźnie powyżej 1 nietypowy | auto → 1.5, inaczej kwantyl | lokalne wartości odstające obok gęstych grup | jeśli wartości odstające same tworzą małą grupę, `n_neighbors` musi być większe niż ta grupa; wolniejszy przy bardzo wielu wierszach; skaluj dane |
+| **DBSCAN** | punkt rdzeniowy = co najmniej `min_samples` wierszy w promieniu `eps`; co nie należy do żadnego klastra, jest **szumem** | odległość do najbliższego punktu rdzeniowego w wielokrotnościach eps | 1 (= eps): szum ⇔ wskaźnik powyżej 1 | klastry dowolnego kształtu i wartości odstające w jednym kroku; nie trzeba K | `eps` zależy od skalowania i liczby cech – które pasuje, pokazuje krok 7 (k-odległość) |
+
+* **contamination to decyzja, nie prawda:** ile wierszy ma zostać zgłoszonych? Lepiej kilka wyraźnych anomalii
+  (0.5–2 %) niż długa lista. Krok 7 pokazuje **załamanie krzywej wskaźnika** – za nim wiersze prawie się już nie
+  różnią – i proponuje je.
+* **Co czyni wiersz nietypowym?** Krok 8 pokazuje dla każdego wiersza cechy o największym odchyleniu od średniej
+  (z, w odchyleniach standardowych) i profil *nietypowe a normalne* – wgląd w dane, nie w model.
+* **Porównanie ze znanym podziałem** (np. *Class* w danych o oszustwach): model nigdy go nie widział. Przy dwóch
+  grupach rzadsza liczy się jako „pozytywna”: **precision** (udział prawdziwych przypadków wśród zgłoszeń),
+  **recall** (udział znalezionych prawdziwych przypadków); **ROC-AUC** i **average precision** oceniają wskaźnik
+  niezależnie od progu (przypadek: 0.5 albo udział grupy pozytywnej).
+* **Nie ograniczaj tego, co chcesz monitorować.** *Ogranicz wartości* w kroku 2 obcina właśnie te skrajne wartości,
+  które tworzą anomalię – przy wykrywaniu anomalii poprawiaj tylko wartości niemożliwe.
+* **Skalowanie:** LOF i DBSCAN liczą odległości → StandardScaler w kroku 4. Isolation Forest tnie po jednej cesze
+  i nie potrzebuje skalowania (choć ono nie szkodzi).
+* **Szeregi czasowe bez zaglądania w przyszłość:** wskaźniki każdego wiersza licz tylko z przeszłości (okna
+  kroczące, wartości z względem *wcześniejszych* wartości – jak w skrypcie Bybit), trenuj na wcześniejszym okresie,
+  a późniejszy oceniaj w kroku 10. Jeśli anomalie skupiają się w jednym okresie, to raczej nowy reżim niż wiele
+  pojedynczych przypadków → wytrenuj ponownie na nowszych danych.
+* **Nowe dane (krok 10):** to samo przygotowanie i ten sam próg co w treningu. LOF jest trenowany z `novelty=True`
+  (inaczej nie mógłby oceniać nowych danych); przy DBSCAN nowy wiersz dostaje klaster najbliższego punktu
+  rdzeniowego, jeśli jest on najwyżej o eps dalej – inaczej −1 (szum = anomalia).
+* Tak jak przy K-Means pokazywany kod Python liczy dokładnie to samo co aplikacja (wskaźnik, anomalie, próg, krzywe
+  dla kroku 7, profile, eksport).
+
+## Bybit → CSV (tools/bybit_features.py)
+
+Buduje z publicznych danych rynkowych API Bybit v5 plik CSV ze wskaźnikami do wykrywania anomalii – bez klucza API,
+tylko z biblioteką standardową i pandas/numpy (obie aplikacja i tak potrzebuje). Aplikacja rozpoznaje plik po
+kolumnach i w kroku 2 proponuje pasującą przykładową konfigurację.
+
+```bash
+python tools/bybit_features.py --symbols BTCUSDT,ETHUSDT,SOLUSDT --interval 1h --days 120
+python tools/bybit_features.py --top 20 --interval 4h --days 365 --split 2026-09-01
+python tools/bybit_features.py --mode cross --top 100 --interval 1h --days 30
+python tools/bybit_features.py --help
+```
+
+**Szereg czasowy** (domyślnie, `--mode series`): jeden wiersz na symbol i zamkniętą świecę – „Które godziny/dni były
+nietypowe?”
+
+| Kolumna | Znaczenie |
+|---|---|
+| `row`, `symbol`, `time` | nazwa wiersza (symbol + początek świecy w UTC), symbol, początek świecy – nie są cechami |
+| `ret_pct`, `ret_z` | zwrot świecy w %; jako wartość z względem poprzednich świec (zwroty logarytmiczne) |
+| `range_pct`, `range_z` | rozpiętość max–min w % ceny otwarcia; jako wartość z |
+| `turnover_z` | obrót w USD jako wartość z – szok wolumenu |
+| `vola_regime` | log2(zmienność w ostatnim oknie / zmienność wcześniej) – 0 normalnie, +1 dwa razy większa |
+| `er` | efficiency ratio w oknie: ruch netto / suma wszystkich ruchów – 0 bokiem, 1 prosty trend |
+| `cs_spread_pct` | szacowany spread bid-ask w % (Corwin-Schultz z max/min), średnia w oknie – stres płynności |
+| `corr_btc`, `excess_z` | korelacja z benchmarkiem (domyślnie BTC) w oknie; zwrot minus zwrot benchmarku jako wartość z – własny ruch coina |
+| `funding_bp`, `funding_z` | funding znany na zamknięciu świecy w punktach bazowych; jako wartość z (tylko kontrakty perpetual) |
+| `oi_chg_pct`, `oi_z` | zmiana open interest w %; jako wartość z (tylko kontrakty perpetual) |
+
+`ret_pct`, `range_pct` i `oi_chg_pct` służą do czytania; przykładowa konfiguracja bierze pozostałe 11 kolumn jako
+cechy (Isolation Forest, 1 % nietypowych). Wskazówka: wybierz w kroku 4 `symbol` jako znany podział – wtedy krok 8
+pokaże, które symbole mają najwięcej nietypowych świec.
+
+**Przekrój** (`--mode cross`): jeden wiersz na symbol za cały okres – „Które tokeny zachowują się inaczej niż reszta?”
+Kolumny: `ret_window_pct`, `vola_ann_pct` (w skali roku), `er`, `cs_spread_pct`, `max_dd_pct` (największy spadek),
+`corr_btc`, `beta_btc`, `vola_trend` (zmienność drugiej względem pierwszej połowy), `turnover_log10` (średni obrót
+dzienny), `ret_skew`, `ret_kurt` (grube ogony), `funding_mean_bp`, `oi_chg_pct` – przykładowa konfiguracja zgłasza
+5 % tokenów.
+
+* **Bez zaglądania w przyszłość:** każdy wskaźnik świecy używa tylko danych do jej zamknięcia – wartości z porównują
+  z *poprzednimi* `--baseline` świecami (domyślnie 30 dni), okna (`--window`, domyślnie 1 dzień) kończą się na
+  świecy, funding i open interest to wartości znane na zamknięciu świecy, trwająca świeca jest pomijana. Rozbieg dla
+  wartości z skrypt pobiera dodatkowo przed startem. Sprawdza to test: obcięcie danych → wcześniejsze wiersze
+  pozostają co do bitu takie same.
+* `--split DATA` zapisuje `<nazwa>_train.csv` (wcześniej) i `<nazwa>_new.csv` (od tej daty): trenuj na pierwszej
+  części, drugą oceniaj w kroku 10 – jak na żywo.
+* `<nazwa>_columns.csv` opisuje kolumny – w kroku 1 w sekcji *Opcjonalnie: wczytaj opisy kolumn*.
+* Symbole: `--symbols` albo `--top N` (największy obrót 24h, bez stablecoinów i kontraktów z terminem
+  wygaśnięcia); `--category` linear (kontrakty perpetual USDT, domyślnie), inverse albo spot (bez fundingu i open
+  interest); `--interval` 1 3 5 15 30 60 120 240 360 720 D W albo 15m, 1h, 4h, 1d, 1w; poza tym `--start`/`--end`,
+  `--no-funding`, `--no-oi`, `--benchmark`, `--keep-ohlcv`.
+* **Limity API:** najwyżej 600 zapytań na 5 sekund z jednego IP – skrypt czeka między zapytaniami (`--pause`) i
+  ponawia przy przeciążeniu. Jeśli Bybit odpowie **HTTP 403**, przekroczono limit IP albo dostęp z tej sieci/regionu
+  jest zablokowany – odczekaj co najmniej 10 minut. `--cache FOLDER` (np. `bybit_cache`, wpisany w `.gitignore`)
+  zachowuje odpowiedzi; przy stałych `--start`/`--end` przebieg można potem powtórzyć bez sieci z `--offline`.
+* Jeśli symbol ma za krótką historię (niedawno notowany), jego pierwsze wiersze odpadają; kolumnę z ponad 20 %
+  braków (np. open interest bez historii) skrypt pomija i o tym informuje.
+
 ## Nowe kolumny i akcje (krok 2)
 
 | Rodzaj | Przykład | Wynik |
@@ -181,6 +299,14 @@ result, report, comparison = pl.assign_new(kmeans, recipe, df_new)
 podsumowanie = pl.assess_assignment(recipe, result, report, comparison)
 ```
 
+Modele anomalii (Isolation Forest, LOF, DBSCAN) oceniają zamiast przypisywać – z progiem z treningu:
+
+```python
+model, recipe = pl.load_bundle("models/moj_model_anomalii")
+result, report, comparison = pl.score_new(model, recipe, df_new)   # Anomalie, Anomalie-Score, Hinweis
+podsumowanie = pl.assess_scoring(recipe, result, report, comparison)
+```
+
 ## Uwagi do aktualnych wersji bibliotek
 
 | starszy kod | problem dziś | w szablonie |
@@ -192,6 +318,8 @@ podsumowanie = pl.assess_assignment(recipe, result, report, comparison)
 | `pickle.dump(model, ...)` / `joblib.dump(...)` | przy wczytywaniu może zostać wykonany dowolny kod z pliku | `.skops` domyślnie; `.joblib` tylko dla zaufanych plików |
 | `df.corr()` | pandas ≥ 2: błąd przy kolumnach tekstowych | `df.corr(numeric_only=True)` |
 | `pd.get_dummies(...)` | pandas ≥ 2: True/False zamiast 0/1 | `dtype=float` |
+| `LocalOutlierFactor().fit_predict(X)`, później `lof.predict(nowe)` | bez `novelty=True` nie ma `predict` dla nowych danych (a z `novelty=True` nie ma `fit_predict`) | `LocalOutlierFactor(novelty=True)`; wskaźnik wierszy treningowych z `negative_outlier_factor_` |
+| `IsolationForest(contamination=0.1, behaviour='new')` z poradników | `behaviour` nie istnieje od scikit-learn 0.24; 10 % „anomalii” to prawie zawsze za dużo | `contamination='auto'` (próg 0.5) albo świadomie mały udział – krok 7 pokazuje załamanie |
 
 ## Pliki
 
@@ -202,9 +330,10 @@ plots.py                wykresy (matplotlib/seaborn), zwracają Figure
 codegen.py              generuje pokazywany lub eksportowany kod Python
 i18n.py                 języki: tx() tłumaczy niemiecki tekst na bieżący język
 locales/                tłumaczenia {niemiecki: (angielski, polski)}, jeden plik na moduł
-configs/                college_beispiel.json (przykładowa konfiguracja College_Data jak w kursie)
+configs/                przykładowe konfiguracje: College_Data jak w kursie, szereg czasowy Bybit, przekrój Bybit
 .streamlit/config.toml  limit uploadu 1 GB, jasny motyw
-tests/                  testy pytest + syntetyczne dane testowe (college_like, mall_like …)
+tools/bybit_features.py dane rynkowe Bybit → CSV ze wskaźnikami do wykrywania anomalii
+tests/                  testy pytest + syntetyczne dane testowe (college_like, mall_like, anomaly_like, FakeBybit …)
 AUDIT.md                raport (po polsku): budowa, kontrole, ograniczenia
 README.md               niemiecki · README_EN.md angielski · README_PL.md polski
 models/                 powstaje przy zapisie (krok 9)
@@ -214,8 +343,13 @@ exports/                domyślny folder dla „Zapisz w folderze” (krok 5)
 Rozszerzanie:
 * nowa akcja kolumny → `ACTIONS` + `_transform_column()` w `pipeline.py` (+ `_action_lines()` w `codegen.py`)
 * nowy wykres → funkcja w `plots.py` + wpis w `page_viz()` lub `page_profiles()` w `app.py`
-* inna metoda klastrowania → `MODEL_NAMES`, `ClusterConfig`, `make_kmeans()`/`train_kmeans()` w `pipeline.py`,
-  `page_train()` w `app.py`, `model_code()` w `codegen.py`
+* inna metoda → w `pipeline.py` `MODEL_NAMES`, `MODEL_CLASSES`, `MODEL_VARS`, `MODEL_WHY` i pola w `ClusterConfig`.
+  Metoda wykrywania anomalii dodatkowo w `ANOMALY_MODELS`, `anomaly_params()`, `anomaly_scores()` (wskaźnik: wyższy =
+  bardziej nietypowy) i `anomaly_threshold()` – trening, kroki 7–10 i zapis działają wtedy przez `train_anomaly()`,
+  `anomaly_curve()` i `score_new()`; nowe typy do bezpiecznego wczytywania w `SKOPS_TRUSTED`. W `app.py` parametry
+  w `anomaly_params_ui()` i wyjaśnienie w `HOW_ANOMALY`, w `codegen.py` `anomaly_model_code()` i `predict_code()`;
+  `tests/test_anomaly.py` sprawdza, że kod liczy to samo co aplikacja. Metoda klastrowania jak K-Means: wzorem są
+  `make_kmeans()`/`train_kmeans()` i `model_code()`.
 * nowy lub zmieniony tekst → napisz po niemiecku w `tx("…")` (stałe: `N_("…")`) i dodaj tłumaczenie angielskie
   i polskie w odpowiednim pliku w `locales/`; `pytest tests/test_i18n.py` zgłasza brakujące tłumaczenia.
 
@@ -223,7 +357,7 @@ Rozszerzanie:
 
 ```bash
 pip install pytest
-pytest -q                                  # 268 testów, ok. 3 minuty
+pytest -q                                  # 349 testów, ok. 5 minut
 python tests/synthetic.py                  # syntetyczne dane College (777 wierszy, nie są to prawdziwe dane)
 ```
 
@@ -231,13 +365,16 @@ python tests/synthetic.py                  # syntetyczne dane College (777 wiers
 |---|---|
 | `tests/test_clustering.py` | K-Means jak w kursie (= bezpośrednio scikit-learn), powtarzalność, łokieć i Silhouette (wyraźne grupy są znajdowane, brak propozycji bez struktury, próbki przy dużych danych), ocena (małe/dominujące klastry, brak zbieżności, powtórzone wiersze), profile w jednostkach oryginalnych, siła rozdzielania = wyjaśniona zmienność, PCA, porównanie ze znanymi grupami, wartości odstające i przypisania na granicy w nowych danych |
 | `tests/test_codegen_parity.py` | pokazywany kod Python liczy **dokładnie** to samo co aplikacja: X, klastry, inercja, krzywa łokcia/Silhouette, profile, porównanie, eksport – także w przypadkach granicznych (separatory tysięcy, data jako liczba, inf, wartości grupowe, ogranicz wartości, nowe kolumny) |
+| `tests/test_anomaly.py` | Isolation Forest, LOF, DBSCAN: wskaźnik ⇔ próg, contamination, novelty, szum = anomalia, za małe eps, krzywe i propozycje dla kroku 7, najbardziej nietypowe wiersze, profil, PCA, zapis/wczytanie (.skops/.joblib), nowe dane, brak pomyłki z K-Means, uszkodzone receptury – a pokazywany kod liczy **dokładnie** to samo (wskaźnik, anomalie, próg, k-odległość, siatka eps, profile, eksport, krok 10); wyeksportowany skrypt działa; wykresy w przypadkach granicznych |
+| `tests/test_bybit_features.py` | skrypt Bybit z symulowanym API (bez sieci): stronicowanie w limitach API, ponawianie/403/cache, bez zaglądania w przyszłość, trwająca świeca pominięta, wskaźniki przeliczone ponownie, przekrój, spot, nieznane symbole, przykładowa konfiguracja pasuje do CSV, wbudowany krach jest najbardziej nietypowym wierszem |
 | `tests/test_pipeline.py` | cały przebieg z danymi podobnymi do LendingClub, zapis/wczytanie (.skops/.joblib, ZIP), nowe dane (nieznane kategorie, wartości odstające, brakujące kolumny), wyeksportowany skrypt działa |
 | `tests/test_new_features.py` | rok + miesiąc, nowe kolumny, *ogranicz wartości*, nowe kolumny dla nowych danych, zapis danych, podsumowanie |
 | `tests/test_audit_regressions.py` … `test_audit4_regressions.py` | testy regresji z czterech audytów aplikacji bazowej, przeniesione na klastrowanie (liczby, daty, rozpoznawanie CSV, limity formuł, konfiguracje, ochrona ZIP, brak kodu z nazw w pokazywanym kodzie, zmiana języka, bezpieczne wczytywanie, tylko modele K-Means) |
 | `tests/test_audit5_regressions.py` | audyt 5 (aplikacja Clustering): kod eksportu = aplikacja także po usunięciu wierszy/kolumn, brak nieproszonej grupy porównawczej, kolumny ID jako nazwa wiersza, tekst „jak w kursie” z prawdziwymi grupami, brak Markdown z obcych modeli, odrzucanie uszkodzonego `preprocessing.json`, puste klastry, uwaga o zmienionych ustawieniach |
 | `tests/test_app.py` | test klikania interfejsu (wszystkie 10 kroków jak w kursie; CSV ze średnikiem, zmienione ustawienia, nieużyteczne wartości, ochrona przed nadpisaniem; nowe kolumny, błędy rysowania, eksport) |
+| `tests/test_app_anomaly.py` | test klikania trzech modeli anomalii przez kroki 4–10 oraz CSV z Bybit z przykładową konfiguracją aż do oceny nowych danych |
 | `tests/test_charts.py` | wykresy kroku 3 i wykresy klastrów (łokieć/Silhouette, wykres Silhouette, wielkości, profile, PCA, tabela krzyżowa) |
-| `tests/test_i18n.py` | języki: każdy tekst przetłumaczony z tymi samymi placeholderami, CSV dla Excela wg języka (aplikacja = kod), generowany kod liczy tak samo w każdym języku, cała aplikacja po angielsku i polsku bez niemieckich pozostałości |
+| `tests/test_i18n.py` | języki: każdy tekst przetłumaczony z tymi samymi placeholderami, CSV dla Excela wg języka (aplikacja = kod), generowany kod liczy tak samo w każdym języku, cała aplikacja po angielsku i polsku bez niemieckich pozostałości – także z modelami anomalii |
 
 ## Uwagi
 
@@ -251,9 +388,13 @@ python tests/synthetic.py                  # syntetyczne dane College (777 wiers
   jest wspólne dla wszystkich użytkowników aplikacji. Nie wystawiaj więc aplikacji do internetu bez logowania.
   Wczytuj modele tylko z zaufanych źródeł (ZIP po rozpakowaniu może mieć najwyżej 2 GB). `.skops` jest wczytywany
   bez wykonywania kodu; `.joblib` to pickle i z wgranego ZIP jest wczytywany tylko po wyraźnym potwierdzeniu.
-  Wczytywane są tylko modele K-Means tej aplikacji – modele wersji Supervised lub Deep Learning aplikacja odrzuca
+  Wczytywane są tylko modele tej aplikacji (K-Means, Isolation Forest, LOF, DBSCAN) – modele wersji Supervised lub Deep Learning aplikacja odrzuca
   z jasnym komunikatem, podobnie jak niekompletny lub uszkodzony `preprocessing.json` i recepturę, która nie pasuje
   do modelu.
 * **K-Means ma ograniczenia:** znajduje raczej okrągłe grupy podobnej wielkości i każdy wiersz przypisuje do
   klastra – także wartości odstające. Przy wydłużonych lub zagnieżdżonych grupach albo klastrach o bardzo różnej
-  wielkości (zob. wykres Silhouette) lepiej sprawdzają się inne metody (np. DBSCAN, klastrowanie hierarchiczne).
+  wielkości (zob. wykres Silhouette) lepiej sprawdzają się **DBSCAN** (do wyboru w kroku 6) albo klastrowanie
+  hierarchiczne; wartości odstające znajduje się bezpośrednio za pomocą Isolation Forest albo LOF.
+* LOF i DBSCAN porównują każdy wiersz z sąsiadami – przy bardzo wielu wierszach (od ok. 50 000) trwa to i zajmuje
+  pamięć; Isolation Forest pozostaje szybki. K-odległość dla kroku 7 od 20 000 wierszy używa próbki, siatka eps jest
+  liczona tylko do 20 000 wierszy.

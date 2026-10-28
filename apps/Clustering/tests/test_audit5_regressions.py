@@ -117,7 +117,7 @@ def test_b3_id_column_is_the_row_name_not_a_feature(tmp_path, monkeypatch):
 # --- C1: Text 'Wie im Kurs' mit den echten Gruppen -----------------------------------------------------------------
 def test_c1_course_comparison_names_the_real_group(tmp_path, monkeypatch):
     at = _app(tmp_path, monkeypatch, iris_like())
-    button(at, "Daten für K-Means vorbereiten").click().run()
+    button(at, "Daten fürs Modell vorbereiten").click().run()
     go(at, 5)
     at.number_input(key="w_k").set_value(3).run()
     button(at, "Training starten").click().run()
@@ -229,7 +229,7 @@ def test_c5_empty_clusters_are_called_empty():
 
 def test_c6_changed_scaler_or_drop_first_shows_the_stale_hint(tmp_path, monkeypatch):
     at = _app(tmp_path, monkeypatch, college_like(150))
-    button(at, "Daten für K-Means vorbereiten").click().run()
+    button(at, "Daten fürs Modell vorbereiten").click().run()
     hint = "seit dem Vorbereiten geändert"
     assert not any(hint in i.value for i in at.info)
     at.selectbox(key="w_scaler").set_value("MinMaxScaler").run()

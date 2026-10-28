@@ -115,7 +115,7 @@ def test_names_from_files_are_escaped(tmp_path, monkeypatch):
     _nav(at, 1)
     _button(at, "Übernehmen").click().run()
     _nav(at, 3)
-    _button(at, "Daten für K-Means vorbereiten").click().run()
+    _button(at, "Daten fürs Modell vorbereiten").click().run()
     _nav(at, 5)
     at.checkbox(key="w_curve").uncheck().run()
     _button(at, "Training starten").click().run()

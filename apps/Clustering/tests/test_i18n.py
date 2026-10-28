@@ -24,7 +24,7 @@ import i18n  # noqa: E402
 import pipeline as pl  # noqa: E402
 import test_codegen_parity as parity  # noqa: E402
 from locales import CATALOG  # noqa: E402
-from synthetic import college_like, mall_like  # noqa: E402
+from synthetic import anomaly_like, college_like, mall_like  # noqa: E402
 
 APP = str(ROOT / "app.py")
 MODULES = ["pipeline", "plots", "codegen", "app"]
@@ -226,7 +226,7 @@ def test_app_runs_in_english_and_polish(tmp_path, monkeypatch, ui_lang):
                        for w in at.warning)
 
     go(3)
-    button(at, t("Daten für K-Means vorbereiten")).click().run()
+    button(at, t("Daten fürs Modell vorbereiten")).click().run()
     ok("Schritt 4")
     assert at.session_state["prep"].recipe["group_col"] == "Private"
 
@@ -276,4 +276,89 @@ def test_app_runs_in_english_and_polish(tmp_path, monkeypatch, ui_lang):
     ok("Formular")
 
     assert not leftovers, f"deutsche Texte in der Oberfläche ({ui_lang}): {leftovers}"
+    i18n.set_lang("de")
+
+
+@pytest.mark.parametrize("ui_lang, model", [("en", "iforest"), ("pl", "lof"), ("en", "dbscan"), ("pl", "dbscan")])
+def test_anomaly_pages_in_english_and_polish(tmp_path, monkeypatch, ui_lang, model):
+    """Isolation Forest, LOF und DBSCAN durch die Schritte 4–10 – ohne deutsche Reste in der Oberfläche."""
+    monkeypatch.setenv("CL_TEMPLATE_MODELS", str(tmp_path / "models"))
+    anomaly_like(800, seed=3).to_csv(tmp_path / "train.csv", index=False)
+    anomaly_like(120, share=0.05, seed=9).to_csv(tmp_path / "neu.csv", index=False)
+    i18n.set_lang(ui_lang)
+    t = i18n.tx
+    leftovers = {}
+
+    def ok(where):
+        assert not at.exception, f"{where}: {[e.message for e in at.exception]}"
+        assert not at.error, f"{where}: {[e.value for e in at.error]}"
+        found = german_leftovers(at)
+        if found:
+            leftovers[where] = found
+
+    def go(i):
+        nav = at.sidebar.radio(key="nav")
+        nav.set_value(nav.options[i]).run()
+
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.session_state["w_lang"] = ui_lang
+    at.run()
+    at.radio(key="w_data_src").set_value("Pfad auf diesem Rechner").run()
+    at.text_input(key="w_data_path").input(str(tmp_path / "train.csv")).run()
+    button(at, t("Daten laden")).click().run()
+    go(1)
+    button(at, t("Übernehmen")).click().run()
+    ok("Schritt 2")
+    go(3)
+    at.selectbox(key="w_group").set_value("Class").run()
+    button(at, t("Daten fürs Modell vorbereiten")).click().run()
+    ok("Schritt 4")
+
+    go(5)
+    at.radio(key="w_model").set_value(model).run()
+    ok(f"Schritt 6 – {model}")
+    if model == "lof":
+        at.number_input(key="w_n_neighbors").set_value(60).run()
+    button(at, t("Training starten")).click().run()
+    ok("Training")
+    go(6)
+    ok("Schritt 7")
+    offers = [b for b in at.button if str(b.key or "").startswith(("apply_c_", "apply_eps_"))]
+    if offers:
+        offers[0].click().run()
+        ok("Vorschlag übernommen")
+    go(7)
+    ok("Schritt 8")
+    assert any(s.value == t("Die auffälligsten Zeilen") for s in at.subheader)
+    button(at, t("Zufällige Zeile ziehen")).click().run()
+    ok("Einzelfall")
+
+    go(4)
+    at.radio(key="w_exp_what").set_value("anomalies").run()
+    button(at, t("CSV erstellen")).click().run()
+    ok("Export Anomalien")
+    head = at.session_state["_export"][1][:3000].decode("utf-8-sig").splitlines()[0]
+    assert head.endswith(t("Anomalie") + "," + t("Anomalie-Score"))
+
+    go(8)
+    at.text_input(key="w_save_name").input(f"anomalie_{model}").run()
+    button(at, t("Speichern")).click().run()
+    ok("Speichern")
+    button(at, t("Laden")).click().run()
+    ok("Laden Modell")
+
+    go(9)
+    at.radio(key="w_pred_model").set_value("bundle").run()
+    at.radio(key="w_pred_src").set_value("Pfad auf diesem Rechner").run()
+    at.text_input(key="w_pred_path").input(str(tmp_path / "neu.csv")).run()
+    button(at, t("Neue Daten bewerten")).click().run()
+    ok("Bewertung")
+    assert any(h.value == t("Fazit") for h in at.subheader)
+    assert {"Anomalie", "Anomalie-Score"} <= set(at.session_state["pred_result"]["res"].columns)  # intern deutsch …
+    assert any(t("Anomalie-Score") in d.value.columns for d in at.dataframe)  # … angezeigt in der Sprache
+    at.radio(key="w_pred_mode").set_value("Einzelner Datensatz (Formular)").run()
+    button(at, t("Neue Daten bewerten")).click().run()
+    ok("Formular")
+
+    assert not leftovers, f"deutsche Texte in der Oberfläche ({ui_lang}, {model}): {leftovers}"
     i18n.set_lang("de")

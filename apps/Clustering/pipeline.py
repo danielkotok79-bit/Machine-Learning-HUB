@@ -2,9 +2,10 @@
 pipeline.py – Rechenlogik des DATA-Analysis-Clustering (ohne Streamlit)
 =====================================================================
 
-Alle Schritte einer Cluster-Analyse mit K-Means (scikit-learn, Unsupervised Learning) für Tabellen (CSV)
-als wiederverwendbare Funktionen. Die Streamlit-App (app.py) ruft nur diese Funktionen auf – das Modul
-lässt sich genauso im Jupyter Notebook verwenden:
+Alle Schritte einer Cluster-Analyse mit K-Means und der Anomalieerkennung mit Isolation Forest, Local Outlier
+Factor (LOF) und DBSCAN (scikit-learn, Unsupervised Learning) für Tabellen (CSV) als wiederverwendbare Funktionen.
+Die Streamlit-App (app.py) ruft nur diese Funktionen auf – das Modul lässt sich genauso im Jupyter Notebook
+verwenden:
 
     import pipeline as pl
     df, _ = pl.read_csv("College_Data.csv")
@@ -13,20 +14,24 @@ Schritte
     1) Bibliotheken ............ Import-Block direkt unten
     2) Aufbereitung 1 .......... suggest_action(), apply_column_actions(), apply_new_columns()
     4) Aufbereitung 2 .......... suggest_missing(), prepare_cluster_data()   (kein Label, kein Split)
-    5) Daten speichern ......... cluster_ready_frame(), to_csv_bytes()
+    5) Daten speichern ......... cluster_ready_frame(), clusters_frame(), anomalies_frame(), to_csv_bytes()
     6) Modell & Training ....... ClusterConfig, make_kmeans(), train_kmeans()
+                                 Anomalien: make_anomaly_model(), train_anomaly(), anomaly_scores()
     7) Wahl von K .............. k_curve() (Elbow + Silhouette), k_assessment(), silhouette_values()
+       Schwelle / eps .......... anomaly_curve() (Score-Kurve, k-Distanz), threshold_assessment()
     8) Cluster-Auswertung ...... cluster_profiles(), feature_separation(), pca_projection(), compare_groups()
+       Anomalien ............... anomaly_profiles(), top_anomalies(), compare_anomalies()
     9) Speichern & Laden ....... save_bundle(), load_bundle()  (model.skops oder model.joblib)
-   10) Neue Daten zuordnen ..... assign_new(), assess_assignment()
+   10) Neue Daten zuordnen ..... assign_new(), assess_assignment()  ·  Anomalien: score_new(), assess_scoring()
 
-Unsupervised: K-Means bekommt keine Antwort (kein Label). Gibt es eine bekannte Einteilung (im Kurs: die
-Spalte Private bei den Hochschulen), wird sie nur NACH dem Clustering zum Vergleich benutzt – nie als Feature.
+Unsupervised: Die Modelle bekommen keine Antwort (kein Label). Gibt es eine bekannte Einteilung (im Kurs: die
+Spalte Private bei den Hochschulen, bei Betrugsdaten z. B. Class), wird sie nur NACH dem Training zum Vergleich
+benutzt – nie als Feature.
 
 Kernidee für Schritt 10: Alles, was in Schritt 2 und 4 aus den Daten gelernt wird (Füllwerte, Kategorien
 bzw. Dummy-Spalten, Skalierung), steht in einem "Rezept" (dict). Das Rezept wird zusammen mit dem Modell
 gespeichert und auf neue Daten unverändert angewendet – auf neuen Daten wird nichts neu gefittet, sie werden
-nur dem nächsten Cluster-Zentrum zugeordnet.
+nur dem nächsten Cluster-Zentrum zugeordnet bzw. mit dem Anomalie-Modell aus dem Training bewertet.
 """
 from __future__ import annotations
 
@@ -40,9 +45,12 @@ import numpy as np
 import matplotlib.pyplot as plt  # noqa: F401
 import seaborn as sns
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, DBSCAN
+from sklearn.ensemble import IsolationForest
+from sklearn.neighbors import LocalOutlierFactor, NearestNeighbors
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score, classification_report, confusion_matrix
+from sklearn.metrics import roc_auc_score, average_precision_score
 
 # Ergänzungen für das Template
 import io
@@ -170,10 +178,13 @@ def _py(v):
 
 
 def _fmt_value(v) -> str:
-    """Wert → Text; ganze Zahlen ohne '.0' (1.0 → '1')."""
+    """Wert → Text; ganze Zahlen ohne '.0' (1.0 → '1'), Kommazahlen ohne Rundungsrauschen
+    (0.17886999999999997 → '0.17887')."""
     v = _py(v)
     if isinstance(v, float) and v.is_integer():
         return str(int(v))
+    if isinstance(v, float):
+        return f"{v:.12g}"
     return str(v)
 
 
@@ -374,9 +385,13 @@ MAX_K = 50  # höchstens so viele Cluster
 SETTING_TYPES = {
     "w_k": (int, 2, MAX_K), "w_k_max": (int, 3, 30), "w_n_init": (int, 1, 100), "w_max_iter": (int, 10, 100_000),
     "w_seed": (int, 0, 1_000_000),
-    "w_drop_first": (bool, None, None), "w_curve": (bool, None, None),
+    # Anomalieerkennung (Isolation Forest, LOF, DBSCAN) – contamination in Prozent
+    "w_n_estimators": (int, 10, 2000), "w_max_samples": (int, 0, 10_000_000), "w_n_neighbors": (int, 2, 500),
+    "w_min_samples": (int, 2, 1000), "w_eps": (float, 1e-6, 1e9), "w_contam_pct": (float, 0.1, 50.0),
+    "w_drop_first": (bool, None, None), "w_curve": (bool, None, None), "w_contam_auto": (bool, None, None),
     "w_viz_cols": (list, None, None), "w_features": (list, None, None),
-    **{k: (str, None, None) for k in ("w_group", "w_name_col", "w_scaler", "w_init", "w_algorithm")},
+    **{k: (str, None, None) for k in ("w_group", "w_name_col", "w_scaler", "w_init", "w_algorithm", "w_model",
+                                      "w_metric")},
 }
 
 
@@ -1520,12 +1535,36 @@ def prepare_cluster_data(
 # 6) Modell & Training – K-Means (scikit-learn)
 # ---------------------------------------------------------------------------
 MODEL_KMEANS = "kmeans"
-MODEL_NAMES = {MODEL_KMEANS: "K-Means"}
+MODEL_IFOREST = "iforest"
+MODEL_LOF = "lof"
+MODEL_DBSCAN = "dbscan"
+MODEL_NAMES = {MODEL_KMEANS: "K-Means", MODEL_IFOREST: "Isolation Forest", MODEL_LOF: "Local Outlier Factor (LOF)",
+               MODEL_DBSCAN: "DBSCAN"}
+ANOMALY_MODELS = (MODEL_IFOREST, MODEL_LOF, MODEL_DBSCAN)  # liefern je Zeile einen Anomalie-Score
+MODEL_CLASSES = {MODEL_KMEANS: KMeans, MODEL_IFOREST: IsolationForest, MODEL_LOF: LocalOutlierFactor,
+                 MODEL_DBSCAN: DBSCAN}
+MODEL_VARS = {MODEL_KMEANS: "kmeans", MODEL_IFOREST: "iforest", MODEL_LOF: "lof", MODEL_DBSCAN: "dbscan"}  # im Code
+MODEL_WHY = {
+    MODEL_KMEANS: N_("Gruppen (Cluster) ähnlicher Zeilen finden – K gibt man vor, Schritt 7 hilft bei der Wahl. "
+                     "Ausreißer zeigt Schritt 10: Zeilen weit weg von allen Zentren."),
+    MODEL_IFOREST: N_("Anomalien finden: Zufällige Schnitte isolieren jede Zeile – ungewöhnliche Zeilen sind nach "
+                      "wenigen Schnitten allein. Schnell, auch bei vielen Zeilen und Features; der Standard für "
+                      "Tabellen."),
+    MODEL_LOF: N_("Anomalien finden: vergleicht die Dichte um eine Zeile mit der Dichte um ihre Nachbarn – findet "
+                  "auch lokale Ausreißer neben dichten Gruppen. Bei sehr vielen Zeilen langsamer."),
+    MODEL_DBSCAN: N_("Cluster beliebiger Form plus Rauschen: Zeilen in dünn besetzten Bereichen sind Rauschen = "
+                     "Anomalien. Kein K nötig, dafür eps (Radius) und min_samples – eps zeigt Schritt 7 (k-Distanz)."),
+}
+METRICS = ["euclidean", "manhattan"]  # Abstandsmaß für LOF und DBSCAN
 INITS = ["k-means++", "random"]
 ALGORITHMS = ["lloyd", "elkan"]
 K_MAX_DEFAULT = 10  # Elbow-/Silhouette-Kurve: K = 1 … 10
 CURVE_ROWS = 20_000  # Kurve auf einer Stichprobe – K-Means wird dafür k_max-mal trainiert
 SIL_ROWS = 5000  # Silhouette vergleicht alle Zeilen paarweise (n²) → Stichprobe, wie silhouette_score(sample_size=…)
+MAX_CONTAMINATION = 0.5  # scikit-learn: contamination höchstens 0.5
+CONTAM_LEVELS = [0.001, 0.0025, 0.005, 0.01, 0.02, 0.05, 0.1]  # Schritt 7: Schwelle für diese Anteile auffälliger Zeilen
+EPS_LEVELS = [0.5, 0.75, 0.9, 0.95, 0.975, 0.99]  # Schritt 7 (DBSCAN): eps = diese Quantile der k-Distanz
+KNEE_TOP = 0.2  # Knick der Score-Kurve: in den auffälligsten 20 % der Zeilen gesucht
 
 
 @dataclass
@@ -1537,13 +1576,31 @@ class ClusterConfig:
     max_iter: int = 300
     algorithm: str = "lloyd"
     seed: int = RANDOM_STATE
-    curve: bool = True  # Elbow- und Silhouette-Kurve für Schritt 7
+    curve: bool = True  # Kurve für Schritt 7: K-Means Elbow + Silhouette, DBSCAN Rauschanteil je eps
     k_max: int = K_MAX_DEFAULT
+    # Anomalieerkennung
+    contamination: float = 0.0  # Anteil auffälliger Zeilen (IF, LOF): 0 = 'auto'
+    n_estimators: int = 100  # Isolation Forest: Anzahl Bäume
+    max_samples: int = 0  # Isolation Forest: Zeilen je Baum, 0 = 'auto' = min(256, Zeilen)
+    n_neighbors: int = 20  # LOF: Anzahl Nachbarn
+    eps: float = 0.5  # DBSCAN: Radius der Nachbarschaft (in den skalierten Features)
+    min_samples: int = 5  # DBSCAN: so viele Zeilen (sie selbst eingeschlossen) im Radius eps → Kernpunkt
+    metric: str = "euclidean"  # LOF, DBSCAN
 
 
 def model_name(key) -> str:
     """Anzeigename eines Modells – '?' für unbekannte Einträge (z. B. Modelle anderer Versionen)."""
     return MODEL_NAMES.get(key, "?")
+
+
+def is_anomaly(key) -> bool:
+    """Isolation Forest, LOF und DBSCAN liefern je Zeile einen Anomalie-Score (K-Means: Cluster und Abstand)."""
+    return key in ANOMALY_MODELS
+
+
+def recipe_model(recipe: dict | None) -> str:
+    """Modell eines Rezepts – ältere Rezepte ohne Eintrag stammen von K-Means."""
+    return ((recipe or {}).get("training") or {}).get("model") or MODEL_KMEANS
 
 
 def make_kmeans(cfg: ClusterConfig, n_clusters: int | None = None) -> KMeans:
@@ -1690,6 +1747,215 @@ def train_kmeans(cfg: ClusterConfig, prep: PrepResult, progress=None):
 
 
 # ---------------------------------------------------------------------------
+# 6b) Anomalieerkennung – Isolation Forest, Local Outlier Factor (LOF), DBSCAN
+# ---------------------------------------------------------------------------
+def anomaly_params(cfg: ClusterConfig, n: int) -> dict:
+    """Parameter des Anomalie-Modells – genau diese Werte stehen auch im erzeugten Code (codegen.anomaly_code).
+    contamination 0 = 'auto'. Werte über der Zeilenzahl begrenzt scikit-learn selbst (mit Warnung) – hier ausdrücklich."""
+    contamination = float(cfg.contamination) if cfg.contamination and cfg.contamination > 0 else "auto"
+    metric = cfg.metric if cfg.metric in METRICS else "euclidean"
+    if cfg.model == MODEL_IFOREST:
+        p = {}
+        if int(cfg.n_estimators) != 100:
+            p["n_estimators"] = int(cfg.n_estimators)
+        if int(cfg.max_samples) > 0:
+            p["max_samples"] = min(int(cfg.max_samples), int(n))
+        p["contamination"] = contamination
+        p["random_state"] = int(cfg.seed)
+        return p
+    if cfg.model == MODEL_LOF:
+        p = {"n_neighbors": max(1, min(int(cfg.n_neighbors), int(n) - 1)), "contamination": contamination}
+        if metric != "euclidean":
+            p["metric"] = metric
+        p["novelty"] = True  # das Modell bewertet später auch neue Daten (Schritt 10)
+        return p
+    if cfg.model == MODEL_DBSCAN:
+        p = {"eps": float(cfg.eps), "min_samples": int(cfg.min_samples)}
+        if metric != "euclidean":
+            p["metric"] = metric
+        return p
+    raise ValueError(tx("Unbekanntes Modell: {model}", model=cfg.model))
+
+
+def make_anomaly_model(cfg: ClusterConfig, n: int):
+    """IsolationForest(…), LocalOutlierFactor(…, novelty=True) oder DBSCAN(…) mit den Einstellungen aus Schritt 6."""
+    if not is_anomaly(cfg.model):
+        raise ValueError(tx("Unbekanntes Modell: {model}", model=cfg.model))
+    return MODEL_CLASSES[cfg.model](**anomaly_params(cfg, n))
+
+
+def core_distance(model, X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """DBSCAN: Abstand jeder Zeile zum nächsten Kernpunkt (components_) und dessen Nummer. Ohne Kernpunkt (eps zu
+    klein) ist der Abstand unendlich."""
+    core = np.asarray(model.components_)
+    if not len(core):
+        return np.full(len(X), np.inf), np.zeros(len(X), dtype=int)
+    dist, idx = NearestNeighbors(n_neighbors=1, metric=model.metric).fit(core).kneighbors(X)
+    return dist[:, 0], idx[:, 0]
+
+
+def anomaly_scores(model, X: np.ndarray, key: str, training: bool = False):
+    """Anomalie-Score je Zeile (höher = auffälliger), Anomalie ja/nein und – nur bei DBSCAN – der Cluster (−1 = Rauschen).
+
+    Isolation Forest: Score = −score_samples (0 … 1; um 0,5 normal, nahe 1 sehr auffällig), Anomalie = predict == −1.
+    LOF: Score = LOF-Wert (≈ 1 normal, deutlich über 1 auffällig). Trainingszeilen: negative_outlier_factor_ aus dem
+         Training (jede Zeile ohne sich selbst als Nachbarn); neue Daten: score_samples und predict (novelty=True).
+    DBSCAN: Score = Abstand zum nächsten Kernpunkt in Vielfachen von eps (über 1 = Rauschen). Trainingszeilen
+         behalten die Cluster aus dem Training (labels_); eine neue Zeile bekommt den Cluster des nächsten
+         Kernpunkts, wenn er höchstens eps entfernt ist – sonst −1 (Rauschen = Anomalie)."""
+    X = np.asarray(X, dtype="float64")
+    if key == MODEL_IFOREST:
+        return -model.score_samples(X), model.predict(X) == -1, None
+    if key == MODEL_LOF:
+        if training:
+            nof = np.asarray(model.negative_outlier_factor_)
+            return -nof, nof < model.offset_, None
+        return -model.score_samples(X), model.predict(X) == -1, None
+    if key == MODEL_DBSCAN:
+        dist, nearest = core_distance(model, X)
+        if training:
+            labels = np.asarray(model.labels_).astype(int)
+        else:
+            core_labels = np.asarray(model.labels_)[model.core_sample_indices_].astype(int)
+            labels = (np.where(dist <= model.eps, core_labels[nearest], -1) if len(core_labels)
+                      else np.full(len(X), -1))
+        return dist / float(model.eps), labels == -1, labels
+    raise ValueError(tx("Unbekanntes Modell: {model}", model=key))
+
+
+def anomaly_threshold(model, key: str) -> float:
+    """Schwelle auf der Skala des Scores – auffällig ist ein Score darüber. IF/LOF: −offset_ (contamination = auto:
+    0,5 bzw. 1,5; sonst das passende Quantil der Trainings-Scores), DBSCAN: 1 (= eps)."""
+    return 1.0 if key == MODEL_DBSCAN else float(-model.offset_)
+
+
+def knee_index(y) -> int | None:
+    """Knick einer sortierten Kurve (vereinfachtes Kneedle-Verfahren): beide Achsen auf 0 … 1 normiert, dann die Stelle
+    mit dem größten Abstand zur Geraden vom ersten zum letzten Punkt. None, wenn die Kurve fast gerade verläuft."""
+    y = np.asarray(y, dtype="float64")
+    if len(y) < 5 or not np.isfinite(y).all() or y[-1] == y[0]:
+        return None
+    x = np.linspace(0.0, 1.0, len(y))
+    gap = np.abs((y - y[0]) / (y[-1] - y[0]) - x)
+    i = int(np.argmax(gap))
+    return i if gap[i] >= 0.1 else None
+
+
+def suggest_share(n_top: int, n: int) -> float:
+    """Vorschlag für contamination aus der Anzahl auffälliger Zeilen: 2 signifikante Stellen, 0,1 % … 50 %."""
+    share = float(f"{n_top / max(int(n), 1):.2g}")
+    return min(max(share, 0.001), MAX_CONTAMINATION)
+
+
+def anomaly_curve(cfg: ClusterConfig, X: np.ndarray, score: np.ndarray, progress=None) -> dict:
+    """7) Daten für die Wahl der Schwelle bzw. von eps.
+
+    Isolation Forest / LOF: Schwelle je Anteil auffälliger Zeilen (CONTAM_LEVELS) und der Knick der absteigend
+    sortierten Score-Kurve in den auffälligsten 20 % – dahinter flacht sie ab (Vorschlag für contamination).
+    DBSCAN: k-Distanz = Abstand jeder Zeile zu ihrem min_samples-ten Nachbarn (sie selbst zählt mit, wie bei DBSCAN):
+    Kernpunkt ⇔ k-Distanz ≤ eps. Der Knick der aufsteigend sortierten k-Distanz ist ein guter Kandidat für eps. Die
+    Nachbarn kommen aus allen Zeilen, ab CURVE_ROWS Zeilen wird nur für eine Stichprobe gemessen. Mit cfg.curve (und
+    höchstens CURVE_ROWS Zeilen) zusätzlich Cluster und Rauschanteil für eps = Quantile der k-Distanz."""
+    n = len(X)
+    score = np.asarray(score, dtype="float64")
+    if cfg.model in (MODEL_IFOREST, MODEL_LOF):
+        thresholds = np.quantile(score, [1 - c for c in CONTAM_LEVELS])
+        top = max(int(np.ceil(KNEE_TOP * n)), min(n, 20))
+        desc = np.sort(score)[::-1][:top]
+        knee = knee_index(desc)
+        return {"kind": "threshold", "levels": list(CONTAM_LEVELS), "thresholds": thresholds.tolist(),
+                "counts": [int(np.sum(score > t)) for t in thresholds], "sorted": desc, "knee": knee,
+                "suggest": None if knee is None else suggest_share(knee + 1, n)}
+    if cfg.model != MODEL_DBSCAN:
+        raise ValueError(tx("Unbekanntes Modell: {model}", model=cfg.model))
+    params = anomaly_params(cfg, n)
+    k = max(1, min(int(cfg.min_samples), n))
+    rows = curve_rows(n, cfg.seed)
+    query = X if rows is None else X[rows]
+    neighbors = NearestNeighbors(n_neighbors=k, **{key: v for key, v in params.items() if key == "metric"}).fit(X)
+    kdist = np.sort(neighbors.kneighbors(query)[0][:, -1])
+    knee = knee_index(kdist)
+    out = {"kind": "kdist", "kdist": kdist, "k": k, "n_rows": int(len(query)), "sampled": rows is not None,
+           "knee": knee, "suggest": None if knee is None else float(f"{kdist[knee]:.4g}"),
+           "core_share": float(np.mean(kdist <= float(cfg.eps))), "grid": None}
+    if cfg.curve and n <= CURVE_ROWS:
+        values = sorted({float(f"{v:.4g}") for v in np.quantile(kdist, EPS_LEVELS) if v > 0} | {float(cfg.eps)})
+        grid = {"eps": [], "clusters": [], "noise": []}
+        for i, e in enumerate(values):
+            labels = DBSCAN(**{**params, "eps": e}).fit(X).labels_
+            grid["eps"].append(e)
+            grid["clusters"].append(int(labels.max()) + 1 if (labels >= 0).any() else 0)
+            grid["noise"].append(float(np.mean(labels == -1)))
+            if progress:
+                progress(0.4 + 0.6 * (i + 1) / len(values),
+                         tx("Rauschanteil je eps: eps = {e} ({i} von {n})", e=f"{e:.4g}", i=i + 1, n=len(values)),
+                         None)
+        out["grid"] = grid
+    return out
+
+
+def suggest_eps(X: np.ndarray, min_samples: int = 5, metric: str = "euclidean", seed: int = RANDOM_STATE,
+                max_rows: int = 5000) -> float:
+    """Startwert für eps (Schritt 6): Knick der k-Distanz auf einer Stichprobe von höchstens max_rows Zeilen – ohne
+    Knick das 90-%-Quantil. Auf einer Stichprobe liegen die Nachbarn weiter auseinander als in allen Daten, der
+    Startwert ist also eher groß; Schritt 7 misst genauer (Nachbarn aus allen Zeilen)."""
+    X = np.asarray(X, dtype="float64")
+    n = len(X)
+    sample = X if n <= max_rows else X[np.random.default_rng(int(seed)).choice(n, max_rows, replace=False)]
+    k = max(1, min(int(min_samples), len(sample)))
+    kw = {"metric": metric} if metric in METRICS and metric != "euclidean" else {}
+    kdist = np.sort(NearestNeighbors(n_neighbors=k, **kw).fit(sample).kneighbors(sample)[0][:, -1])
+    i = knee_index(kdist)
+    value = kdist[i] if i is not None else np.quantile(kdist, 0.9)
+    return float(f"{max(float(value), 1e-6):.4g}")
+
+
+def train_anomaly(cfg: ClusterConfig, prep: PrepResult, progress=None):
+    """6) Isolation Forest, LOF oder DBSCAN auf allen Zeilen trainieren – unsupervised, ohne Label.
+
+    Rückgabe: (Modell, history mit Score, Anomalie ja/nein, DBSCAN-Clustern und den Daten für Schritt 7, info)."""
+    X = prep.X
+    n, p = X.shape
+    if not is_anomaly(cfg.model):
+        raise ValueError(tx("Unbekanntes Modell: {model}", model=cfg.model))
+    if cfg.contamination and not 0 < float(cfg.contamination) <= MAX_CONTAMINATION:
+        raise ValueError(tx("contamination muss zwischen 0 und 0.5 liegen (Anteil auffälliger Zeilen, z. B. 0.01 = 1 %)."))
+    if cfg.model == MODEL_DBSCAN and not (np.isfinite(cfg.eps) and cfg.eps > 0):
+        raise ValueError(tx("eps muss größer als 0 sein."))
+    t0 = time.time()
+    if progress:
+        progress(0.05, tx("Trainiere {name} …", name=model_name(cfg.model)), None)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        model = make_anomaly_model(cfg, n).fit(X)
+        score, flag, labels = anomaly_scores(model, X, cfg.model, training=True)
+    notes = list(dict.fromkeys(str(w.message) for w in caught
+                               if issubclass(w.category, (UserWarning, RuntimeWarning, ConvergenceWarning))))
+    finite = score[np.isfinite(score)]
+    info = {
+        "model": cfg.model, "n_rows": int(n), "n_features": int(p), "n_anomalies": int(flag.sum()),
+        "share": float(flag.mean()), "threshold": anomaly_threshold(model, cfg.model),
+        "contamination": float(cfg.contamination or 0.0),
+        "score_median": float(np.median(finite)) if len(finite) else float("nan"),
+        "score_p99": float(np.percentile(finite, 99)) if len(finite) else float("nan"),
+        "score_max": float(finite.max()) if len(finite) else float("nan"),
+        "warnings": notes,
+    }
+    if cfg.model == MODEL_DBSCAN:
+        k = int(labels.max()) + 1 if (labels >= 0).any() else 0
+        info.update(k=k, sizes=np.bincount(labels[labels >= 0], minlength=k).tolist() if k else [],
+                    n_core=int(len(model.core_sample_indices_)), eps=float(model.eps),
+                    min_samples=int(model.min_samples))
+    if progress:
+        progress(0.4, tx("{name} fertig – {n} auffällige Zeilen", name=model_name(cfg.model), n=info["n_anomalies"]),
+                 None)
+    curve = anomaly_curve(cfg, X, score, progress)
+    info["seconds"] = round(time.time() - t0, 1)
+    info["trained_at"] = datetime.now().isoformat(timespec="seconds")
+    return model, {"score": score, "flag": flag, "labels": labels, "curve": curve}, info
+
+
+# ---------------------------------------------------------------------------
 # 7) Wahl von K – Elbow-Methode und Silhouette
 # ---------------------------------------------------------------------------
 def silhouette_verdict(s: float) -> str:
@@ -1771,6 +2037,88 @@ def k_assessment(curve: dict | None, info: dict, cfg: ClusterConfig) -> dict:
     return {"notes": notes, "suggest": suggest}
 
 
+def share_text(x: float) -> str:
+    """Anteil lesbar: unter 1 % mit zwei Nachkommastellen (0.25 %), sonst eine (1.5 %)."""
+    x = float(x)
+    return f"{x:.2%}" if 0 < x < 0.01 else f"{x:.1%}"
+
+
+def score_text(v) -> str:
+    """Score mit 4 signifikanten Stellen; ∞ (DBSCAN ohne Kernpunkt), '–' wenn unbekannt."""
+    v = float(v)
+    if np.isnan(v):
+        return "–"
+    return "∞" if np.isinf(v) else f"{v:.4g}"
+
+
+def threshold_assessment(curve: dict | None, info: dict, cfg: ClusterConfig) -> dict:
+    """Fazit zu Schritt 7 für die Anomalie-Modelle: Wie viele Zeilen sind auffällig, passt die Schwelle (IF, LOF) bzw.
+    eps (DBSCAN)? Rückgabe wie k_assessment: {"notes": [Markdown], "suggest": [(Text, Wert)]} – Wert = contamination
+    (Anteil) bzw. eps für den Knopf 'übernehmen'."""
+    n, k, share = info["n_rows"], info["n_anomalies"], info["share"]
+    notes, suggest = [], []
+    curve = curve or {}
+    if cfg.model in (MODEL_IFOREST, MODEL_LOF):
+        notes.append(tx("**{k} von {n} Zeilen auffällig ({pct})** – Schwelle: Score über {thr}.",
+                        k=_n(k), n=_n(n), pct=share_text(share), thr=score_text(info["threshold"])))
+        if not cfg.contamination:
+            notes.append(tx(N_("contamination = auto: Die Schwelle kommt aus dem Verfahren selbst – Score 0.5 wie im "
+                               "Original-Paper zu Isolation Forest.") if cfg.model == MODEL_IFOREST else
+                            N_("contamination = auto: Die Schwelle kommt aus dem Verfahren selbst – LOF-Wert 1.5.")))
+            if share > 0.1:
+                notes.append(tx(":orange[**Viele auffällige Zeilen ({pct}):**] Für eine Liste der stärksten Ausreißer "
+                                "mit contamination einen festen, kleineren Anteil wählen (z. B. 1 %).",
+                                pct=share_text(share)))
+        else:
+            notes.append(tx("contamination = {pct}: Die Schwelle ist das passende Quantil der Trainings-Scores – etwa "
+                            "dieser Anteil der Zeilen gilt als auffällig.", pct=share_text(cfg.contamination)))
+        if k == 0:
+            notes.append(tx(":orange[**Keine auffällige Zeile:**] Kein Score liegt über der Schwelle – mit "
+                            "contamination einen festen Anteil wählen."))
+        if curve.get("knee") is not None:
+            c = curve["suggest"]
+            notes.append(tx("**Knick der Score-Kurve:** Nach den auffälligsten {n} Zeilen ({pct}) flacht die Kurve ab – "
+                            "diese Zeilen heben sich deutlich vom Rest ab. Ein Kandidat für contamination.",
+                            n=_n(curve["knee"] + 1), pct=share_text(c)))
+            if not cfg.contamination or abs(c - cfg.contamination) > 0.2 * c:
+                suggest.append((tx("contamination = {pct} übernehmen", pct=share_text(c)), c))
+        elif curve:
+            notes.append(tx("**Score-Kurve ohne deutlichen Knick:** Die Scores sinken gleichmäßig – die Schwelle ist dann "
+                            "eine Frage des gewünschten Anteils (Tabelle unten)."))
+    else:
+        notes.append(tx("**{c} Cluster, {k} Zeilen Rauschen ({pct})** bei eps = {eps} und min_samples = {m}.",
+                        c=info.get("k", 0), k=_n(k), pct=share_text(share), eps=f"{info['eps']:.4g}",
+                        m=info["min_samples"]))
+        notes.append(tx("Kernpunkte: {c} von {n} Zeilen ({pct}).", c=_n(info["n_core"]), n=_n(n),
+                        pct=share_text(info["n_core"] / max(n, 1))))
+        if info["n_core"] == 0:
+            notes.append(tx(":red[**Kein Kernpunkt:**] eps ist zu klein – alle Zeilen sind Rauschen. eps vergrößern "
+                            "(Knick der k-Distanz)."))
+        elif share > 0.5:
+            notes.append(tx(":orange[**Mehr als die Hälfte ist Rauschen:**] eps ist zu klein oder min_samples zu groß."))
+        elif info.get("k", 0) == 1 and share < 0.005:
+            notes.append(tx(":orange[**Ein Cluster, fast kein Rauschen:**] eps ist eher zu groß – kaum eine Zeile gilt als "
+                            "Anomalie."))
+        if curve.get("knee") is not None:
+            e = curve["suggest"]
+            notes.append(tx("**Knick der k-Distanz bei eps ≈ {eps}:** Rechts davon liegen die Zeilen deutlich weiter von "
+                            "ihren Nachbarn entfernt – Kandidaten für Rauschen.", eps=f"{e:.4g}"))
+            if abs(e - float(cfg.eps)) > 0.05 * e:
+                suggest.append((tx("eps = {eps} übernehmen", eps=f"{e:.4g}"), e))
+        elif curve:
+            notes.append(tx("**k-Distanz ohne deutlichen Knick:** eps nach dem gewünschten Rauschanteil wählen (Tabelle "
+                            "unten)."))
+        if curve.get("sampled"):
+            notes.append(tx("k-Distanz für {n} zufällige Zeilen gemessen (Nachbarn aus allen Zeilen).",
+                            n=_n(curve["n_rows"])))
+        if curve and curve.get("grid") is None and cfg.curve and n > CURVE_ROWS:
+            notes.append(tx("Rauschanteil je eps nur bis {m} Zeilen – DBSCAN müsste für jedes eps neu laufen. Tipp: "
+                            "Stichprobe in der Seitenleiste.", m=_n(CURVE_ROWS)))
+    for w in info.get("warnings", []):
+        notes.append(tx(":orange[**Hinweis von scikit-learn:**] {w}", w=w))
+    return {"notes": notes, "suggest": suggest}
+
+
 # ---------------------------------------------------------------------------
 # 8) Cluster-Auswertung – Profile, Trennkraft, PCA, Vergleich mit bekannten Gruppen
 # ---------------------------------------------------------------------------
@@ -1825,22 +2173,41 @@ def feature_separation(prep: PrepResult, labels: np.ndarray, k: int) -> pd.DataF
     return pd.DataFrame(rows).sort_values("R²", ascending=False, ignore_index=True)
 
 
-def pca_projection(prep: PrepResult, model, max_points: int = 5000, seed: int = RANDOM_STATE) -> dict:
-    """PCA auf 2 Dimensionen – nur für die Darstellung. K-Means rechnet weiter mit allen Features."""
+def pca_projection(prep: PrepResult, model, max_points: int = 5000, seed: int = RANDOM_STATE,
+                   labels: np.ndarray | None = None, priority: np.ndarray | None = None) -> dict:
+    """PCA auf 2 Dimensionen – nur für die Darstellung. Die Modelle rechnen weiter mit allen Features.
+
+    labels: Farbe je Zeile (Standard: model.labels_ – bei den Anomalie-Modellen 0/1 bzw. die DBSCAN-Cluster).
+    priority: Zeilen, die in der Stichprobe für das Bild immer dabei sind (z. B. die Anomalien – sonst fehlten
+    seltene Ausreißer im Bild). Zentren gibt es nur bei K-Means."""
     X = prep.X
     n, p = X.shape
     n_comp = min(2, p)
     pca = PCA(n_components=n_comp, random_state=int(seed)).fit(X)
-    rows = (np.sort(np.random.default_rng(int(seed)).choice(n, max_points, replace=False)) if n > max_points
-            else np.arange(n))
-    coords, centers = pca.transform(X[rows]), pca.transform(model.cluster_centers_)
+    if n > max_points:
+        rng = np.random.default_rng(int(seed))
+        rows = rng.choice(n, max_points, replace=False)
+        if priority is not None:  # Anomalien zuerst (höchstens die Hälfte des Bildes), der Rest zufällig
+            must = np.flatnonzero(np.asarray(priority, dtype=bool))
+            if len(must) > max_points // 2:
+                must = rng.choice(must, max_points // 2, replace=False)
+            rows = np.concatenate([must, rows[~np.isin(rows, must)][: max_points - len(must)]])
+        rows = np.sort(rows)
+    else:
+        rows = np.arange(n)
+    centers_in = getattr(model, "cluster_centers_", None)
+    coords = pca.transform(X[rows])
+    centers = pca.transform(centers_in) if centers_in is not None else np.empty((0, n_comp))
     if n_comp == 1:  # nur ein Feature: zweite Achse = 0
         coords = np.column_stack([coords[:, 0], np.zeros(len(coords))])
         centers = np.column_stack([centers[:, 0], np.zeros(len(centers))])
     ratio = np.nan_to_num(pca.explained_variance_ratio_, nan=0.0).tolist() + [0.0] * (2 - n_comp)
     load = pd.DataFrame(pca.components_.T, index=prep.recipe["feature_columns"],
                         columns=[f"PC{i + 1}" for i in range(n_comp)])
-    return {"coords": coords, "rows": rows, "labels": np.asarray(model.labels_)[rows], "centers": centers,
+    if labels is None:  # Isolation Forest und LOF haben keine labels_ → alle 0
+        labels = getattr(model, "labels_", np.zeros(n, dtype=int))
+    lab = np.asarray(labels)
+    return {"coords": coords, "rows": rows, "labels": lab[rows], "centers": centers,
             "explained": ratio, "loadings": load, "n": int(n)}
 
 
@@ -1889,15 +2256,96 @@ def cluster_distances(model, X: np.ndarray, labels: np.ndarray | None = None) ->
     return D, lab
 
 
+# --- 8) Auswertung der Anomalie-Modelle ------------------------------------------------------------------------------
+def anomaly_profiles(prep: PrepResult, flag: np.ndarray) -> dict:
+    """Mittelwerte der normalen und der auffälligen Zeilen in Originaleinheiten und ihre Abweichung vom Durchschnitt
+    (z) – wie die Cluster-Profile mit zwei Gruppen: 0 = normal, 1 = Anomalie."""
+    return cluster_profiles(prep, np.asarray(flag, dtype=bool).astype(int), 2)
+
+
+def row_deviations(prep: PrepResult, rows, top: int = 3) -> list[list[tuple[str, float]]]:
+    """Je Zeile die Features mit der größten Abweichung vom Durchschnitt aller Zeilen (z in Standardabweichungen) –
+    ein Blick in die Daten, was eine auffällige Zeile ausmacht (unabhängig vom Modell)."""
+    X = prep.X
+    mean, std = X.mean(axis=0), X.std(axis=0)
+    rows = np.asarray(rows, dtype=int)
+    z = np.where(std > 0, (X[rows] - mean) / np.where(std > 0, std, 1.0), 0.0)
+    cols = prep.recipe["feature_columns"]
+    out = []
+    for zr in z.reshape(len(rows), -1):
+        idx = np.argsort(-np.abs(zr), kind="stable")[:top]
+        out.append([(cols[j], float(zr[j])) for j in idx])
+    return out
+
+
+def deviation_text(devs) -> str:
+    """[('vol_z', 3.2), ('ret_z', -2.9)] → 'vol_z +3.2 σ · ret_z −2.9 σ'."""
+    return " · ".join(f"{c} " + f"{z:+.1f}".replace("-", "−") + " σ" for c, z in devs)
+
+
+def top_anomalies(prep: PrepResult, score, flag, n: int = 15, labels=None) -> pd.DataFrame:
+    """Die n auffälligsten Zeilen (höchster Score): Zeile im Datensatz nach Schritt 2, Bezeichnung, Score und die
+    Features mit der größten Abweichung vom Durchschnitt."""
+    score = np.asarray(score, dtype="float64")
+    order = np.argsort(-score, kind="stable")[:n]
+    rows = []
+    for rank, (i, devs) in enumerate(zip(order, row_deviations(prep, order)), 1):
+        row = {"Rang": rank, "Zeile": int(prep.index[i])}
+        if prep.names is not None:
+            name = prep.names.iloc[i]
+            row["Bezeichnung"] = "–" if pd.isna(name) else str(name)
+        if labels is not None:
+            row["Cluster"] = int(labels[i])
+        row.update({"Anomalie-Score": float(np.round(score[i], 4)), "Anomalie": bool(flag[i]),
+                    "größte Abweichungen (z)": deviation_text(devs)})
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def compare_anomalies(flag, score, groups) -> dict | None:
+    """Vergleich mit einer bekannten Einteilung (z. B. Class bei Betrugsdaten) – das Modell kannte sie nicht.
+
+    Je Gruppe der Anteil auffälliger Zeilen. Bei genau zwei Gruppen gilt die seltenere als 'positiv' (Anomalien sind
+    selten): Precision = Anteil der auffälligen Zeilen, die zu ihr gehören; Recall = Anteil ihrer Zeilen, die als
+    auffällig gemeldet werden; ROC-AUC und Average Precision bewerten den Score unabhängig von der Schwelle."""
+    g = pd.Series(groups).reset_index(drop=True).astype(object)
+    f = np.asarray(flag, dtype=bool)
+    s = np.asarray(score, dtype="float64")
+    mask = g.notna().to_numpy()
+    if not mask.any():
+        return None
+    g, f, s = g[mask].reset_index(drop=True), f[mask], s[mask]
+    values = sorted(g.unique(), key=_natural_key)
+    counts = g.value_counts()
+    table = pd.DataFrame({"Gruppe": values, "Zeilen": [int(counts[v]) for v in values],
+                          "auffällig": [int(f[(g == v).to_numpy()].sum()) for v in values]})
+    table["Anteil auffällig"] = table["auffällig"] / table["Zeilen"]
+    out = {"table": table, "values": values, "n": int(mask.sum()), "missing": int((~mask).sum()),
+           "share": float(f.mean()), "binary": len(values) == 2}
+    if len(values) == 2:
+        pos = min(values, key=lambda v: (int(counts[v]), _natural_key(v)))
+        y = (g == pos).to_numpy()
+        finite = np.isfinite(s)
+        s_rank = np.where(np.isposinf(s), (s[finite].max() + 1.0) if finite.any() else 1.0, s)  # ∞ (DBSCAN) = höchster
+        precision = float(y[f].mean()) if f.any() else float("nan")
+        out.update(positive=pos, base_rate=float(y.mean()), precision=precision, recall=float(f[y].mean()),
+                   lift=precision / float(y.mean()) if f.any() else float("nan"),
+                   roc_auc=float(roc_auc_score(y, s_rank)), ap=float(average_precision_score(y, s_rank)),
+                   tp=int((f & y).sum()), fp=int((f & ~y).sum()), fn=int((~f & y).sum()), tn=int((~f & ~y).sum()))
+    return out
+
+
 # ---------------------------------------------------------------------------
 # 9) Speichern & Laden
 # ---------------------------------------------------------------------------
 MODEL_FILES = ("model.skops", "model.joblib")
 BUNDLE_FILES = (*MODEL_FILES, "preprocessing.json")
 MAX_BUNDLE_BYTES = 2 * 10**9  # entpackte Größe eines Modell-ZIPs
-# skops lädt nur Typen, denen man ausdrücklich vertraut. K-Means braucht keine zusätzlichen Typen – alles, was skops
-# nicht von sich aus kennt (z. B. fremder Code), wird abgelehnt; die Liste bleibt für scikit-learn-Bausteine offen.
-SKOPS_TRUSTED: set = set()
+# skops lädt nur Typen, denen man ausdrücklich vertraut: K-Means braucht keine zusätzlichen, Isolation Forest die Bäume
+# (Tree), LOF den Suchbaum der Nachbarn (KDTree/BallTree, wie in der Supervised-Version). Alles andere, was skops nicht
+# von sich aus kennt (z. B. fremder Code), wird abgelehnt.
+SKOPS_TRUSTED: set = {"sklearn.tree._tree.Tree", "sklearn.neighbors._kd_tree.KDTree",
+                      "sklearn.neighbors._ball_tree.BallTree"}
 SKOPS_TRUSTED_PREFIX = ("sklearn.metrics._dist_metrics.",)
 
 
@@ -1916,21 +2364,32 @@ def cluster_label(j: int, names=None) -> str:
 
 def finalize_recipe(recipe: dict, cfg: ClusterConfig | None = None, info: dict | None = None,
                     cluster_names: list | None = None, comparison: dict | None = None) -> dict:
-    """Einstellungen, Kennzahlen, Cluster-Namen und die Zuordnung zur Vergleichsgruppe ins Rezept schreiben."""
+    """Einstellungen, Kennzahlen, Cluster-Namen und die Zuordnung zur Vergleichsgruppe ins Rezept schreiben –
+    bei den Anomalie-Modellen Schwelle, Anteil auffälliger Zeilen und der Vergleich mit der bekannten Einteilung."""
     r = dict(recipe)
     if cfg is not None:
         r["training"] = asdict(cfg)
-    if info is not None:
+    if info is not None and is_anomaly(info.get("model")):
+        r["train_info"] = info
+        sizes = np.asarray(info.get("sizes", []), dtype=float)  # nur DBSCAN: Zeilen je Cluster (ohne Rauschen)
+        r["cluster_share"] = (sizes / max(int(info.get("n_rows", 0)), 1)).tolist() if len(sizes) else []
+        r["metrics"] = {key: info.get(key) for key in ("n_anomalies", "share", "threshold", "score_median",
+                                                       "score_p99")}
+        r["cluster_names"] = []
+    elif info is not None:
         r["train_info"] = info
         sizes = np.asarray(info.get("sizes", []), dtype=float)
         r["cluster_share"] = (sizes / sizes.sum()).tolist() if sizes.sum() else []
         r["metrics"] = {key: info.get(key) for key in ("inertia", "silhouette", "davies_bouldin",
                                                        "calinski_harabasz", "r2")}
         r["cluster_names"] = clean_names(cluster_names, int(info.get("k", len(sizes))))
-    if comparison is not None:
+    if comparison is not None and "mapping" in comparison:
         r["group_mapping"] = {str(j): v for j, v in comparison["mapping"].items()}
         r["group_metrics"] = {"accuracy": comparison["accuracy"], "baseline": comparison["baseline"],
                               "ari": comparison["ari"], "nmi": comparison["nmi"], "n": comparison["n"]}
+    elif comparison is not None:  # Anomalie-Modell: Vergleich mit der bekannten Einteilung (compare_anomalies)
+        r["anomaly_metrics"] = {key: comparison.get(key) for key in ("positive", "base_rate", "precision", "recall",
+                                                                     "roc_auc", "ap", "share", "n")}
     return r
 
 
@@ -2074,22 +2533,36 @@ def recipe_problem(recipe: dict) -> str | None:
     k = (recipe.get("training") or {}).get("n_clusters")
     if k is not None and (not isinstance(k, int) or isinstance(k, bool)):
         return "training.n_clusters"
+    if recipe_model(recipe) not in MODEL_NAMES:
+        return "training.model"
+    for key in ("threshold", "share"):  # Anomalie-Modelle: Schwelle endlich, Anteil auffälliger Zeilen 0 … 1
+        v = ti.get(key)
+        if v is not None and (not _numbers([v]) or not np.isfinite(v) or (key == "share" and not 0 <= v <= 1)):
+            return f"train_info.{key}"
     return None
 
 
 def check_recipe(recipe, model=None) -> None:
     """Nur Modelle der Clustering-Version laden – ein Modell der Supervised-Version hätte ein anderes Rezept. Prüft
-    außerdem, ob das Rezept vollständig ist und (mit model) zum Modell passt."""
+    außerdem, ob das Rezept vollständig ist und (mit model) zum Modell passt: Modelltyp laut Rezept (K-Means, Isolation
+    Forest, LOF, DBSCAN), Zahl der Eingänge, bei K-Means die Zahl der Cluster."""
     if not isinstance(recipe, dict) or recipe.get("task") != T_CLUSTER:
         task = recipe.get("task") if isinstance(recipe, dict) else None
         raise ValueError(tx("Dieses Modell stammt nicht aus der Clustering-Version (Aufgabe: {task}) – hier lassen "
-                            "sich nur K-Means-Modelle laden, die mit dieser App gespeichert wurden.",
+                            "sich nur Modelle laden, die mit dieser App gespeichert wurden (K-Means, Isolation Forest, "
+                            "LOF, DBSCAN).",
                             task=str(task or "?")[:40]))
     problem = recipe_problem(recipe)
     if problem:
         raise ValueError(tx("preprocessing.json ist unvollständig oder beschädigt (Eintrag: {part}) – das Modell bitte "
                             "neu speichern (Schritt 9).", part=problem))
-    if model is not None:
+    if model is None:
+        return
+    key = recipe_model(recipe)
+    if not isinstance(model, MODEL_CLASSES[key]):
+        raise ValueError(tx("Die Modelldatei enthält kein {name}-Modell ({type}).", name=model_name(key),
+                            type=type(model).__name__))
+    if key == MODEL_KMEANS:
         k = len(model.cluster_centers_)
         n_in = int(getattr(model, "n_features_in_", model.cluster_centers_.shape[1]))
         sizes = (recipe.get("train_info") or {}).get("sizes")
@@ -2098,6 +2571,15 @@ def check_recipe(recipe, model=None) -> None:
             raise ValueError(tx("Modell und preprocessing.json passen nicht zusammen: das Modell hat {k} Cluster und "
                                 "erwartet {n} Eingänge, das Rezept liefert {m}.",
                                 k=k, n=n_in, m=len(recipe["feature_columns"])))
+        return
+    n_in = int(getattr(model, "n_features_in_", -1))
+    if n_in != len(recipe["feature_columns"]):
+        raise ValueError(tx("Modell und preprocessing.json passen nicht zusammen: das {name}-Modell erwartet {n} "
+                            "Eingänge, das Rezept liefert {m}.",
+                            name=model_name(key), n=n_in, m=len(recipe["feature_columns"])))
+    if key == MODEL_LOF and not getattr(model, "novelty", False):
+        raise ValueError(tx("Das LOF-Modell wurde ohne novelty=True trainiert – damit lassen sich keine neuen Daten "
+                            "bewerten."))
 
 
 def load_bundle(folder, allow_pickle: bool = True):
@@ -2110,9 +2592,7 @@ def load_bundle(folder, allow_pickle: bool = True):
     if model_file is None:
         raise ValueError(tx("Kein scikit-learn-Modell gefunden (model.skops oder model.joblib)."))
     model = _load_model_file(model_file, allow_pickle)
-    if not isinstance(model, KMeans):
-        raise ValueError(tx("Die Modelldatei enthält kein K-Means-Modell ({type}).", type=type(model).__name__))
-    check_recipe(recipe, model)
+    check_recipe(recipe, model)  # Modelltyp laut Rezept, Eingänge, Cluster
     return model, recipe
 
 
@@ -2156,7 +2636,8 @@ def load_bundle_zip(data: bytes, allow_pickle: bool = False):
 
 
 def list_bundles(models_dir) -> list[dict]:
-    """Gespeicherte K-Means-Modelle im Ordner models/ auflisten (neueste zuerst) – Modelle anderer Versionen nicht."""
+    """Gespeicherte Modelle der Clustering-Version im Ordner models/ auflisten (neueste zuerst) – Modelle anderer
+    Versionen nicht. model: kmeans, iforest, lof oder dbscan (ältere Rezepte ohne Eintrag: K-Means)."""
     out = []
     root = Path(models_dir)
     if not root.is_dir():
@@ -2173,6 +2654,7 @@ def list_bundles(models_dir) -> list[dict]:
             continue
         out.append({"name": sub.name, "path": str(sub), "k": (r.get("training") or {}).get("n_clusters"),
                     "n_features": len(r.get("features") or []), "model": (r.get("training") or {}).get("model"),
+                    "share": (r.get("train_info") or {}).get("share"),
                     "saved_at": str(r.get("saved_at", "")), "metrics": r.get("metrics", {})})
     return sorted(out, key=lambda b: b["saved_at"], reverse=True)
 
@@ -2239,6 +2721,7 @@ def prepare_new_data(df_new: pd.DataFrame, recipe: dict):
 
 
 RESULT_CLUSTER, RESULT_NAME, RESULT_DIST, RESULT_NOTE = "Cluster", "Cluster-Name", "Abstand", "Hinweis"
+RESULT_ANOMALY, RESULT_SCORE = "Anomalie", "Anomalie-Score"  # Ergebnisspalten der Anomalie-Modelle (1 = auffällig)
 AMBIGUOUS = 0.95  # Abstand zum nächsten / zum zweitnächsten Zentrum ≥ 0.95 → liegt fast genau zwischen zwei Clustern
 
 
@@ -2246,6 +2729,8 @@ def assign_new(model, recipe: dict, df_new: pd.DataFrame):
     """Neue Daten dem nächsten Cluster-Zentrum zuordnen (kmeans.predict) – nichts wird neu gelernt.
 
     Rückgabe: (Ergebnis-DataFrame, Bericht, Vergleich mit der bekannten Einteilung oder None)."""
+    if is_anomaly(recipe_model(recipe)):
+        raise ValueError(tx("Anomalie-Modell: neue Daten mit score_new() bewerten (assign_new ist für K-Means)."))
     check_recipe(recipe, model)
     if len(df_new) == 0:
         raise ValueError(tx("Die Datei enthält keine Datenzeilen (nur Kopfzeile?)."))
@@ -2277,6 +2762,44 @@ def assign_new(model, recipe: dict, df_new: pd.DataFrame):
     gcol = recipe.get("group_col")
     if gcol and gcol in d.columns:
         cmp = compare_groups(lab, group_values(d[gcol]), k, recipe.get("group_mapping"))
+    return res, rep, cmp
+
+
+def score_new(model, recipe: dict, df_new: pd.DataFrame):
+    """Neue Daten mit dem Anomalie-Modell aus dem Training bewerten (Isolation Forest, LOF, DBSCAN) – nichts wird neu
+    gelernt: gleiche Aufbereitung (Rezept), gleiche Schwelle wie im Training.
+
+    Ergebnis: Daten + Anomalie (1 = auffällig), Anomalie-Score (höher = auffälliger), bei DBSCAN zusätzlich Cluster
+    (−1 = Rauschen) und Hinweis (Datenqualität). Rückgabe: (Ergebnis-DataFrame, Bericht, Vergleich mit der bekannten
+    Einteilung oder None)."""
+    key = recipe_model(recipe)
+    if not is_anomaly(key):
+        raise ValueError(tx("K-Means-Modell: neue Daten mit assign_new() zuordnen (score_new ist für die "
+                            "Anomalie-Modelle)."))
+    check_recipe(recipe, model)
+    if len(df_new) == 0:
+        raise ValueError(tx("Die Datei enthält keine Datenzeilen (nur Kopfzeile?)."))
+    X, d, rep = prepare_new_data(df_new, recipe)
+    score, flag, labels = anomaly_scores(model, X, key)
+    name_col = recipe.get("name_col")
+    rep.update(score=score, flag=flag, labels=labels,
+               names=_to_str(d[name_col]).to_numpy() if name_col and name_col in d.columns else None)
+    res = df_new.copy()
+    if labels is not None:
+        res[RESULT_CLUSTER] = labels.astype(int)
+    res[RESULT_ANOMALY] = flag.astype(int)
+    res[RESULT_SCORE] = np.round(score, 4)
+    flags = [(rep["row_imputed"], N_("Lücken ergänzt")), (rep["row_unknown"], N_("unbekannte Kategorie")),
+             (rep["row_out_of_range"], N_("außerhalb Trainingsbereich"))]
+    notes = pd.Series("", index=range(len(res)), dtype=object)
+    for mask, text in flags:
+        if mask.any():
+            notes[mask] = notes[mask].where(notes[mask] == "", notes[mask] + "; ") + text
+    res[RESULT_NOTE] = notes.to_numpy()
+    cmp = None
+    gcol = recipe.get("group_col")
+    if gcol and gcol in d.columns:
+        cmp = compare_anomalies(flag, score, group_values(d[gcol]))
     return res, rep, cmp
 
 
@@ -2323,6 +2846,20 @@ def clusters_frame(df_viz: pd.DataFrame, prep: PrepResult, labels: np.ndarray, d
         out[free_name(out.columns, columns[RESULT_NAME])] = [names[j] for j in labels]
     if distance is not None:
         out[free_name(out.columns, columns[RESULT_DIST])] = np.round(np.asarray(distance, dtype=float), 4)
+    return out.reset_index(drop=True)
+
+
+def anomalies_frame(df_viz: pd.DataFrame, prep: PrepResult, flag: np.ndarray, score: np.ndarray,
+                    labels: np.ndarray | None = None, columns: dict | None = None) -> pd.DataFrame:
+    """Daten nach Schritt 2 (verwendete Zeilen) + bei DBSCAN der Cluster (−1 = Rauschen), dazu Anomalie (1 = auffällig)
+    und Anomalie-Score. columns = Namen der neuen Spalten je Sprache (Standard: Cluster, Anomalie, Anomalie-Score)."""
+    columns = {RESULT_CLUSTER: RESULT_CLUSTER, RESULT_ANOMALY: RESULT_ANOMALY, RESULT_SCORE: RESULT_SCORE,
+               **(columns or {})}
+    out = df_viz.loc[prep.index].copy()
+    if labels is not None:
+        out[free_name(out.columns, columns[RESULT_CLUSTER])] = np.asarray(labels).astype(int)
+    out[free_name(out.columns, columns[RESULT_ANOMALY])] = np.asarray(flag, dtype=bool).astype(int)
+    out[free_name(out.columns, columns[RESULT_SCORE])] = np.round(np.asarray(score, dtype=float), 4)
     return out.reset_index(drop=True)
 
 
@@ -2407,18 +2944,14 @@ def _fill_text(recipe: dict, col: str) -> str:
               N_("häufigster Wert der Trainingsdaten ({fb}) – im Training gab es hier keine Lücken"), fb=fb)
 
 
-def assess_assignment(recipe: dict, res: pd.DataFrame, rep: dict, cmp: dict | None = None) -> dict:
-    """Fazit zu Schritt 10.
-
-    Rückgabe: {"level": Gesamtstufe der Datenqualität,
-               "quality": [{"level", "text", "details": [Text]}], "meaning": [Text], "advice": [Text]}"""
-    n = len(res)
-    quality, meaning, advice = [], [], []
+def _data_quality(recipe: dict, n: int, rep: dict, anomaly: bool = False) -> tuple[list, str]:
+    """Datenqualität der neuen Daten (Schritt 10) – für die Zuordnung (K-Means) und die Bewertung (Anomalie-Modelle).
+    Rückgabe: ([{"level", "text", "details"}], Gesamtstufe)."""
+    quality = []
 
     def add(level, text, details=None):
         quality.append({"level": level, "text": text, "details": details or []})
 
-    # --- Datenqualität ------------------------------------------------------------------------------
     extra = rep.get("extra_columns") or []
     add(LEVEL_OK, tx("{n} Zeilen; alle {v} benötigten Spalten vorhanden",
                      n=_n(n), v=rep.get('n_required', len(recipe['features'])))
@@ -2446,8 +2979,10 @@ def assess_assignment(recipe: dict, res: pd.DataFrame, rep: dict, cmp: dict | No
     if n_out:
         share = n_out / n
         add(_level(share, 0.01, 0.05),
-            tx("{n} Zeilen ({pct}) mit Werten außerhalb des Trainingsbereichs – solche Zeilen liegen oft weit weg "
-               "von allen Clustern.",
+            tx(N_("{n} Zeilen ({pct}) mit Werten außerhalb des Trainingsbereichs – solche Zeilen sind oft auffällig.")
+               if anomaly else
+               N_("{n} Zeilen ({pct}) mit Werten außerhalb des Trainingsbereichs – solche Zeilen liegen oft weit weg "
+                  "von allen Clustern."),
                n=_n(n_out), pct=_pct(share)),
             [tx("{c}: {n} Zeile", c=md_escape(c), n=_n(k)) if k == 1 else tx("{c}: {n} Zeilen", c=md_escape(c), n=_n(k))
              for c, k in rep["out_of_range"].items()])
@@ -2456,7 +2991,17 @@ def assess_assignment(recipe: dict, res: pd.DataFrame, rep: dict, cmp: dict | No
         add(_level(k / n, 0.01, 0.05), tx("{n} Werte in Zahlenspalten waren keine Zahl und wurden wie Lücken "
                                           "behandelt.",
                                           n=_n(k)), [f"{md_escape(c)}: {v}" for c, v in rep["invalid_numeric"].items()])
-    level = max((q["level"] for q in quality), key=_LEVEL_RANK.get)
+    return quality, max((q["level"] for q in quality), key=_LEVEL_RANK.get)
+
+
+def assess_assignment(recipe: dict, res: pd.DataFrame, rep: dict, cmp: dict | None = None) -> dict:
+    """Fazit zu Schritt 10.
+
+    Rückgabe: {"level": Gesamtstufe der Datenqualität,
+               "quality": [{"level", "text", "details": [Text]}], "meaning": [Text], "advice": [Text]}"""
+    n = len(res)
+    meaning, advice = [], []
+    quality, level = _data_quality(recipe, n, rep)
 
     # --- Was sagt die Zuordnung? ----------------------------------------------------------------------
     lab = np.asarray(rep.get("labels", res[RESULT_CLUSTER].to_numpy()), dtype=int)
@@ -2509,6 +3054,65 @@ def assess_assignment(recipe: dict, res: pd.DataFrame, rep: dict, cmp: dict | No
         if gm.get("accuracy") is not None and cmp["accuracy"] < gm["accuracy"] - 0.05:
             advice.append(tx("Die Cluster passen hier schlechter zur bekannten Einteilung als im Training – die neuen "
                              "Daten unterscheiden sich vermutlich."))
+    if level != LEVEL_OK:
+        advice.append(tx("Datenqualität verbessern: Lücken, unbekannte Kategorien und Ausreißer in der Quelle "
+                         "prüfen – betroffene Zeilen stehen in der Spalte 'Hinweis'."))
+    return {"level": level, "quality": quality, "meaning": meaning, "advice": advice}
+
+
+def assess_scoring(recipe: dict, res: pd.DataFrame, rep: dict, cmp: dict | None = None, top: int = 5) -> dict:
+    """Fazit zu Schritt 10 für die Anomalie-Modelle: Datenqualität, Anteil auffälliger Zeilen im Vergleich zum
+    Training, die auffälligsten Zeilen und – wenn die neuen Daten die bekannte Einteilung enthalten – der Vergleich.
+
+    Rückgabe wie assess_assignment: {"level", "quality", "meaning", "advice"}."""
+    n = len(res)
+    meaning, advice = [], []
+    quality, level = _data_quality(recipe, n, rep, anomaly=True)
+    key = recipe_model(recipe)
+    ti = recipe.get("train_info") or {}
+    flag = np.asarray(rep.get("flag", res[RESULT_ANOMALY].to_numpy()), dtype=bool)
+    score = np.asarray(rep.get("score", res[RESULT_SCORE].to_numpy()), dtype="float64")
+    k, share, train_share = int(flag.sum()), float(flag.mean()) if n else 0.0, ti.get("share")
+    txt = tx("**{k} von {n} Zeilen auffällig ({pct})**", k=_n(k), n=_n(n), pct=share_text(share))
+    if train_share is not None:
+        txt += tx(" – im Training {pct}", pct=share_text(train_share))
+    meaning.append(txt + tx("; Schwelle aus dem Training: Score über {thr}.",
+                            thr=score_text(ti.get("threshold", 1.0 if key == MODEL_DBSCAN else float("nan")))))
+    if k == 0:
+        meaning.append(tx("Keine Zeile liegt über der Schwelle – die neuen Daten sehen aus wie die normalen "
+                          "Trainingsdaten."))
+    if train_share is not None and n >= 20 and share > max(2 * train_share, train_share + 0.02):
+        meaning.append(tx("Deutlich mehr auffällige Zeilen als im Training – die neuen Daten unterscheiden sich "
+                          "(anderer Zeitraum, andere Marktphase, andere Quelle) oder es gab echte Ereignisse."))
+        advice.append(tx("Bei Zeitreihen: Häufen sich die Anomalien in einem Zeitraum, ist das eher ein neues Regime als "
+                         "lauter Einzelfälle – dann mit neueren Daten neu trainieren (Schritt 4–6)."))
+    if k:
+        order = np.argsort(-score, kind="stable")[:top]
+        names = rep.get("names")
+        label = (lambda i: md_escape(names[i])) if names is not None else (lambda i: tx("Zeile {i}", i=int(i) + 1))
+        meaning.append(tx("Am auffälligsten: ") + " · ".join(f"{label(i)} ({score_text(score[i])})" for i in order)
+                       + ".")
+    labels = rep.get("labels")
+    if key == MODEL_DBSCAN and labels is not None:
+        labels = np.asarray(labels, dtype=int)
+        parts = [tx("Cluster {j}: {pct}", j=j, pct=share_text(float(np.mean(labels == j))))
+                 for j in sorted(set(labels.tolist()) - {-1})]
+        parts.append(tx("Rauschen: {pct}", pct=share_text(float(np.mean(labels == -1)))))
+        meaning.append(tx("Verteilung (DBSCAN): ") + " · ".join(parts) + ".")
+    if cmp is not None:
+        g = md_escape(recipe.get("group_col"))
+        if cmp.get("binary"):
+            pos = md_escape(cmp["positive"])
+            meaning.append(tx("Vergleich mit '{g}' ({n} Zeilen): Von den auffälligen Zeilen gehören {prec} zu '{pos}' "
+                              "(Anteil insgesamt {base}); erkannt werden {rec} aller '{pos}'-Zeilen. ROC-AUC des Scores: "
+                              "{auc}.", g=g, n=_n(cmp["n"]), pos=pos,
+                              prec="–" if np.isnan(cmp["precision"]) else share_text(cmp["precision"]),
+                              base=share_text(cmp["base_rate"]), rec=share_text(cmp["recall"]),
+                              auc=f"{cmp['roc_auc']:.3f}"))
+        else:
+            parts = [f"{md_escape(r['Gruppe'])}: {share_text(r['Anteil auffällig'])}"
+                     for r in cmp["table"].to_dict("records")]
+            meaning.append(tx("Anteil auffälliger Zeilen je '{g}': ", g=g) + " · ".join(parts) + ".")
     if level != LEVEL_OK:
         advice.append(tx("Datenqualität verbessern: Lücken, unbekannte Kategorien und Ausreißer in der Quelle "
                          "prüfen – betroffene Zeilen stehen in der Spalte 'Hinweis'."))

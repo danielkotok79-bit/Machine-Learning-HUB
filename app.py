@@ -303,20 +303,28 @@ APPS = {
         "dir": "Clustering",
         "port": 8503,
         "icon": "🔵",
-        "name": {"en": "Clustering (K-Means)", "pl": "Klastrowanie (K-Means)", "de": "Clustering (K-Means)"},
+        "name": {"en": "Clustering & anomaly detection", "pl": "Klastrowanie i wykrywanie anomalii",
+                 "de": "Clustering & Anomalieerkennung"},
         "desc": {
-            "en": "Tabular data: preparation, visualisation and grouping with K-Means (unsupervised learning). "
-                  "Cluster profiles, comparison with a known grouping, assigning new data. Languages: EN / PL / DE.",
-            "pl": "Dane tabelaryczne: przygotowanie, wizualizacja i podział na grupy za pomocą K-Means (uczenie "
-                  "nienadzorowane). Profile klastrów, porównanie ze znanym podziałem, przypisywanie nowych danych. "
-                  "Języki: EN / PL / DE.",
-            "de": "Tabellarische Daten: Aufbereitung, Visualisierung und Gruppierung mit K-Means (unüberwachtes "
-                  "Lernen). Cluster-Profile, Vergleich mit einer bekannten Einteilung, Zuordnung neuer Daten. "
-                  "Sprachen: EN / PL / DE.",
+            "en": "Tabular data: preparation, visualisation, grouping with K-Means and anomaly detection with "
+                  "Isolation Forest, LOF and DBSCAN (unsupervised learning). Cluster profiles, the most unusual rows, "
+                  "comparison with a known grouping, assigning or scoring new data. Includes a Bybit script that "
+                  "builds crypto-market features. Languages: EN / PL / DE.",
+            "pl": "Dane tabelaryczne: przygotowanie, wizualizacja, podział na grupy za pomocą K-Means i wykrywanie "
+                  "anomalii (Isolation Forest, LOF, DBSCAN) – uczenie nienadzorowane. Profile klastrów, najbardziej "
+                  "nietypowe wiersze, porównanie ze znanym podziałem, przypisywanie lub ocena nowych danych. Ze "
+                  "skryptem Bybit, który buduje cechy rynku krypto. Języki: EN / PL / DE.",
+            "de": "Tabellarische Daten: Aufbereitung, Visualisierung, Gruppierung mit K-Means und Anomalieerkennung "
+                  "mit Isolation Forest, LOF und DBSCAN (unüberwachtes Lernen). Cluster-Profile, die auffälligsten "
+                  "Zeilen, Vergleich mit einer bekannten Einteilung, Zuordnung bzw. Bewertung neuer Daten. Mit einem "
+                  "Bybit-Skript, das Kennzahlen des Kryptomarkts erzeugt. Sprachen: EN / PL / DE.",
         },
-        "models": "K-Means",
+        "models": "K-Means · Isolation Forest · LOF · DBSCAN",
         "keywords": ["klastrowanie", "clustering", "k-means", "kmeans", "nienadzorowane", "unsupervised",
-                     "unüberwacht", "grupy", "groups", "gruppen", "klastry", "cluster"],
+                     "unüberwacht", "grupy", "groups", "gruppen", "klastry", "cluster", "anomalie", "anomalia",
+                     "anomaly", "anomalies", "anomalien", "isolation forest", "lof", "local outlier factor", "dbscan",
+                     "outlier", "outliers", "ausreißer", "odstające", "wykrywanie anomalii", "bybit", "krypto",
+                     "crypto", "trading"],
         "packages": SKLEARN_STACK,
     },
     "nlp": {

@@ -16,9 +16,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, DBSCAN
+from sklearn.ensemble import IsolationForest
+from sklearn.neighbors import LocalOutlierFactor, NearestNeighbors
 from sklearn.decomposition import PCA
-from sklearn.metrics import silhouette_score, classification_report, confusion_matrix"""
+from sklearn.metrics import silhouette_score, classification_report, confusion_matrix
+from sklearn.metrics import roc_auc_score, average_precision_score"""
 
 # Hilfsfunktion für "Zahl extrahieren" – dieselbe Logik wie pipeline.parse_numbers()
 TO_NUMBER = r'''def to_number(s):
@@ -48,6 +51,23 @@ _TO_NUMBER_DOC = N_("Erste Zahl aus Text: ' 36 months' → 36, '13,5 %' → 13.5
 def _to_number_code() -> str:
     """TO_NUMBER mit Docstring in der gewählten Sprache."""
     return TO_NUMBER.replace(_TO_NUMBER_DOC, tx(_TO_NUMBER_DOC))
+
+
+# Hilfsfunktion für den Knick einer sortierten Kurve (Schritt 7 der Anomalie-Modelle) – wie pipeline.knee_index()
+KNEE = '''def knick(y):
+    """Knick einer sortierten Kurve: größter Abstand zur Geraden vom ersten zum letzten Punkt (Achsen auf 0 … 1)."""
+    y = np.asarray(y, dtype=float)
+    if len(y) < 5 or not np.isfinite(y).all() or y[-1] == y[0]:
+        return None
+    gap = np.abs((y - y[0]) / (y[-1] - y[0]) - np.linspace(0.0, 1.0, len(y)))
+    i = int(np.argmax(gap))
+    return i if gap[i] >= 0.1 else None'''
+_KNEE_DOC = N_("Knick einer sortierten Kurve: größter Abstand zur Geraden vom ersten zum letzten Punkt (Achsen auf 0 … 1).")
+
+
+def _knee_code() -> str:
+    """KNEE mit Docstring in der gewählten Sprache."""
+    return KNEE.replace(_KNEE_DOC, tx(_KNEE_DOC))
 
 
 def imports_code() -> str:
@@ -360,16 +380,18 @@ def step4_code(r: dict) -> str:
 EXCEL_NOTE = {"de": N_("für deutsches Excel"), "pl": N_("für polnisches Excel"),
               "en": N_("für Excel in Großbritannien, USA, Australien …")}
 EXPORT_FILES = {"step2": N_("daten_aufbereitet"), "ml": N_("clustering_daten"), "ml_scaled": N_("clustering_daten_skaliert"),
-                "clusters": N_("daten_mit_clustern")}
+                "clusters": N_("daten_mit_clustern"), "anomalies": N_("daten_mit_anomalien")}
 
 
 def export_code(what: str, recipe: dict | None = None, excel: str | None = None, names: list | None = None,
-                columns: dict | None = None, data_columns: list | None = None) -> str:
-    """what = 'step2' (Daten nach Schritt 2), 'ml' / 'ml_scaled' (nach Schritt 4, so sieht K-Means die Daten) oder
-    'clusters' (Daten nach Schritt 2 + Cluster). excel = 'de', 'pl' oder 'en': CSV wie Excel in dieser Sprache –
-    wie in der App mit entschärften Formeln (=, +, -, @ am Anfang eines Textes bekommen ein ').
-    columns = Namen der neuen Spalten (Cluster, Cluster-Name, Abstand) in der gewählten Sprache;
-    data_columns = Spalten der Daten nach Schritt 2 (ein schon vorhandener Name bekommt _2 – wie in der App)."""
+                columns: dict | None = None, data_columns: list | None = None, model: str = pl.MODEL_KMEANS) -> str:
+    """what = 'step2' (Daten nach Schritt 2), 'ml' / 'ml_scaled' (nach Schritt 4, so sieht das Modell die Daten),
+    'clusters' (Daten nach Schritt 2 + Cluster) oder 'anomalies' (Daten nach Schritt 2 + Anomalie und Score, bei
+    DBSCAN auch der Cluster). excel = 'de', 'pl' oder 'en': CSV wie Excel in dieser Sprache – wie in der App mit
+    entschärften Formeln (=, +, -, @ am Anfang eines Textes bekommen ein ').
+    columns = Namen der neuen Spalten (Cluster, Cluster-Name, Abstand, Anomalie, Anomalie-Score) in der gewählten
+    Sprache; data_columns = Spalten der Daten nach Schritt 2 (ein schon vorhandener Name bekommt _2 – wie in der App);
+    model = trainiertes Modell (kmeans, iforest, lof, dbscan)."""
     kw = note = ""  # Kommentar erst nach der schließenden Klammer (sonst wäre die Klammer auskommentiert)
     if excel:
         sep, dec = pl.EXCEL_CSV[excel]
@@ -394,6 +416,21 @@ def export_code(what: str, recipe: dict | None = None, excel: str | None = None,
         if r.get("group_col"):
             col = pl.free_name(taken, r["group_col"])
             L.append(f"out[{col!r}] = {v}[{r['group_col']!r}].values   # " + tx("bekannte Einteilung (nicht im Modell)"))
+    elif what == "anomalies":
+        columns = {pl.RESULT_CLUSTER: pl.RESULT_CLUSTER, pl.RESULT_ANOMALY: pl.RESULT_ANOMALY,
+                   pl.RESULT_SCORE: pl.RESULT_SCORE, **(columns or {})}
+        taken = [str(c) for c in (data_columns or [])]
+        L = ["out = df.loc[data.index].copy()   # " + tx("Zeilen, die ins Clustering gingen")
+             if rows_var(r) == "data" else "out = df.copy()"]
+        if model == pl.MODEL_DBSCAN:
+            col = pl.free_name(taken, columns[pl.RESULT_CLUSTER])
+            taken.append(col)
+            L.append(f"out[{col!r}] = labels   # " + tx("Cluster, -1 = Rauschen"))
+        col = pl.free_name(taken, columns[pl.RESULT_ANOMALY])
+        taken.append(col)
+        L.append(f"out[{col!r}] = anomaly.astype(int)   # " + tx("1 = auffällig"))
+        col = pl.free_name(taken, columns[pl.RESULT_SCORE])
+        L.append(f"out[{col!r}] = np.round(score, 4)")
     else:
         columns = {pl.RESULT_CLUSTER: pl.RESULT_CLUSTER, pl.RESULT_NAME: pl.RESULT_NAME,
                    pl.RESULT_DIST: pl.RESULT_DIST, **(columns or {})}
@@ -444,8 +481,56 @@ def _silhouette_call(x: str, labels: str, n: int, seed: int) -> str:
     return f"silhouette_score({x}, {labels})"
 
 
+def _param(v) -> str:
+    """Wert eines Parameters im erzeugten Code: Zahlen exakt (wie _float), Texte in Anführungszeichen."""
+    if isinstance(v, bool):
+        return str(v)
+    if isinstance(v, (int, float)):
+        return _float(v)
+    return repr(v)
+
+
+def anomaly_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
+    """IsolationForest(…), LocalOutlierFactor(…) oder DBSCAN(…) – genau die Parameter der App (pipeline.anomaly_params)."""
+    args = ", ".join(f"{k}={_param(v)}" for k, v in pl.anomaly_params(cfg, n_rows).items())
+    return f"{pl.MODEL_CLASSES[cfg.model].__name__}({args})"
+
+
+def anomaly_model_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
+    """Code für Schritt 6 mit einem Anomalie-Modell: trainieren, Score und Anomalie (ja/nein) je Zeile."""
+    v = pl.MODEL_VARS[cfg.model]
+    L = [f"{v} = {anomaly_code(cfg, n_rows)}",
+         f"{v}.fit(X)   # " + tx("Unsupervised: kein y – das Modell lernt nur, wie die Zeilen normalerweise aussehen")]
+    if cfg.model == pl.MODEL_IFOREST:
+        L += [f"score = -{v}.score_samples(X)   # "
+              + tx("Anomalie-Score: höher = auffälliger (um 0.5 normal, nahe 1 sehr auffällig)"),
+              f"anomaly = {v}.predict(X) == -1   # " + tx("True = auffällig (Score über der Schwelle)"),
+              f"threshold = -{v}.offset_   # " + tx("Schwelle auf der Skala des Scores")]
+    elif cfg.model == pl.MODEL_LOF:
+        L += [f"score = -{v}.negative_outlier_factor_   # "
+              + tx("LOF der Trainingszeilen: ≈ 1 normal, deutlich über 1 auffällig"),
+              f"anomaly = {v}.negative_outlier_factor_ < {v}.offset_   # " + tx("True = auffällig"),
+              f"threshold = -{v}.offset_   # " + tx("Schwelle auf der Skala des Scores")]
+    else:
+        L += [f"labels = {v}.labels_   # " + tx("Cluster je Zeile, -1 = Rauschen (Anomalie)"),
+              "anomaly = labels == -1",
+              f"if len({v}.components_):   # " + tx("Score: Abstand zum nächsten Kernpunkt in Vielfachen von eps"),
+              f"    nearest_core = NearestNeighbors(n_neighbors=1, metric={v}.metric).fit({v}.components_)",
+              f"    score = nearest_core.kneighbors(X)[0][:, 0] / {v}.eps   # " + tx("über 1 = Rauschen"),
+              "else:",
+              "    score = np.full(len(X), np.inf)   # " + tx("kein Kernpunkt – eps ist zu klein"),
+              "threshold = 1.0",
+              f"print({tx('Cluster:')!r}, labels.max() + 1)"]
+    L += [f"print({tx('Schwelle:')!r}, threshold)",
+          f"print({tx('Anomalien:')!r}, anomaly.sum(), f'({{anomaly.mean():.2%}})')"]
+    return "\n".join(L)
+
+
 def model_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
-    """Code für Schritt 6: K-Means auf allen Zeilen trainieren (wie im Kurs: kmeans.fit(...))."""
+    """Code für Schritt 6: K-Means auf allen Zeilen trainieren (wie im Kurs: kmeans.fit(...)) – oder ein
+    Anomalie-Modell (Isolation Forest, LOF, DBSCAN)."""
+    if pl.is_anomaly(cfg.model):
+        return anomaly_model_code(cfg, n_rows)
     return "\n".join([
         f"kmeans = {kmeans_code(cfg)}",
         "kmeans.fit(X)   # " + tx("Unsupervised: K-Means bekommt keine Antwort (kein y)"),
@@ -456,8 +541,76 @@ def model_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
     ])
 
 
+def anomaly_curve_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
+    """Code für Schritt 7 der Anomalie-Modelle – wie pipeline.anomaly_curve(): Schwelle je Anteil auffälliger Zeilen
+    und Knick der Score-Kurve (IF, LOF) bzw. k-Distanz, ihr Knick und der Rauschanteil je eps (DBSCAN)."""
+    L = [_knee_code(), ""]
+    if cfg.model in (pl.MODEL_IFOREST, pl.MODEL_LOF):
+        L += [f"levels = {pl.CONTAM_LEVELS!r}   # " + tx("Anteil auffälliger Zeilen (contamination)"),
+              "thresholds = np.quantile(score, [1 - c for c in levels])   # " + tx("Schwelle je Anteil"),
+              "for c, t in zip(levels, thresholds):",
+              "    print(f'{c:.2%}: Score > {t:.4g} → {(score > t).sum()}')",
+              "",
+              f"top = max(int(np.ceil({pl.KNEE_TOP} * len(score))), min(len(score), 20))",
+              "desc = np.sort(score)[::-1][:top]   # " + tx("die auffälligsten 20 % der Zeilen, absteigend sortiert"),
+              "knee = knick(desc)",
+              "if knee is not None:",
+              f"    print({tx('Knick der Score-Kurve – contamination etwa:')!r}, (knee + 1) / len(score))",
+              "",
+              "fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))",
+              "ax1.hist(score, bins=60)",
+              "ax1.axvline(threshold, color='red')",
+              f"ax1.set(title={tx('Anomalie-Score')!r}, xlabel='Score', ylabel={tx('Anzahl')!r})",
+              "ax2.plot(np.arange(1, len(desc) + 1), desc, marker='.')",
+              f"ax2.set(title={tx('Score-Kurve (absteigend)')!r}, xlabel={tx('Rang')!r}, ylabel='Score')",
+              "plt.show()"]
+        return "\n".join(L)
+    params = pl.anomaly_params(cfg, n_rows)
+    metric = f", metric={params['metric']!r}" if "metric" in params else ""
+    k = max(1, min(int(cfg.min_samples), n_rows))
+    if n_rows > pl.CURVE_ROWS:
+        L += [f"rows = np.random.default_rng({int(cfg.seed)}).choice(len(X), {pl.CURVE_ROWS}, replace=False)   # "
+              + tx("Stichprobe – k-Distanz nur für diese Zeilen (Nachbarn aus allen Zeilen)"),
+              "X_query = X[rows]"]
+    else:
+        L.append("X_query = X")
+    L += [f"neighbors = NearestNeighbors(n_neighbors={k}{metric}).fit(X)   # "
+          + tx("min_samples Nachbarn – die Zeile selbst zählt mit (wie bei DBSCAN)"),
+          "kdist = np.sort(neighbors.kneighbors(X_query)[0][:, -1])   # "
+          + tx("k-Distanz: Kernpunkt, wenn sie höchstens eps ist"),
+          "knee = knick(kdist)",
+          "eps_knee = float(f'{kdist[knee]:.4g}') if knee is not None else None",
+          f"print({tx('Knick der k-Distanz – eps etwa:')!r}, eps_knee)",
+          f"print({tx('Anteil Kernpunkte bei eps =')!r}, {_float(cfg.eps)}, np.mean(kdist <= {_float(cfg.eps)}))"]
+    grid = cfg.curve and n_rows <= pl.CURVE_ROWS
+    if grid:
+        L += ["",
+              f"eps_values = sorted({{float(f'{{v:.4g}}') for v in np.quantile(kdist, {pl.EPS_LEVELS!r}) if v > 0}}"
+              f" | {{{_float(cfg.eps)}}})",
+              "clusters, noise = [], []",
+              "for e in eps_values:",
+              f"    lab = DBSCAN(eps=e, min_samples={int(cfg.min_samples)}{metric}).fit(X).labels_",
+              "    clusters.append(lab.max() + 1)",
+              "    noise.append(np.mean(lab == -1))   # " + tx("Anteil Rauschen"),
+              "print(pd.DataFrame({'eps': eps_values, 'cluster': clusters, 'noise': noise}))"]
+    L += ["",
+          f"fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))" if grid else "fig, ax1 = plt.subplots(figsize=(7, 4))",
+          "ax1.plot(kdist)",
+          f"ax1.axhline({_float(cfg.eps)}, color='red')   # eps",
+          f"ax1.set(title={tx('k-Distanz (aufsteigend sortiert)')!r}, xlabel={tx('Zeilen')!r}, "
+          f"ylabel={tx('Abstand zum min_samples-ten Nachbarn')!r})"]
+    if grid:
+        L += ["ax2.plot(eps_values, noise, marker='o')",
+              f"ax2.set(title={tx('Rauschanteil je eps')!r}, xlabel='eps', ylabel={tx('Anteil Rauschen')!r})"]
+    L.append("plt.show()")
+    return "\n".join(L)
+
+
 def curve_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
-    """Code für Schritt 7: Elbow-Methode (Inertia je K) und Silhouette je K."""
+    """Code für Schritt 7: Elbow-Methode (Inertia je K) und Silhouette je K – bei den Anomalie-Modellen Schwelle
+    bzw. eps (anomaly_curve_code)."""
+    if pl.is_anomaly(cfg.model):
+        return anomaly_curve_code(cfg, n_rows)
     if not cfg.curve:
         return "# " + tx("keine Elbow-/Silhouette-Kurve (in Schritt 6 ausgeschaltet)")
     L = []
@@ -488,9 +641,55 @@ def curve_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
 # ---------------------------------------------------------------------------
 # 8) Cluster-Auswertung
 # ---------------------------------------------------------------------------
+def anomaly_eval_code(recipe: dict, cfg: pl.ClusterConfig) -> str:
+    """Code für Schritt 8 der Anomalie-Modelle: Anzahl, Profile normal gegen auffällig, die auffälligsten Zeilen mit
+    den stärksten Abweichungen, PCA-Bild und – falls vorhanden – der Vergleich mit der bekannten Einteilung."""
+    L = ["print(pd.Series(anomaly).value_counts())   # " + tx("False = normal, True = auffällig"), "",
+         "# " + tx("Profile: Mittelwerte normal gegen auffällig in Originaleinheiten (Dummies: Anteil)"),
+         "profile = X_df.groupby(anomaly).mean().T",
+         f"profile.insert(0, {tx('Alle')!r}, X_df.mean())",
+         "print(profile.round(2))", "",
+         "# " + tx("Die auffälligsten Zeilen und ihre stärksten Abweichungen vom Durchschnitt (z)"),
+         "z = (X - X.mean(axis=0)) / np.where(X.std(axis=0) > 0, X.std(axis=0), 1)",
+         "top = np.argsort(-score, kind='stable')[:10]",
+         "for i in top:",
+         "    biggest = np.argsort(-np.abs(z[i]), kind='stable')[:3]",
+         "    print(i, round(score[i], 4), [(feature_columns[j], round(z[i, j], 1)) for j in biggest])", "",
+         "# " + tx("PCA auf 2 Dimensionen – nur zur Darstellung (das Modell nutzt alle Features)"),
+         f"pca = PCA(n_components={min(2, len(recipe['feature_columns']))}, random_state={int(cfg.seed)})",
+         "xy = pca.fit_transform(X)"]
+    if len(recipe["feature_columns"]) >= 2:
+        L += ["plt.figure(figsize=(9, 6))",
+              "plt.scatter(xy[~anomaly, 0], xy[~anomaly, 1], s=8, c='lightgray')",
+              "plt.scatter(xy[anomaly, 0], xy[anomaly, 1], s=20, c='red')   # " + tx("auffällig"),
+              "plt.xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.0%})')",
+              "plt.ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.0%})')",
+              "plt.show()"]
+    g = recipe.get("group_col")
+    if g:
+        values = recipe.get("group_values") or []
+        L += ["", "# " + _cm(tx("Vergleich mit der bekannten Einteilung '{g}' – das Modell hat sie nie gesehen", g=g)),
+              "known = groups.notna().values",
+              "g, a, s = groups.values[known], anomaly[known], score[known]",
+              "print(pd.crosstab(a, g))   # " + tx("auffällig × Gruppe")]
+        if len(values) == 2:
+            if cfg.model == pl.MODEL_DBSCAN:
+                L.append("s = np.where(np.isposinf(s), s[np.isfinite(s)].max() + 1 if np.isfinite(s).any() else 1.0, s)"
+                         "   # " + tx("∞ (kein Kernpunkt in der Nähe) = höchster Score"))
+            L += ["counts = pd.Series(g).value_counts()",
+                  f"positive = min({values!r}, key=lambda v: counts.get(v, 0))   # "
+                  + tx("die seltenere Gruppe – Anomalien sind selten"),
+                  "y = g == positive",
+                  "print('Precision:', y[a].mean() if a.any() else np.nan, '· Recall:', a[y].mean())",
+                  "print('ROC-AUC:', roc_auc_score(y, s), '· Average Precision:', average_precision_score(y, s))"]
+    return "\n".join(L)
+
+
 def eval_code(recipe: dict, cfg: pl.ClusterConfig) -> str:
     """Code für Schritt 8: Größen, Profile, PCA-Darstellung und – falls vorhanden – Vergleich mit der bekannten
-    Einteilung wie im Kurs (confusion_matrix, classification_report)."""
+    Einteilung wie im Kurs (confusion_matrix, classification_report). Anomalie-Modelle: anomaly_eval_code."""
+    if pl.is_anomaly(cfg.model):
+        return anomaly_eval_code(recipe, cfg)
     L = ["print(pd.Series(labels).value_counts().sort_index())   # " + tx("Größe der Cluster"), "",
          "# " + tx("Profile: Mittelwert je Cluster in Originaleinheiten (Dummies: Anteil)"),
          "profile = X_df.groupby(labels).mean().T",
@@ -532,16 +731,17 @@ def eval_code(recipe: dict, cfg: pl.ClusterConfig) -> str:
 # ---------------------------------------------------------------------------
 # 9) Speichern, 10) Neue Daten
 # ---------------------------------------------------------------------------
-def save_code(folder: str, fmt: str = ".skops") -> str:
+def save_code(folder: str, fmt: str = ".skops", var: str = "kmeans") -> str:
+    """Code für Schritt 9: Modell speichern und laden (var = Variable des Modells im erzeugten Code)."""
     path = f"{folder}/model{fmt}"
     if fmt == ".joblib":
         lines = ["import os", "import joblib", f"os.makedirs({folder!r}, exist_ok=True)",
-                 f"joblib.dump(kmeans, {path!r})   # " + tx("Standard von scikit-learn (pickle)"),
+                 f"joblib.dump({var}, {path!r})   # " + tx("Standard von scikit-learn (pickle)"),
                  f"later_model = joblib.load({path!r})   # "
                  + tx("nur vertrauenswürdige Dateien laden – pickle kann beim Laden Code ausführen")]
     else:
         lines = ["import os", "import skops.io as sio", f"os.makedirs({folder!r}, exist_ok=True)",
-                 f"sio.dump(kmeans, {path!r})   # " + tx("sicheres Format: beim Laden wird kein Code ausgeführt"),
+                 f"sio.dump({var}, {path!r})   # " + tx("sicheres Format: beim Laden wird kein Code ausgeführt"),
                  f"unknown = sio.get_untrusted_types(file={path!r})",
                  "trusted = [t for t in unknown if t.startswith('sklearn.')]   # "
                  + tx("nur scikit-learn-Typen vertrauen – alles andere lehnt sio.load ab"),
@@ -552,7 +752,23 @@ def save_code(folder: str, fmt: str = ".skops") -> str:
                           folder=folder)))
 
 
-def predict_code(folder: str) -> str:
+def predict_code(folder: str, model: str = pl.MODEL_KMEANS) -> str:
+    """Code für Schritt 10 ohne App: K-Means ordnet zu (assign_new), die Anomalie-Modelle bewerten (score_new)."""
+    if pl.is_anomaly(model):
+        v = pl.MODEL_VARS[model]
+        new_score = {pl.MODEL_IFOREST: f"-{v}.score_samples(X_new)", pl.MODEL_LOF: f"-{v}.score_samples(X_new)",
+                     pl.MODEL_DBSCAN: f"NearestNeighbors(n_neighbors=1, metric={v}.metric).fit({v}.components_)"
+                                      f".kneighbors(X_new)[0][:, 0] / {v}.eps"}[model]
+        return ("import pipeline as pl\n\n"
+                f"{v}, recipe = pl.load_bundle({folder!r})\n"
+                f"df_new, _ = pl.read_csv({tx('neue_daten.csv')!r})\n"
+                f"result, report, comparison = pl.score_new({v}, recipe, df_new)   # "
+                + tx("Anomalie (1 = auffällig), Anomalie-Score, Hinweis") + "\n"
+                f"result.to_csv({tx('anomalien.csv')!r}, index=False)\n\n"
+                "# " + tx("Ohne pipeline.py: neue Daten genauso aufbereiten wie oben (Schritt 2, fill, to_X) und dann")
+                + "\n# " + tx("NUR transformieren – nichts neu fitten:") + "\n"
+                "# X_new = scaler.transform(to_X(df_new_filled).values)\n"
+                f"# score_new = {new_score}")
     return ("import pipeline as pl\n\n"
             f"kmeans, recipe = pl.load_bundle({folder!r})\n"
             f"df_new, _ = pl.read_csv({tx('neue_daten.csv')!r})\n"
@@ -578,10 +794,11 @@ def full_script(source: dict, actions: list[dict], numeric_cols: set, recipe: di
                   strip_columns=bool(source.get("strip_columns"))), "",
         "# " + tx("2) Datenaufbereitung 1"), step2_code(actions, numeric_cols, new_columns), "",
         "# " + tx("4) Datenaufbereitung 2"), step4_code(recipe), "",
-        "# " + tx("6) Modell & Training") + " – K-Means", model_code(cfg, n), "",
-        "# " + tx("7) Wahl von K"), curve_code(cfg, n), "",
-        "# " + tx("8) Cluster-Auswertung"), eval_code(recipe, cfg), "",
-        "# " + tx("9) Speichern & Laden"), save_code(folder, fmt),
+        "# " + tx("6) Modell & Training") + " – " + pl.model_name(cfg.model), model_code(cfg, n), "",
+        "# " + (tx("7) Schwelle bzw. eps") if pl.is_anomaly(cfg.model) else tx("7) Wahl von K")), curve_code(cfg, n), "",
+        "# " + (tx("8) Auswertung der Anomalien") if pl.is_anomaly(cfg.model) else tx("8) Cluster-Auswertung")),
+        eval_code(recipe, cfg), "",
+        "# " + tx("9) Speichern & Laden"), save_code(folder, fmt, pl.MODEL_VARS.get(cfg.model, "kmeans")),
     ]
     return "\n".join(parts) + "\n"
 

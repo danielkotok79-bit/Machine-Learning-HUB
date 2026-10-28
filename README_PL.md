@@ -19,7 +19,7 @@ nowych danych. Na każdym kroku aplikacje pokazują też odpowiedni kod w Python
 | Aplikacja | Rodzaj uczenia | Modele | Przykładowe dane |
 |---|---|---|---|
 | 📊 [**Uczenie nadzorowane**](apps/Supervised) | nadzorowane – klasyfikacja i regresja | Gradient Boosting, drzewo decyzyjne + Random Forest, SVM, regresja logistyczna, KNN, regresja liniowa; podział losowy albo czasowy, porównanie z Elo | LendingClub, NBA/tenis |
-| 🔵 [**Klastrowanie**](apps/Clustering) | nienadzorowane | K-Means (metoda łokcia, silhouette, profile klastrów, mapa PCA) | dane uczelni (College) |
+| 🔵 [**Klastrowanie**](apps/Clustering) | nienadzorowane | K-Means (metoda łokcia, silhouette, profile klastrów, mapa PCA) · wykrywanie anomalii: Isolation Forest, LOF, DBSCAN | dane uczelni (College) · dane rynku krypto z Bybit (skrypt w zestawie) |
 | 📝 [**NLP – klasyfikacja tekstu**](apps/NLP) | nadzorowane, tekst | Bag of Words / TF-IDF + Naive Bayes, regresja logistyczna, liniowy SVM | recenzje Yelp, SMS spam |
 | 🧠 [**Deep Learning**](apps/Deeplearning) | nadzorowane – klasyfikacja i regresja | Keras Sequential (Dense) na TensorFlow, EarlyStopping | LendingClub |
 
@@ -36,8 +36,8 @@ Wszystkie cztery aplikacje mają te same dziesięć kroków:
 9. **Zapis i wczytanie modelu** – `.skops` (bezpieczny) albo `.joblib` + `preprocessing.json`, pobranie ZIP, cały pipeline jako skrypt Python
 10. **Predykcja dla nowych danych** – to samo przygotowanie stosowane automatycznie, potem predykcja, wyjaśnienie i wniosek
 
-Klastrowanie i NLP dopasowują kroki 4–10 do swojego zadania (np. wybór K i profile klastrów albo najważniejsze słowa
-dla każdej klasy). Szczegóły są w README każdej aplikacji (DE · EN · PL).
+Klastrowanie i NLP dopasowują kroki 4–10 do swojego zadania (np. wybór K i profile klastrów, próg i najbardziej
+nietypowe wiersze przy anomaliach albo najważniejsze słowa dla każdej klasy). Szczegóły są w README każdej aplikacji (DE · EN · PL).
 
 ![Uczenie nadzorowane – krok 8: ewaluacja modelu](docs/screenshots/supervised-evaluation.png)
 *Uczenie nadzorowane, krok 8: ewaluacja modelu Random Forest na syntetycznych danych podobnych do LendingClub (zob. [Wypróbuj bez własnych danych](#wypróbuj-bez-własnych-danych)).*
@@ -81,7 +81,7 @@ samymi kolumnami i formatami co oryginalny zbiór, więc wszystko można wyprób
 | Aplikacja | Polecenie (w folderze aplikacji) | Tworzy |
 |---|---|---|
 | Supervised | `python tests/synthetic.py` | `demo_lending_club_synthetisch.csv` (20 000 wierszy) |
-| Clustering | `python tests/synthetic.py` | `demo_college_synthetisch.csv` (777 wierszy) |
+| Clustering | `python tests/synthetic.py` · `python tools/bybit_features.py --top 10 --days 60` | `demo_college_synthetisch.csv` (777 wierszy) · prawdziwe wskaźniki krypto z publicznych danych Bybit (potrzebny internet) |
 | NLP | `python tests/synthetic.py` · `python tests/synthetic.py --sms` | `demo_yelp_synthetisch.csv` (10 000 recenzji) · `demo_sms_synthetisch.txt` |
 | Deep Learning | `python tests/synthetic.py` | `demo_lending_club_synthetisch.csv` (20 000 wierszy) |
 
@@ -104,7 +104,7 @@ Wersja polska i niemiecka trzeciego dokumentu to jeden dwujęzyczny plik (najpie
 
 ## Testy
 
-**956 automatycznych testów** (pytest, w tym testy całego interfejsu przez Streamlit `AppTest`) – uruchamiane
+**1037 automatycznych testów** (pytest, w tym testy całego interfejsu przez Streamlit `AppTest`) – uruchamiane
 osobno dla każdej aplikacji:
 
 ```bash
@@ -116,7 +116,7 @@ pytest -q
 | Aplikacja | Testy |
 |---|---|
 | Supervised | 310 |
-| Clustering | 268 |
+| Clustering | 349 |
 | NLP | 188 |
 | Deep Learning | 190 |
 
@@ -134,7 +134,7 @@ ich poprawienia i testy regresyjne, które je pokrywają.
 ├── docs/screenshots/
 └── apps/
     ├── Supervised/      📊 scikit-learn – sześć modeli uczenia nadzorowanego
-    ├── Clustering/      🔵 K-Means
+    ├── Clustering/      🔵 K-Means · Isolation Forest · LOF · DBSCAN
     ├── NLP/             📝 klasyfikacja tekstu
     └── Deeplearning/    🧠 Keras / TensorFlow
 ```

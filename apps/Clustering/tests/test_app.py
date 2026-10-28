@@ -102,7 +102,7 @@ def test_full_workflow_like_the_course(data):
     go(at, 3)
     assert at.session_state["w_group"] == "Private" and at.session_state["w_name_col"] == "College"
     assert "annahmequote" in at.session_state["w_features"] and "Private" not in at.session_state["w_features"]
-    button(at, "Daten für K-Means vorbereiten").click().run()
+    button(at, "Daten fürs Modell vorbereiten").click().run()
     ok(at, "Schritt 4")
     prep = at.session_state["prep"]
     assert prep.X.shape == (777, 18) and prep.recipe["group_col"] == "Private" and prep.names is not None
@@ -210,11 +210,11 @@ def test_semicolon_csv_overwrite_guard_and_stale_settings(tmp_path, monkeypatch)
     assert at.session_state["w_group"] == "kanal" or at.session_state["w_group"] == "(keine)"
     at.selectbox(key="w_group").set_value("kanal").run()
     assert at.session_state["w_features"] == ["betrag", "dauer", "typ"]
-    button(at, "Daten für K-Means vorbereiten").click().run()
+    button(at, "Daten fürs Modell vorbereiten").click().run()
     ok(at, "Schritt 4")
     at.multiselect(key="w_features").set_value(["betrag", "dauer"]).run()
     assert any("seit dem Vorbereiten geändert" in i.value for i in at.info)
-    button(at, "Daten für K-Means vorbereiten").click().run()
+    button(at, "Daten fürs Modell vorbereiten").click().run()
 
     # unbrauchbarer Wert (z. B. aus einer von Hand bearbeiteten Datei) → Vorschlag statt TypeError
     go(at, 2)
@@ -230,7 +230,7 @@ def test_semicolon_csv_overwrite_guard_and_stale_settings(tmp_path, monkeypatch)
         button(at, "Training starten").click().run()
         ok(at, "Training")
 
-    button(at, "Daten für K-Means vorbereiten").click().run()
+    button(at, "Daten fürs Modell vorbereiten").click().run()
     train()
     go(at, 8)
     at.text_input(key="w_save_name").input("kunden").run()

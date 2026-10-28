@@ -24,6 +24,9 @@ apps/*/exports/
 demo_*_synthetisch.*
 data/
 
+# Raw API answers of apps/Clustering/tools/bybit_features.py --cache
+bybit_cache/
+
 # Saved models
 *.skops
 *.joblib
