@@ -204,6 +204,10 @@ nietypowy (`Anomalia = 1`), gdy jego wskaźnik przekracza **próg**.
 * **Warstwy i aktywacja:** propozycja na podstawie liczby cech (8 → 8,2,8; 11 → 16,3,16; 30 → 32,8,32), głębiej np.
   32,16,4,16,32. `tanh` w małych sieciach zwykle działa lepiej niż `relu`. Jeśli najwęższa warstwa ma co najmniej tyle
   neuronów, ile jest cech, sieć może po prostu przepuścić wiersze – aplikacja ostrzega.
+* **Trening także na małych danych:** batch_size = liczba wierszy/20 (8 … 200), czyli ok. 20 kroków uczenia na epokę –
+  przy domyślnym ustawieniu scikit-learn (200 wierszy na krok) sieć przy kilkuset wierszach robiła tylko jeden–dwa kroki
+  na epokę i prawie nie znajdowała nietypowych kombinacji. Early stopping dopiero od 200 wierszy (inaczej do walidacji
+  zostałoby za mało wierszy); poniżej sieć uczy się na wszystkich wierszach, a krok 6 o tym informuje.
 * **Nie ograniczaj tego, co chcesz monitorować.** *Ogranicz wartości* w kroku 2 obcina właśnie te skrajne wartości,
   które tworzą anomalię – przy wykrywaniu anomalii poprawiaj tylko wartości niemożliwe.
 * **Skalowanie:** LOF i DBSCAN liczą odległości → StandardScaler w kroku 4. Isolation Forest tnie po jednej cesze
@@ -380,7 +384,7 @@ Rozszerzanie:
 
 ```bash
 pip install pytest
-pytest -q                                  # 382 testy, ok. 6 minut
+pytest -q                                  # 385 testów, ok. 6 minut
 python tests/synthetic.py                  # syntetyczne dane College (777 wierszy, nie są to prawdziwe dane)
 ```
 
@@ -389,7 +393,7 @@ python tests/synthetic.py                  # syntetyczne dane College (777 wiers
 | `tests/test_clustering.py` | K-Means jak w kursie (= bezpośrednio scikit-learn), powtarzalność, łokieć i Silhouette (wyraźne grupy są znajdowane, brak propozycji bez struktury, próbki przy dużych danych), ocena (małe/dominujące klastry, brak zbieżności, powtórzone wiersze), profile w jednostkach oryginalnych, siła rozdzielania = wyjaśniona zmienność, PCA, porównanie ze znanymi grupami, wartości odstające i przypisania na granicy w nowych danych |
 | `tests/test_codegen_parity.py` | pokazywany kod Python liczy **dokładnie** to samo co aplikacja: X, klastry, inercja, krzywa łokcia/Silhouette, profile, porównanie, eksport – także w przypadkach granicznych (separatory tysięcy, data jako liczba, inf, wartości grupowe, ogranicz wartości, nowe kolumny) |
 | `tests/test_anomaly.py` | Isolation Forest, LOF, DBSCAN, autoenkoder: wskaźnik ⇔ próg, contamination, novelty, szum = anomalia, za małe eps, krzywe i propozycje dla kroku 7, najbardziej nietypowe wiersze, profil, PCA, zapis/wczytanie (.skops/.joblib), nowe dane, brak pomyłki z K-Means, uszkodzone receptury – a pokazywany kod liczy **dokładnie** to samo (wskaźnik, anomalie, próg, k-odległość, siatka eps, profile, eksport, krok 10); wyeksportowany skrypt działa; wykresy w przypadkach granicznych |
-| `tests/test_autoencoder.py` | autoenkoder: warstwy (propozycja, sprawdzanie), próg = kwantyl błędów rekonstrukcji, contamination 1 % bez podania, znajduje wbudowane oszustwa, wąskie gardło = wyjście enkodera (tanh, relu), mapa 2D, najgorzej odtworzone cechy, zapis/odczyt bez pickle, niekompletne modele, krzywa uczenia, konfiguracja, krok 6 sprawdza warstwy |
+| `tests/test_autoencoder.py` | autoenkoder: warstwy (propozycja, sprawdzanie), próg = kwantyl błędów rekonstrukcji, contamination 1 % bez podania, znajduje wbudowane oszustwa, znajduje nietypowe kombinacje (gdzie Isolation Forest zawodzi), batch_size i early stopping na małych danych (nawet 10 wierszy), wąskie gardło = wyjście enkodera (tanh, relu), mapa 2D, najgorzej odtworzone cechy, zapis/odczyt bez pickle, niekompletne modele, krzywa uczenia, konfiguracja, krok 6 sprawdza warstwy i wyszarza early stopping przy małych danych |
 | `tests/test_bybit_features.py` | skrypt Bybit z symulowanym API (bez sieci): stronicowanie w limitach API, ponawianie/403/cache, bez zaglądania w przyszłość, trwająca świeca pominięta, wskaźniki przeliczone ponownie, przekrój, spot, nieznane symbole, przykładowa konfiguracja pasuje do CSV, wbudowany krach jest najbardziej nietypowym wierszem |
 | `tests/test_pipeline.py` | cały przebieg z danymi podobnymi do LendingClub, zapis/wczytanie (.skops/.joblib, ZIP), nowe dane (nieznane kategorie, wartości odstające, brakujące kolumny), wyeksportowany skrypt działa |
 | `tests/test_new_features.py` | rok + miesiąc, nowe kolumny, *ogranicz wartości*, nowe kolumny dla nowych danych, zapis danych, podsumowanie |

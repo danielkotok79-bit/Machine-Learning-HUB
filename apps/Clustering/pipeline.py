@@ -1571,6 +1571,11 @@ METRICS = ["euclidean", "manhattan"]  # Abstandsmaß für LOF und DBSCAN
 AE_ACTIVATIONS = ["tanh", "relu"]  # Autoencoder: Aktivierung der verborgenen Schichten (tanh: bei wenigen Neuronen meist besser)
 AE_DEFAULT_CONTAMINATION = 0.01  # Autoencoder: keine eingebaute Schwelle – ohne Angabe die auffälligsten 1 %
 AE_MAX_LAYERS, AE_MAX_UNITS = 9, 1024
+# Autoencoder: Zeilen je Lernschritt (batch_size) = Zeilen/20, zwischen 8 und 200 → etwa 20 Lernschritte je Epoche.
+# scikit-learn nimmt sonst min(200, Zeilen): bei 1 000 Zeilen 5 Schritte je Epoche, unter 200 Zeilen nur einen – in 300
+# Epochen lernt das Netz dann kaum etwas (ae_batch_size). Ab 4 000 Zeilen gilt der Standard 200.
+AE_STEPS_PER_EPOCH, AE_BATCH_MIN, AE_BATCH_MAX = 20, 8, 200
+AE_EARLY_MIN_ROWS = 200  # Early Stopping erst ab 200 Zeilen: 10 % zur Validierung = mindestens 20 Zeilen
 INITS = ["k-means++", "random"]
 ALGORITHMS = ["lloyd", "elkan"]
 K_MAX_DEFAULT = 10  # Elbow-/Silhouette-Kurve: K = 1 … 10
@@ -1810,6 +1815,21 @@ def parse_layers(text, p: int | None = None) -> tuple[int, ...]:
     return layers
 
 
+def ae_batch_size(n: int) -> int:
+    """Autoencoder: Zeilen je Lernschritt – Zeilen/20, zwischen 8 und 200, also etwa 20 Lernschritte je Epoche. Mit dem
+    scikit-learn-Standard min(200, Zeilen) bekäme das Netz bei wenigen hundert Zeilen nur einen Schritt je Epoche und
+    fände ungewöhnliche Kombinationen kaum (gemessen: Average Precision 0.1–0.7 statt 0.85–0.9). Ab 4 000 Zeilen = 200."""
+    n = max(int(n), 1)
+    return int(min(AE_BATCH_MAX, n, max(AE_BATCH_MIN, n // AE_STEPS_PER_EPOCH)))
+
+
+def ae_early_stopping(cfg: ClusterConfig, n: int) -> bool:
+    """Early Stopping nur, wenn gewählt und mindestens AE_EARLY_MIN_ROWS Zeilen da sind: Mit weniger wären die 10 %
+    Validierungszeilen zu wenige – das R² darauf schwankt stark und beendet das Training zu früh, bei 10 Zeilen bricht
+    scikit-learn ab ('validation set is too small')."""
+    return bool(cfg.ae_early_stopping) and int(n) >= AE_EARLY_MIN_ROWS
+
+
 def anomaly_params(cfg: ClusterConfig, n: int, p: int | None = None) -> dict:
     """Parameter des Anomalie-Modells – genau diese Werte stehen auch im erzeugten Code (codegen.anomaly_code).
     contamination 0 = 'auto'. Werte über der Zeilenzahl begrenzt scikit-learn selbst (mit Warnung) – hier ausdrücklich.
@@ -1821,7 +1841,9 @@ def anomaly_params(cfg: ClusterConfig, n: int, p: int | None = None) -> dict:
             q["alpha"] = float(cfg.ae_alpha)
         if float(cfg.ae_learning_rate) != 1e-3:
             q["learning_rate_init"] = float(cfg.ae_learning_rate)
-        q.update(max_iter=int(cfg.ae_epochs), early_stopping=bool(cfg.ae_early_stopping), random_state=int(cfg.seed))
+        if ae_batch_size(n) < AE_BATCH_MAX:  # 200 = Standard ('auto' = min(200, Zeilen)) – dann nicht nötig
+            q["batch_size"] = ae_batch_size(n)
+        q.update(max_iter=int(cfg.ae_epochs), early_stopping=ae_early_stopping(cfg, n), random_state=int(cfg.seed))
         return q
     contamination = float(cfg.contamination) if cfg.contamination and cfg.contamination > 0 else "auto"
     metric = cfg.metric if cfg.metric in METRICS else "euclidean"
@@ -2134,6 +2156,8 @@ def train_anomaly(cfg: ClusterConfig, prep: PrepResult, progress=None):
         best = getattr(model, "best_validation_score_", None)
         info.update(layers=[int(v) for v in model.hidden_layer_sizes], code_size=int(min(model.hidden_layer_sizes)),
                     n_iter=int(model.n_iter_), loss=float(model.loss_), epochs=int(cfg.ae_epochs),
+                    batch_size=ae_batch_size(n), early_stopping=bool(model.early_stopping),
+                    early_requested=bool(cfg.ae_early_stopping),
                     best_validation=float(best) if best is not None and np.isfinite(best) else None)
     if progress:
         progress(0.4, tx("{name} fertig – {n} auffällige Zeilen", name=model_name(cfg.model), n=info["n_anomalies"]),
@@ -2244,12 +2268,21 @@ def autoencoder_notes(info: dict) -> list[str]:
     """Schritt 6/7, Autoencoder: Aufbau des Netzes, Training (Epochen, Loss, Validierung) und Warnung, wenn der Engpass
     nicht enger ist als die Zahl der Features – dann kann das Netz die Zeilen einfach durchreichen."""
     layers, b, p = info.get("layers") or [], int(info.get("code_size") or 0), int(info["n_features"])
-    text = tx("**Netz:** {p} Features → Schichten {layers} → {p} Features, Engpass {b} Neuronen · {e} Epochen, Loss "
-              "{loss}.", p=p, layers=" – ".join(str(v) for v in layers), b=b, e=info.get("n_iter", "?"),
-              loss=score_text(info.get("loss", float("nan"))))
-    if info.get("best_validation") is not None:
-        text += tx(" Early Stopping: bestes R² auf den Validierungszeilen {r}.", r=f"{info['best_validation']:.3f}")
+    text = tx("**Netz:** {p} Features → Schichten {layers} → {p} Features, Engpass {b} Neuronen · {e} Epochen mit "
+              "batch_size {bs}, Loss {loss}.", p=p, layers=" – ".join(str(v) for v in layers), b=b,
+              e=info.get("n_iter", "?"), bs=info.get("batch_size", "?"), loss=score_text(info.get("loss", float("nan"))))
+    best = info.get("best_validation")
+    if best is not None:
+        text += tx(" Early Stopping: bestes R² auf den Validierungszeilen {r}.", r=f"{best:.3f}")
     notes = [text]
+    if info.get("early_requested") and not info.get("early_stopping", True):
+        notes.append(tx("Early Stopping aus: erst ab {m} Zeilen sinnvoll (10 % = mindestens {v} Zeilen zur Validierung) – "
+                        "bei {n} Zeilen lernt das Netz mit allen Zeilen und endet, wenn der Trainingsfehler nicht mehr "
+                        "sinkt.", m=_n(AE_EARLY_MIN_ROWS), v=AE_EARLY_MIN_ROWS // 10, n=_n(info["n_rows"])))
+    if best is not None and best < 0:
+        notes.append(tx(":orange[**Schwacher Nachbau:**] Das beste R² auf den Validierungszeilen ist negativ – das Netz "
+                        "baut sie schlechter nach als der Mittelwert jeder Spalte. Mehr Epochen, eine größere Lernrate "
+                        "oder mehr Neuronen probieren (Schritt 6)."))
     if info.get("epochs") and info.get("n_iter", 0) >= info["epochs"]:
         notes.append(tx("Das Training hat die Höchstzahl von {e} Epochen erreicht, der Fehler sank zuletzt noch leicht – "
                         "mehr Epochen (Schritt 6) können den Nachbau etwas verbessern.", e=info["epochs"]))

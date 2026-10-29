@@ -1613,9 +1613,9 @@ eps hängt von der Skalierung und der Zahl der Features ab – welches eps passt
    nicht.
 2. Dazwischen liegt ein **Engpass** (z. B. 16 → 3 → 16 Neuronen): Der *Encoder* verdichtet die Features auf wenige
    Zahlen, der *Decoder* baut daraus die Zeile wieder auf. Dabei lernt das Netz die typischen Zusammenhänge der Daten.
-3. **Training:** Epoche für Epoche (Optimierer Adam) wird der Fehler zwischen Eingabe und Nachbau kleiner. *Early
-   Stopping* hält 10 % der Zeilen zurück und behält die Gewichte der Epoche, in der das Netz diese Zeilen am besten
-   nachbaut.
+3. **Training:** Epoche für Epoche (Optimierer Adam, je Epoche etwa 20 Lernschritte mit *batch_size* = Zeilen/20)
+   wird der Fehler zwischen Eingabe und Nachbau kleiner. *Early Stopping* (ab 200 Zeilen) hält 10 % der Zeilen zurück
+   und behält die Gewichte der Epoche, in der das Netz diese Zeilen am besten nachbaut.
 4. **Score = Rekonstruktionsfehler** (RMSE je Zeile, in den skalierten Features): Normale Zeilen baut das Netz gut nach,
    ungewöhnliche nicht – auch wenn jedes Feature für sich normal ist, die Kombination aber nicht passt.
 5. **Schwelle:** ein fester Anteil (*contamination*, Standard 1 %) – ein Autoencoder hat keine eingebaute Schwelle.
@@ -1717,9 +1717,10 @@ def contamination_ui(with_auto: bool = True):
                                 "Anomalien. Einen Vorschlag zeigt Schritt 7 (Knick der Score-Kurve)."))
 
 
-def autoencoder_params_ui(n_feat):
+def autoencoder_params_ui(n_feat, n):
     """Schritt 6, Autoencoder: Schichten (Neuronen je Schicht), Aktivierung, Epochen, Seed, L2-Strafe, Lernrate, Early
-    Stopping und der Anteil auffälliger Zeilen. Zeigt Fehler in den Schichten und einen fehlenden Engpass sofort."""
+    Stopping (erst ab pl.AE_EARLY_MIN_ROWS Zeilen) und der Anteil auffälliger Zeilen. Zeigt Fehler in den Schichten und
+    einen fehlenden Engpass sofort."""
     default = pl.layers_text(pl.default_ae_layers(n_feat))
     c1, c2, c3, c4 = st.columns([1.6, 1.1, 1.2, 1.3])
     with c1:
@@ -1735,8 +1736,9 @@ def autoencoder_params_ui(n_feat):
     with c3:
         init("w_ae_epochs", 300)
         st.number_input(tx("Epochen (max_iter)"), 10, 5000, step=50, key="w_ae_epochs",
-                        help=tx("Höchstens so viele Durchläufe durch die Trainingsdaten – mit Early Stopping endet das "
-                                "Training früher, wenn das Netz nicht mehr besser wird."))
+                        help=tx("Höchstens so viele Durchläufe durch die Trainingsdaten – das Training endet früher, "
+                                "wenn das Netz nicht mehr besser wird. Je Epoche etwa 20 Lernschritte: batch_size = "
+                                "Zeilen/20, zwischen 8 und 200 (hier {b}).", b=pl.ae_batch_size(n)))
     with c4:
         init("w_seed", pl.RANDOM_STATE)
         st.number_input(tx("Seed (random_state)"), 0, 1_000_000, step=1, key="w_seed",
@@ -1753,10 +1755,16 @@ def autoencoder_params_ui(n_feat):
                         help=tx("Schrittweite des Optimierers Adam (Standard 0.001)."))
     with c3:
         init("w_ae_early", True)
-        st.checkbox(tx("Early Stopping (10 % der Zeilen zur Validierung)"), key="w_ae_early",
-                    help=tx("Hält 10 % der Zeilen zurück und beendet das Training, wenn das Netz sie 10 Epochen lang "
-                            "nicht besser nachbaut – die Gewichte der besten Epoche bleiben. Schützt davor, dass das Netz "
-                            "auch Ausreißer auswendig lernt."))
+        if n >= pl.AE_EARLY_MIN_ROWS:
+            st.checkbox(tx("Early Stopping (10 % der Zeilen zur Validierung)"), key="w_ae_early",
+                        help=tx("Hält 10 % der Zeilen zurück und beendet das Training, wenn das Netz sie 10 Epochen "
+                                "lang nicht besser nachbaut – die Gewichte der besten Epoche bleiben. Schützt davor, dass "
+                                "das Netz auch Ausreißer auswendig lernt."))
+        else:  # nur Anzeige: die Einstellung (w_ae_early) bleibt für größere Daten erhalten
+            st.checkbox(tx("Early Stopping (10 % der Zeilen zur Validierung)"), value=False, disabled=True,
+                        help=tx("Erst ab {m} Zeilen: Bei {n} Zeilen wären nur {v} Zeilen zur Validierung – zu wenige für "
+                                "ein verlässliches R². Das Netz lernt mit allen Zeilen.",
+                                m=fmt_int(pl.AE_EARLY_MIN_ROWS), n=fmt_int(n), v=max(1, int(np.ceil(n / 10)))))
     try:
         layers = pl.parse_layers(ss.get("w_ae_layers"), n_feat)
     except ValueError as exc:
@@ -1807,7 +1815,7 @@ def anomaly_params_ui(key, p, n, n_feat):
                help=tx("Abstandsmaß: euclidean = Luftlinie (Standard) · manhattan = Summe der Abstände je Feature"))
         contamination_ui()
     elif key == pl.MODEL_AUTOENCODER:
-        autoencoder_params_ui(n_feat)
+        autoencoder_params_ui(n_feat, n)
     else:
         init("w_min_samples", int(min(max(5, 2 * n_feat), 50)))
         # Startwert aus der k-Distanz einer Stichprobe – genauer misst Schritt 7. Neu berechnet, wenn sich Daten (neue

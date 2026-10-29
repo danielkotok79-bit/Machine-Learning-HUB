@@ -26,11 +26,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pipeline as pl  # noqa: E402
 import plots  # noqa: E402
 from synthetic import anomaly_like  # noqa: E402
-from test_anomaly import prepare  # noqa: E402
+from test_anomaly import assert_same, prepare, run_both  # noqa: E402
 from test_app import button, go, load, ok  # noqa: E402
 
 AE = pl.MODEL_AUTOENCODER
 APP = str(ROOT / "app.py")
+
+
+def combinations(n, seed=0):
+    """Ungewöhnliche Kombinationen: b ≈ a und c ≈ −a; die Anomalien (Class 1) brechen nur diesen Zusammenhang – jeder
+    Wert für sich liegt im normalen Bereich. Isolation Forest sieht das kaum, ein gut trainierter Autoencoder schon."""
+    rng = np.random.default_rng(seed)
+    k = max(2, round(0.05 * n))
+    m = n - k
+    x = rng.normal(size=m)
+    normal = np.column_stack([x, x + 0.1 * rng.normal(size=m), -x + 0.1 * rng.normal(size=m), rng.normal(size=m)])
+    a = rng.uniform(-1.5, 1.5, k)
+    odd = np.column_stack([a, -a, a, rng.normal(size=k)])
+    df = pd.DataFrame(np.vstack([normal, odd]).round(4), columns=["a", "b", "c", "d"])
+    df["Class"] = np.r_[np.zeros(m, dtype=int), np.ones(k, dtype=int)]
+    return df.sample(frac=1.0, random_state=seed).reset_index(drop=True)
 
 
 @pytest.fixture(scope="module")
@@ -76,6 +91,44 @@ def test_the_network_finds_the_planted_anomalies(trained):
     assert average_precision_score(y, hist["score"]) > 0.85
     top = np.argsort(-hist["score"])[:10]
     assert y[top].mean() >= 0.9  # die auffälligsten Zeilen sind die eingebauten Betrugsfälle
+
+
+def test_the_network_learns_unusual_combinations(tmp_path):
+    """Durchsicht vor dem Zusammenführen: Mit dem scikit-learn-Standard batch_size = min(200, Zeilen) machte das Netz bei
+    400 Zeilen nur 2 Lernschritte je Epoche und fand die Kombinationen kaum (Average Precision ≈ 0.16, Isolation
+    Forest ≈ 0.13). Mit batch_size = Zeilen/20 etwa 20 Schritte je Epoche."""
+    prep, _ = prepare(tmp_path, combinations(400), name=None)
+    y = (prep.groups == "1").to_numpy()
+    cfg = pl.ClusterConfig(model=AE)
+    _, hist, info = pl.train_anomaly(cfg, prep)
+    _, forest, _ = pl.train_anomaly(pl.ClusterConfig(model=pl.MODEL_IFOREST), prep)
+    ap, ap_forest = average_precision_score(y, hist["score"]), average_precision_score(y, forest["score"])
+    assert ap > 0.75 and ap_forest < 0.4  # nur der Autoencoder sieht, dass die Werte nicht zueinander passen
+    assert cfg.ae_layers == "8,2,8" and info["batch_size"] == 20 == pl.anomaly_params(cfg, 400)["batch_size"]
+
+
+def test_small_data_trains_without_early_stopping(tmp_path):
+    """Durchsicht vor dem Zusammenführen: 10 Zeilen (das Minimum der App) mit Early Stopping → scikit-learn brach ab
+    ('validation set is too small'). Unter 200 Zeilen schwankt das R² auf den wenigen Validierungszeilen so stark, dass es
+    das Training zu früh beendet – dort trainiert das Netz ohne Early Stopping und sagt es."""
+    tiny, _ = prepare(tmp_path, combinations(10), name=None)
+    model, hist, info = pl.train_anomaly(pl.ClusterConfig(model=AE), tiny)  # früher: ValueError von scikit-learn
+    assert len(tiny.X) == pl.MIN_ROWS and not model.early_stopping and info["n_anomalies"] >= 1
+    assert info["early_requested"] and not info["early_stopping"] and info["best_validation"] is None
+    assert any(t.startswith("Early Stopping aus: erst ab 200 Zeilen") for t in pl.autoencoder_notes(info))
+
+    assert [pl.ae_batch_size(n) for n in (10, 150, 199, 400, 1200, 3999, 4000, 10 ** 6)] == [
+        8, 8, 9, 20, 60, 199, 200, 200]
+    cfg = pl.ClusterConfig(model=AE)
+    for n, early, batch in ((10, False, 8), (199, False, 9), (200, True, 10), (1200, True, 60), (5000, True, None)):
+        q = pl.anomaly_params(cfg, n, 4)
+        assert q["early_stopping"] is early and q.get("batch_size") == batch  # ab 4 000 Zeilen der Standard (200)
+    assert pl.anomaly_params(pl.ClusterConfig(model=AE, ae_early_stopping=False), 5000, 4)["early_stopping"] is False
+
+    r = run_both(tmp_path, combinations(150, seed=1), pl.ClusterConfig(model=AE), group="Class")
+    assert_same(r)  # der angezeigte Code nutzt dieselbe batch_size und lässt Early Stopping ebenso weg
+    assert "batch_size=8" in r["code"] and "early_stopping=False" in r["code"] and "erst ab 200 Zeilen" in r["code"]
+    assert "batch_size 8" in pl.autoencoder_notes(r["info"])[0]
 
 
 @pytest.mark.parametrize("activation", ["tanh", "relu"])
@@ -135,8 +188,10 @@ def test_save_load_without_pickle_and_broken_models(trained, tmp_path):
 def test_notes_learning_curve_and_no_bottleneck(trained, tmp_path):
     prep, _, cfg, model, hist, info = trained
     notes = pl.threshold_assessment(hist["curve"], info, cfg)["notes"]
-    assert any(t.startswith("**Netz:** 8 Features → Schichten 8 – 2 – 8") for t in notes)
+    assert any(t.startswith("**Netz:** 8 Features → Schichten 8 – 2 – 8") and "batch_size 60" in t for t in notes)
     assert any("Early Stopping: bestes R²" in t for t in notes)
+    assert not any("Schwacher Nachbau" in t or "Early Stopping aus" in t for t in notes)
+    assert any("Schwacher Nachbau" in t for t in pl.autoencoder_notes({**info, "best_validation": -0.4}))
     fig = plots.fig_learning_curve(model)
     assert len(fig.axes) == 2 and "beste Epoche" in fig.axes[1].texts[0].get_text()
     wide, _, info_w = pl.train_anomaly(pl.ClusterConfig(model=AE, ae_layers="16,16", ae_epochs=30,
@@ -176,3 +231,29 @@ def test_step_6_checks_the_layers(tmp_path, monkeypatch):
     at.text_input(key="w_ae_layers").input("16,16,16").run()
     assert any("Kein echter Engpass" in w.value for w in at.warning)
     assert not button(at, "Training starten").disabled
+    box = [c for c in at.checkbox if c.label.startswith("Early Stopping")]
+    assert len(box) == 1 and box[0].key == "w_ae_early" and box[0].value  # 400 Zeilen: Early Stopping wählbar
+
+
+def test_step_6_small_data_without_early_stopping(tmp_path, monkeypatch):
+    """Schritt 6 mit 60 Zeilen: Early Stopping ausgegraut (erst ab 200 Zeilen), das Netz trainiert ohne und sagt es."""
+    monkeypatch.setenv("CL_TEMPLATE_MODELS", str(tmp_path / "models"))
+    combinations(60, seed=2).to_csv(tmp_path / "klein.csv", index=False)
+    at = AppTest.from_file(APP, default_timeout=300)
+    at.run()
+    load(at, tmp_path / "klein.csv")
+    go(at, 1)
+    button(at, "Übernehmen").click().run()
+    go(at, 3)
+    at.selectbox(key="w_group").set_value("Class").run()
+    button(at, "Daten fürs Modell vorbereiten").click().run()
+    go(at, 5)
+    at.radio(key="w_model").set_value(AE).run()
+    ok(at, "Autoencoder mit 60 Zeilen")
+    box = [c for c in at.checkbox if c.label.startswith("Early Stopping")]
+    assert len(box) == 1 and box[0].disabled and not box[0].value and "Erst ab 200 Zeilen" in box[0].help
+    assert at.session_state["w_ae_early"]  # die Einstellung selbst bleibt – für größere Daten
+    button(at, "Training starten").click().run()
+    ok(at, "Training mit 60 Zeilen")
+    assert any("Early Stopping aus: erst ab 200 Zeilen" in m.value for m in at.markdown)
+    assert any("batch_size=8" in c.value for c in at.code)

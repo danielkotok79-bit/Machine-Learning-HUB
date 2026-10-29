@@ -1480,9 +1480,10 @@ T = {
     "**Eingabe** und soll **dieselbe Zeile als Ausgabe** liefern – ein Label braucht es\n   nicht.\n2. Dazwischen "
     "liegt ein **Engpass** (z. B. 16 → 3 → 16 Neuronen): Der *Encoder* verdichtet die Features auf wenige\n   "
     "Zahlen, der *Decoder* baut daraus die Zeile wieder auf. Dabei lernt das Netz die typischen Zusammenhänge der "
-    "Daten.\n3. **Training:** Epoche für Epoche (Optimierer Adam) wird der Fehler zwischen Eingabe und Nachbau "
-    "kleiner. *Early\n   Stopping* hält 10 % der Zeilen zurück und behält die Gewichte der Epoche, in der das Netz "
-    "diese Zeilen am besten\n   nachbaut.\n4. **Score = Rekonstruktionsfehler** (RMSE je Zeile, in den skalierten "
+    "Daten.\n3. **Training:** Epoche für Epoche (Optimierer Adam, je Epoche etwa 20 Lernschritte mit *batch_size* = "
+    "Zeilen/20)\n   wird der Fehler zwischen Eingabe und Nachbau kleiner. *Early Stopping* (ab 200 Zeilen) hält 10 % "
+    "der Zeilen zurück\n   und behält die Gewichte der Epoche, in der das Netz diese Zeilen am besten nachbaut.\n4. "
+    "**Score = Rekonstruktionsfehler** (RMSE je Zeile, in den skalierten "
     "Features): Normale Zeilen baut das Netz gut nach,\n   ungewöhnliche nicht – auch wenn jedes Feature für sich "
     "normal ist, die Kombination aber nicht passt.\n5. **Schwelle:** ein fester Anteil (*contamination*, Standard "
     "1 %) – ein Autoencoder hat keine eingebaute Schwelle.\n\nWichtig: Skalierung in Schritt 4 (StandardScaler) "
@@ -1492,9 +1493,10 @@ T = {
         "and is supposed to return **the same row as output** – it needs no label.\n2. In between there is a "
         "**bottleneck** (e.g. 16 → 3 → 16 neurons): the *encoder* compresses the features into a few numbers, the "
         "*decoder* rebuilds the row from them. Doing so, the network learns the typical relationships in the "
-        "data.\n3. **Training:** epoch by epoch (optimiser Adam) the error between input and reconstruction gets "
-        "smaller. *Early stopping* holds back 10 % of the rows and keeps the weights of the epoch in which the "
-        "network reconstructs these rows best.\n4. **Score = reconstruction error** (RMSE per row, in the scaled "
+        "data.\n3. **Training:** epoch by epoch (optimiser Adam, about 20 learning steps per epoch with *batch_size* "
+        "= rows/20) the error between input and reconstruction gets smaller. *Early stopping* (from 200 rows on) "
+        "holds back 10 % of the rows and keeps the weights of the epoch in which the network reconstructs these rows "
+        "best.\n4. **Score = reconstruction error** (RMSE per row, in the scaled "
         "features): the network reconstructs normal rows well, unusual ones not – even if every feature is normal "
         "on its own but the combination does not fit.\n5. **Threshold:** a fixed share (*contamination*, default "
         "1 %) – an autoencoder has no built-in threshold.\n\nImportant: scaling in step 4 (StandardScaler) and a "
@@ -1504,8 +1506,9 @@ T = {
         "ma zwrócić **ten sam wiersz jako wyjście** – etykieta nie jest potrzebna.\n2. Pomiędzy jest **wąskie "
         "gardło** (np. 16 → 3 → 16 neuronów): *enkoder* kompresuje cechy do kilku liczb, *dekoder* odbudowuje z nich "
         "wiersz. Przy tym sieć uczy się typowych zależności w danych.\n3. **Trening:** epoka po epoce (optymalizator "
-        "Adam) błąd między wejściem a rekonstrukcją maleje. *Early stopping* odkłada 10 % wierszy i zachowuje wagi "
-        "z epoki, w której sieć najlepiej odtwarza te wiersze.\n4. **Wskaźnik = błąd rekonstrukcji** (RMSE dla "
+        "Adam, ok. 20 kroków uczenia na epokę przy *batch_size* = liczba wierszy/20) błąd między wejściem a "
+        "rekonstrukcją maleje. *Early stopping* (od 200 wierszy) odkłada 10 % wierszy i zachowuje wagi z epoki, w "
+        "której sieć najlepiej odtwarza te wiersze.\n4. **Wskaźnik = błąd rekonstrukcji** (RMSE dla "
         "wiersza, w skalowanych cechach): typowe wiersze sieć odtwarza dobrze, nietypowe nie – także wtedy, gdy "
         "każda cecha z osobna jest normalna, ale ich kombinacja nie pasuje.\n5. **Próg:** stały udział "
         "(*contamination*, domyślnie 1 %) – autoenkoder nie ma wbudowanego progu.\n\nWażne: skalowanie w kroku 4 "
@@ -1544,12 +1547,18 @@ T = {
         "standard of large networks.",
         "tanh (domyślnie) odwzorowuje łagodnie na −1 … 1 i przy niewielu neuronach zwykle działa lepiej; relu = "
         "max(0, x), standard dużych sieci."),
-    "Höchstens so viele Durchläufe durch die Trainingsdaten – mit Early Stopping endet das Training früher, wenn das "
-    "Netz nicht mehr besser wird.": (
-        "At most this many passes through the training data – with early stopping, training ends earlier when the "
-        "network stops improving.",
-        "Najwyżej tyle przejść przez dane treningowe – z early stopping trening kończy się wcześniej, gdy sieć "
-        "przestaje się poprawiać."),
+    "Höchstens so viele Durchläufe durch die Trainingsdaten – das Training endet früher, wenn das Netz nicht mehr "
+    "besser wird. Je Epoche etwa 20 Lernschritte: batch_size = Zeilen/20, zwischen 8 und 200 (hier {b}).": (
+        "At most this many passes through the training data – training ends earlier when the network stops "
+        "improving. About 20 learning steps per epoch: batch_size = rows/20, between 8 and 200 (here {b}).",
+        "Najwyżej tyle przejść przez dane treningowe – trening kończy się wcześniej, gdy sieć przestaje się "
+        "poprawiać. Ok. 20 kroków uczenia na epokę: batch_size = liczba wierszy/20, od 8 do 200 (tutaj {b})."),
+    "Erst ab {m} Zeilen: Bei {n} Zeilen wären nur {v} Zeilen zur Validierung – zu wenige für ein verlässliches R². "
+    "Das Netz lernt mit allen Zeilen.": (
+        "Only from {m} rows on: with {n} rows only {v} rows would be left for validation – too few for a reliable R². "
+        "The network learns from all rows.",
+        "Dopiero od {m} wierszy: przy {n} wierszach do walidacji zostałoby tylko {v} – za mało na wiarygodne R². "
+        "Sieć uczy się na wszystkich wierszach."),
     "Gleicher Seed = gleiche Startgewichte = gleiches Ergebnis.": (
         "Same seed = same initial weights = same result.",
         "Ten sam seed = te same wagi startowe = ten sam wynik."),

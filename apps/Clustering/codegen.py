@@ -509,7 +509,15 @@ def autoencoder_model_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
     Schwelle = Quantil für contamination – wie pipeline.train_anomaly()."""
     v = pl.MODEL_VARS[cfg.model]
     c = float(cfg.contamination or pl.AE_DEFAULT_CONTAMINATION)
-    return "\n".join([
+    params = pl.anomaly_params(cfg, n_rows)
+    head = []
+    if "batch_size" in params:
+        head.append("# " + tx("batch_size = Zeilen/20 (8 … 200): etwa 20 Lernschritte je Epoche – mit dem Standard (200 "
+                              "Zeilen je Schritt) lernt das Netz bei wenigen Zeilen kaum etwas"))
+    if cfg.ae_early_stopping and not params["early_stopping"]:
+        head.append("# " + tx("Early Stopping erst ab {m} Zeilen – hier zu wenige Zeilen für 10 % zur Validierung",
+                              m=pl.AE_EARLY_MIN_ROWS))
+    return "\n".join(head + [
         f"{v} = {anomaly_code(cfg, n_rows)}",
         f"{v}.fit(X, X)   # " + tx("Autoencoder: Eingabe = Ziel – das Netz lernt, die Zeilen nachzubauen (kein Label)"),
         f"score = np.sqrt(((X - {v}.predict(X)) ** 2).mean(axis=1))   # "

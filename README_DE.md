@@ -107,7 +107,7 @@ polnische, dann der deutsche Teil).
 
 ## Tests
 
-**1070 automatische Tests** (pytest, darunter Tests der gesamten Oberfläche mit Streamlit `AppTest`) – je App:
+**1073 automatische Tests** (pytest, darunter Tests der gesamten Oberfläche mit Streamlit `AppTest`) – je App:
 
 ```bash
 pip install pytest
@@ -118,7 +118,7 @@ pytest -q
 | App | Tests |
 |---|---|
 | Supervised | 310 |
-| Clustering | 382 |
+| Clustering | 385 |
 | NLP | 188 |
 | Deep Learning | 190 |
 

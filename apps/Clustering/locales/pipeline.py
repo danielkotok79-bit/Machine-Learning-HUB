@@ -799,14 +799,29 @@ T = {
         "Wykrywanie anomalii siecią neuronową (deep learning, bez nadzoru): sieć uczy się odtwarzać każdy wiersz "
         "przez wąskie gardło – typowe wzorce się udają, nietypowe wiersze nie. Wskaźnik = błąd rekonstrukcji; "
         "wykrywa też nietypowe kombinacje cech, które pojedynczo wyglądają normalnie."),
-    "**Netz:** {p} Features → Schichten {layers} → {p} Features, Engpass {b} Neuronen · {e} Epochen, Loss "
-    "{loss}.": (
-        "**Network:** {p} features → layers {layers} → {p} features, bottleneck {b} neurons · {e} epochs, loss "
-        "{loss}.",
-        "**Sieć:** {p} cech → warstwy {layers} → {p} cech, neurony w wąskim gardle: {b} · epoki: {e}, loss {loss}."),
+    "**Netz:** {p} Features → Schichten {layers} → {p} Features, Engpass {b} Neuronen · {e} Epochen mit batch_size "
+    "{bs}, Loss {loss}.": (
+        "**Network:** {p} features → layers {layers} → {p} features, bottleneck {b} neurons · {e} epochs with "
+        "batch_size {bs}, loss {loss}.",
+        "**Sieć:** {p} cech → warstwy {layers} → {p} cech, neurony w wąskim gardle: {b} · epoki: {e} przy batch_size "
+        "{bs}, loss {loss}."),
     " Early Stopping: bestes R² auf den Validierungszeilen {r}.": (
         " Early stopping: best R² on the validation rows {r}.",
         " Early stopping: najlepsze R² na wierszach walidacyjnych {r}."),
+    "Early Stopping aus: erst ab {m} Zeilen sinnvoll (10 % = mindestens {v} Zeilen zur Validierung) – bei {n} Zeilen "
+    "lernt das Netz mit allen Zeilen und endet, wenn der Trainingsfehler nicht mehr sinkt.": (
+        "Early stopping off: it only makes sense from {m} rows on (10 % = at least {v} rows for validation) – with {n} "
+        "rows the network learns from all rows and stops when the training error no longer falls.",
+        "Early stopping wyłączony: ma sens dopiero od {m} wierszy (10 % = co najmniej {v} wierszy do walidacji) – "
+        "przy {n} wierszach sieć uczy się na wszystkich wierszach i kończy, gdy błąd treningowy przestaje spadać."),
+    ":orange[**Schwacher Nachbau:**] Das beste R² auf den Validierungszeilen ist negativ – das Netz baut sie "
+    "schlechter nach als der Mittelwert jeder Spalte. Mehr Epochen, eine größere Lernrate oder mehr Neuronen "
+    "probieren (Schritt 6).": (
+        ":orange[**Weak reconstruction:**] the best R² on the validation rows is negative – the network reconstructs "
+        "them worse than the mean of each column. Try more epochs, a larger learning rate or more neurons (step 6).",
+        ":orange[**Słaba rekonstrukcja:**] najlepsze R² na wierszach walidacyjnych jest ujemne – sieć odtwarza je "
+        "gorzej niż średnia każdej kolumny. Spróbuj więcej epok, większego learning rate albo więcej neuronów "
+        "(krok 6)."),
     "Schichten: 1 bis {n} Schichten mit je 1 bis {m} Neuronen, z. B. 16,3,16.": (
         "Layers: 1 to {n} layers with 1 to {m} neurons each, e.g. 16,3,16.",
         "Warstwy: od 1 do {n} warstw, każda z 1 do {m} neuronów, np. 16,3,16."),

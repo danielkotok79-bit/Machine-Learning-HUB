@@ -371,7 +371,7 @@ przykład deep learningu bez nadzoru), README w trzech językach.
 |---|---|
 | Gdzie | w aplikacji Clustering obok Isolation Forest, LOF i DBSCAN – te same kroki i ten sam CSV (np. z Bybit), więc metody da się porównać bezpośrednio; nie w aplikacji Deep Learning (Keras), która jest zbudowana wokół etykiety |
 | Biblioteka | scikit-learn `MLPRegressor` (optymalizator Adam), bez TensorFlow – lekko i deterministycznie przy tym samym seedzie, więc pokazany kod liczy dokładnie to samo co aplikacja (testy parytetu); zapis `.skops` (zaufany dodatkowo typ `AdamOptimizer`, stan optymalizatora) |
-| Architektura | warstwy jako tekst „16,3,16”; propozycja z liczby cech p: na zewnątrz potęga 2 ≥ p (8 … 64 neuronów), wąskie gardło ≈ p/4 (2 … 8, zawsze mniej niż p); aktywacja `tanh` (w próbach na danych typu oszustwa average precision 0.94–0.98 wobec 0.70–0.88 dla `relu`), early stopping (10 % wierszy do walidacji, zostają wagi najlepszej epoki), 300 epok |
+| Architektura | warstwy jako tekst „16,3,16”; propozycja z liczby cech p: na zewnątrz potęga 2 ≥ p (8 … 64 neuronów), wąskie gardło ≈ p/4 (2 … 8, zawsze mniej niż p); aktywacja `tanh` (w próbach na danych typu oszustwa average precision 0.94–0.98 wobec 0.70–0.88 dla `relu`), early stopping (10 % wierszy do walidacji, zostają wagi najlepszej epoki; od 200 wierszy), `batch_size` = wiersze/20 w granicach 8 … 200, 300 epok – oba progi z przeglądu przed scaleniem (niżej) |
 | Wskaźnik | błąd rekonstrukcji = RMSE dla wiersza w skalowanych cechach (przy StandardScaler w odchyleniach standardowych) |
 | Próg | autoenkoder nie ma wbudowanego progu → zawsze stały udział (contamination, domyślnie 1 %) = kwantyl błędów w treningu; zapisany w modelu jako `threshold_` (jak `offset_` w IF/LOF) i w `preprocessing.json` |
 | Krok 6/7 | krzywa uczenia (loss na epokę, R² walidacji z najlepszą epoką); progi dla udziałów i załamanie krzywej jak przy IF/LOF; uwagi: budowa sieci, epoki, loss, R², ostrzeżenie „brak prawdziwego wąskiego gardła”, zrozumiały komunikat zamiast surowego ConvergenceWarning „Maximum iterations” |
@@ -389,7 +389,7 @@ przykład deep learningu bez nadzoru), README w trzech językach.
   te same wskaźniki; model bez `threshold_` albo z inną liczbą wyjść niż wejść jest odrzucany.
 * **Interfejs** (AppTest) przez kroki 4–10 po niemiecku, angielsku i polsku bez niemieckich resztek; krok 6: błędne
   warstwy → komunikat i zablokowany trening, brak wąskiego gardła → ostrzeżenie; launcher w trzech językach.
-* **Czas:** 1500 wierszy × 8 cech ok. 1 s, 3500 × 11 ok. 2 s (300 epok, early stopping).
+* **Czas:** 1500 wierszy × 8 cech ok. 1.5 s, 3500 × 11 ok. 2 s (do 300 epok, early stopping, `batch_size` 75 i 175).
 
 ## Uwagi
 
@@ -402,8 +402,33 @@ przykład deep learningu bez nadzoru), README w trzech językach.
 * Wersja w Keras/TensorFlow (GPU, dowolne warstwy) pasowałaby do aplikacji Deep Learning – bez bezpośredniego
   porównania z IF/LOF/DBSCAN i bez identycznego wyniku pokazanego kodu.
 
+## Przegląd przed scaleniem – 2 poprawki
+
+Zanim autoenkoder trafił do `main`, sprawdziłem go jeszcze na skrajnie małych danych i na anomaliach, do których jest
+przeznaczony: **nietypowych kombinacjach cech** (b ≈ a, c ≈ −a; anomalie łamią tylko tę zależność, każda wartość
+osobno leży w normalnym zakresie). Oba problemy zostały znalezione i poprawione przed scaleniem; każdy test nie
+przechodzi na kodzie sprzed poprawki z powodu zachowania (nie API).
+
+| # | Problem | Poprawka | Test |
+|---|---|---|---|
+| A1 | **Sieć prawie się nie uczyła przy małych i średnich danych.** scikit-learn bierze `batch_size = min(200, wiersze)`: przy 400 wierszach to 2 kroki uczenia na epokę, poniżej 200 wierszy jeden – po 300 epokach sieć była niedouczona i nietypowych kombinacji prawie nie widziała | `batch_size = wiersze/20` w granicach 8 … 200 (`ae_batch_size`, ok. 20 kroków na epokę; od 4000 wierszy bez zmian 200) – w aplikacji, w pokazanym kodzie (z komentarzem) i w uwagach kroku 6/7 | `test_the_network_learns_unusual_combinations` (na starym kodzie AP 0.32) |
+| A2 | **10 wierszy (minimum aplikacji) + early stopping → wyjątek scikit-learn** „The validation set is too small” (po angielsku, trening przerwany). Przy 11–199 wierszach R² na 2–19 wierszach walidacji mocno skacze (np. −400 przy 15 wierszach) i kończy trening za wcześnie | early stopping dopiero od 200 wierszy (≥ 20 wierszy walidacji, `ae_early_stopping`); poniżej pole w kroku 6 jest wyszarzone z wyjaśnieniem, krok 6/7 podaje uwagę, kod – komentarz; ustawienie użytkownika zostaje dla większych danych. Dodatkowo uwaga „słaba rekonstrukcja”, gdy najlepsze R² walidacji jest ujemne | `test_small_data_trains_without_early_stopping`, `test_step_6_small_data_without_early_stopping` |
+
+Pomiary (nietypowe kombinacje, sieć 8-2-8, tanh, średnia z 3 seedów; average precision, 5 % anomalii):
+
+| Wiersze | dotąd (`batch_size` 200) | teraz | Isolation Forest | LOF |
+|---|---|---|---|---|
+| 150 | 0.10 | 0.86 | 0.16 | 0.41 |
+| 400 | 0.16 | 0.89 | 0.13 | 0.70 |
+| 1000 | 0.72 | 0.91 | 0.14 | 0.63 |
+| 5000 | 0.87 | 0.87 (bez zmian) | 0.11 | 0.26 |
+
+Early stopping przy małych danych (`batch_size` jak teraz): 40 wierszy 0.42 z / 0.62 bez, 100 wierszy 0.66 / 0.80,
+150 wierszy 0.85 / 0.86; od 200 wierszy z early stopping tak samo dobrze albo nieco lepiej (200: 0.90 / 0.88, 1000:
+0.89 / 0.86). Koszt: 1000 wierszy ok. 1.2 s zamiast 0.6 s; od 4000 wierszy bez zmian.
+
 ## Testy (stan wersji 3)
 
-382 testy (362 + 20: 10 w `tests/test_autoencoder.py`, 7 nowych przypadków w `tests/test_anomaly.py`, 1 w
+385 testów (362 + 23: 13 w `tests/test_autoencoder.py`, 7 nowych przypadków w `tests/test_anomaly.py`, 1 w
 `tests/test_app_anomaly.py`, 2 w `tests/test_i18n.py`) – wszystkie przechodzą (Python 3.13, pandas 3.1,
 scikit-learn 1.9, skops 0.16, Streamlit 1.66). Uruchomienie: `pytest -q` (ok. 6 minut).

@@ -276,6 +276,15 @@ T = {
     "Autoencoder: Eingabe = Ziel – das Netz lernt, die Zeilen nachzubauen (kein Label)": (
         "autoencoder: input = target – the network learns to reconstruct the rows (no label)",
         "autoenkoder: wejście = cel – sieć uczy się odtwarzać wiersze (bez etykiety)"),
+    "batch_size = Zeilen/20 (8 … 200): etwa 20 Lernschritte je Epoche – mit dem Standard (200 Zeilen je Schritt) "
+    "lernt das Netz bei wenigen Zeilen kaum etwas": (
+        "batch_size = rows/20 (8 … 200): about 20 learning steps per epoch – with the default (200 rows per step) the "
+        "network hardly learns anything on small data",
+        "batch_size = liczba wierszy/20 (8 … 200): ok. 20 kroków uczenia na epokę – przy domyślnym (200 wierszy na "
+        "krok) sieć na małych danych prawie niczego się nie uczy"),
+    "Early Stopping erst ab {m} Zeilen – hier zu wenige Zeilen für 10 % zur Validierung": (
+        "early stopping only from {m} rows on – too few rows here for 10 % validation",
+        "early stopping dopiero od {m} wierszy – tutaj za mało wierszy na 10 % do walidacji"),
     "Rekonstruktionsfehler (RMSE je Zeile): höher = auffälliger": (
         "reconstruction error (RMSE per row): higher = more anomalous",
         "błąd rekonstrukcji (RMSE dla wiersza): wyższy = bardziej nietypowy"),

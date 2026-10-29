@@ -213,6 +213,10 @@ Auffällig (`Anomalie = 1`) ist ein Score über der **Schwelle**.
 * **Schichten und Aktivierung:** Vorschlag aus der Zahl der Features (8 → 8,2,8; 11 → 16,3,16; 30 → 32,8,32), tiefer
   z. B. 32,16,4,16,32. `tanh` klappt bei kleinen Netzen meist besser als `relu`. Hat die engste Schicht mindestens so
   viele Neuronen wie es Features gibt, kann das Netz die Zeilen einfach durchreichen – die App warnt.
+* **Training auch bei wenigen Zeilen:** batch_size = Zeilen/20 (8 … 200), also etwa 20 Lernschritte je Epoche – mit
+  dem scikit-learn-Standard (200 Zeilen je Schritt) machte das Netz bei einigen hundert Zeilen nur ein bis zwei Schritte
+  je Epoche und fand ungewöhnliche Kombinationen kaum. Early Stopping erst ab 200 Zeilen (sonst blieben zu wenige Zeilen
+  zur Validierung); darunter lernt das Netz mit allen Zeilen, und Schritt 6 sagt es.
 * **Nicht begrenzen, was überwacht werden soll.** *Werte begrenzen* in Schritt 2 schneidet genau die Extremwerte ab,
   die eine Anomalie ausmachen – für die Anomalieerkennung nur unmögliche Werte korrigieren.
 * **Skalierung:** LOF und DBSCAN rechnen mit Abständen → StandardScaler in Schritt 4. Isolation Forest schneidet je
@@ -391,7 +395,7 @@ Erweitern:
 
 ```bash
 pip install pytest
-pytest -q                                  # 382 Tests, ca. 6 Minuten
+pytest -q                                  # 385 Tests, ca. 6 Minuten
 python tests/synthetic.py                  # synthetische College-Daten (777 Zeilen, keine echten Daten)
 ```
 
@@ -400,7 +404,7 @@ python tests/synthetic.py                  # synthetische College-Daten (777 Zei
 | `tests/test_clustering.py` | K-Means wie im Kurs (= scikit-learn direkt), Reproduzierbarkeit, Elbow und Silhouette (klare Gruppen werden gefunden, kein Vorschlag ohne Struktur, Stichproben bei großen Daten), Einordnung (kleine/dominierende Cluster, nicht konvergiert, doppelte Zeilen), Profile in Originaleinheiten, Trennkraft = erklärte Streuung, PCA, Vergleich mit bekannten Gruppen, Ausreißer und knappe Zuordnungen in neuen Daten |
 | `tests/test_codegen_parity.py` | der angezeigte Python-Code rechnet **exakt** dasselbe wie die App: X, Cluster, Inertia, Elbow-/Silhouette-Kurve, Profile, Vergleich, Export – auch in Grenzfällen (Tausendertrennzeichen, Datum als Zahl, inf, Gruppen-Füllwerte, Werte begrenzen, neue Spalten) |
 | `tests/test_anomaly.py` | Isolation Forest, LOF, DBSCAN, Autoencoder: Score ⇔ Schwelle, contamination, novelty, Rauschen = Anomalie, eps zu klein, Kurven und Vorschläge für Schritt 7, auffälligste Zeilen, Profil, PCA, Speichern/Laden (.skops/.joblib), neue Daten, kein Vertauschen mit K-Means, beschädigte Rezepte – und der angezeigte Code rechnet **exakt** dasselbe (Score, Anomalien, Schwelle, k-Distanz, eps-Raster, Profile, Export, Schritt 10); das exportierte Skript läuft; Diagramme in Grenzfällen |
-| `tests/test_autoencoder.py` | Autoencoder: Schichten (Vorschlag, Prüfung), Schwelle = Quantil der Rekonstruktionsfehler, contamination 1 % ohne Angabe, findet die eingebauten Betrugsfälle, Engpass = Ausgabe des Encoders (tanh, relu), 2D-Karte, am schlechtesten nachgebaute Features, Speichern/Laden ohne pickle, unvollständige Modelle, Lernkurve, Konfiguration, Schritt 6 prüft die Schichten |
+| `tests/test_autoencoder.py` | Autoencoder: Schichten (Vorschlag, Prüfung), Schwelle = Quantil der Rekonstruktionsfehler, contamination 1 % ohne Angabe, findet die eingebauten Betrugsfälle, findet ungewöhnliche Kombinationen (wo Isolation Forest versagt), batch_size und Early Stopping bei wenigen Zeilen (auch 10 Zeilen), Engpass = Ausgabe des Encoders (tanh, relu), 2D-Karte, am schlechtesten nachgebaute Features, Speichern/Laden ohne pickle, unvollständige Modelle, Lernkurve, Konfiguration, Schritt 6 prüft die Schichten und graut Early Stopping bei wenigen Zeilen aus |
 | `tests/test_bybit_features.py` | Bybit-Skript mit simulierter API (kein Netz): Blättern nach den Grenzen der API, Wiederholen/403/Cache, kein Blick in die Zukunft, laufende Kerze fehlt, Kennzahlen nachgerechnet, Querschnitt, Spot, unbekannte Symbole, Beispiel-Konfiguration passt zur CSV, der eingebaute Kurssturz ist die auffälligste Zeile |
 | `tests/test_pipeline.py` | ganzer Ablauf mit LendingClub-ähnlichen Daten, Speichern/Laden (.skops/.joblib, ZIP), neue Daten (unbekannte Kategorien, Ausreißer, fehlende Spalten), exportiertes Skript läuft |
 | `tests/test_new_features.py` | Jahr + Monat, neue Spalten, *Werte begrenzen*, neue Spalten für neue Daten, Daten speichern, Fazit |

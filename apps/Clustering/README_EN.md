@@ -207,6 +207,10 @@ Same steps 1–5 as for K-Means, another **method** in step 6. All three are uns
 * **Layers and activation:** suggestion from the number of features (8 → 8,2,8; 11 → 16,3,16; 30 → 32,8,32), deeper
   e.g. 32,16,4,16,32. `tanh` usually works better than `relu` in small networks. If the narrowest layer has at least
   as many neurons as there are features, the network can simply pass the rows through – the app warns.
+* **Training on small data too:** batch_size = rows/20 (8 … 200), i.e. about 20 learning steps per epoch – with the
+  scikit-learn default (200 rows per step) the network made only one or two steps per epoch on a few hundred rows and
+  hardly found unusual combinations. Early stopping only from 200 rows on (otherwise too few rows would be left for
+  validation); below that the network learns from all rows, and step 6 says so.
 * **Do not clip what you want to monitor.** *Clip values* in step 2 cuts off exactly the extreme values that make an
   anomaly – for anomaly detection only correct impossible values.
 * **Scaling:** LOF and DBSCAN work with distances → StandardScaler in step 4. Isolation Forest splits one feature at
@@ -382,7 +386,7 @@ Extending:
 
 ```bash
 pip install pytest
-pytest -q                                  # 382 tests, approx. 6 minutes
+pytest -q                                  # 385 tests, approx. 6 minutes
 python tests/synthetic.py                  # synthetic college data (777 rows, not real data)
 ```
 
@@ -391,7 +395,7 @@ python tests/synthetic.py                  # synthetic college data (777 rows, n
 | `tests/test_clustering.py` | K-Means as in the course (= scikit-learn directly), reproducibility, elbow and silhouette (clear groups are found, no suggestion without structure, samples for large data), assessment (small/dominating clusters, not converged, duplicate rows), profiles in original units, separating power = explained variance, PCA, comparison with known groups, outliers and close calls in new data |
 | `tests/test_codegen_parity.py` | the Python code shown computes **exactly** the same as the app: X, clusters, inertia, elbow/silhouette curve, profiles, comparison, export – also in edge cases (thousands separators, dates as numbers, inf, group fill values, clip values, new columns) |
 | `tests/test_anomaly.py` | Isolation Forest, LOF, DBSCAN, autoencoder: score ⇔ threshold, contamination, novelty, noise = anomaly, eps too small, curves and suggestions for step 7, most anomalous rows, profile, PCA, saving/loading (.skops/.joblib), new data, no mix-up with K-Means, damaged recipes – and the code shown computes **exactly** the same (score, anomalies, threshold, k-distance, eps grid, profiles, export, step 10); the exported script runs; charts in edge cases |
-| `tests/test_autoencoder.py` | autoencoder: layers (suggestion, validation), threshold = quantile of the reconstruction errors, contamination 1 % if not given, finds the built-in fraud cases, bottleneck = encoder output (tanh, relu), 2D map, worst reconstructed features, saving/loading without pickle, incomplete models, learning curve, configuration, step 6 checks the layers |
+| `tests/test_autoencoder.py` | autoencoder: layers (suggestion, validation), threshold = quantile of the reconstruction errors, contamination 1 % if not given, finds the built-in fraud cases, finds unusual combinations (where Isolation Forest fails), batch_size and early stopping on small data (even 10 rows), bottleneck = encoder output (tanh, relu), 2D map, worst reconstructed features, saving/loading without pickle, incomplete models, learning curve, configuration, step 6 checks the layers and greys out early stopping on small data |
 | `tests/test_bybit_features.py` | the Bybit script with a simulated API (no network): paging within the API limits, retries/403/cache, no look-ahead, the running candle is left out, metrics recomputed, cross-section, spot, unknown symbols, the example configuration fits the CSV, the built-in crash is the most anomalous row |
 | `tests/test_pipeline.py` | the whole pipeline with LendingClub-like data, saving/loading (.skops/.joblib, ZIP), new data (unknown categories, outliers, missing columns), the exported script runs |
 | `tests/test_new_features.py` | year + month, new columns, *clip values*, new columns for new data, saving data, conclusion |
