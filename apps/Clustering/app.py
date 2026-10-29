@@ -1722,9 +1722,15 @@ def autoencoder_params_ui(n_feat, n):
     Stopping (erst ab pl.AE_EARLY_MIN_ROWS Zeilen) und der Anteil auffälliger Zeilen. Zeigt Fehler in den Schichten und
     einen fehlenden Engpass sofort."""
     default = pl.layers_text(pl.default_ae_layers(n_feat))
+    # Vorschlag aus der Zahl der Features – neu, wenn sich die Zahl ändert (andere Features in Schritt 4) und das Feld
+    # noch den alten Vorschlag enthält: sonst bliebe z. B. 8,1,8 aus 2 Features bei 8 Features stehen (Engpass 1 statt
+    # 2 – ungewöhnliche Kombinationen fallen dann kaum noch auf). Selbst eingegebene Schichten bleiben.
+    auto = ss.get("_ae_layers_auto")  # (Zahl der Features, Vorschlag) – zuletzt aus den Daten eingetragen
+    if "w_ae_layers" not in ss or (auto is not None and auto[0] != n_feat and ss.w_ae_layers == auto[1]):
+        ss.w_ae_layers = default
+        ss._ae_layers_auto = (n_feat, default)
     c1, c2, c3, c4 = st.columns([1.6, 1.1, 1.2, 1.3])
     with c1:
-        init("w_ae_layers", default)
         st.text_input(tx("Schichten (Neuronen je Schicht)"), key="w_ae_layers",
                       help=tx("Verborgene Schichten mit Komma getrennt – symmetrisch mit dem Engpass in der Mitte, "
                               "z. B. 16,3,16 oder 32,8,32 oder tiefer 32,16,4,16,32. Leer = Vorschlag für {p} Features "
@@ -1774,6 +1780,8 @@ def autoencoder_params_ui(n_feat, n):
             st.warning(tx("Kein echter Engpass: Die engste Schicht hat {b} Neuronen bei {p} Features – das Netz kann die "
                           "Zeilen fast unverändert durchreichen, ungewöhnliche Zeilen fallen dann kaum auf. In der Mitte "
                           "weniger Neuronen wählen (z. B. {d}).", b=min(layers), p=n_feat, d=default))
+        elif n_feat == 1:
+            st.warning(tx(pl.ONE_FEATURE_NOTE))
         else:
             st.caption(tx("Netz: {p} Features → {layers} → {p} Features · Engpass {b} Neuronen.",
                           p=n_feat, layers=" → ".join(str(v) for v in layers), b=min(layers)))
@@ -1817,7 +1825,14 @@ def anomaly_params_ui(key, p, n, n_feat):
     elif key == pl.MODEL_AUTOENCODER:
         autoencoder_params_ui(n_feat, n)
     else:
-        init("w_min_samples", int(min(max(5, 2 * n_feat), 50)))
+        # min_samples nach der Faustregel 2 × Zahl der Features – wie die Schichten des Autoencoders neu, wenn sich die
+        # Zahl der Features ändert und noch der alte Vorschlag eingetragen ist; selbst gewählte Werte bleiben
+        rule = int(min(max(5, 2 * n_feat), 50))
+        auto_ms = ss.get("_min_samples_auto")  # (Zahl der Features, Vorschlag)
+        if "w_min_samples" not in ss or (auto_ms is not None and auto_ms[0] != n_feat
+                                         and ss.w_min_samples == auto_ms[1]):
+            ss.w_min_samples = rule
+            ss._min_samples_auto = (n_feat, rule)
         # Startwert aus der k-Distanz einer Stichprobe – genauer misst Schritt 7. Neu berechnet, wenn sich Daten (neue
         # Vorbereitung, z. B. anderer Scaler), min_samples oder metric ändern und eps noch aus den Daten stammt
         # (Startwert oder in Schritt 7 übernommener Vorschlag): ein eps aus anderen Einheiten wäre sonst viel zu groß
@@ -1836,8 +1851,7 @@ def anomaly_params_ui(key, p, n, n_feat):
         with c2:
             st.number_input("min_samples", 2, 1000, step=1, key="w_min_samples",
                             help=tx("So viele Zeilen (sie selbst eingeschlossen) müssen im Radius eps liegen, damit eine "
-                                    "Zeile Kernpunkt ist. Faustregel: 2 × Zahl der Features (hier {v}).",
-                                    v=int(min(max(5, 2 * n_feat), 50))))
+                                    "Zeile Kernpunkt ist. Faustregel: 2 × Zahl der Features (hier {v}).", v=rule))
         with c3:
             sb("metric", pl.METRICS, "w_metric", default="euclidean",
                help=tx("Abstandsmaß: euclidean = Luftlinie (Standard) · manhattan = Summe der Abstände je Feature"))

@@ -285,6 +285,9 @@ T = {
     "Early Stopping erst ab {m} Zeilen – hier zu wenige Zeilen für 10 % zur Validierung": (
         "early stopping only from {m} rows on – too few rows here for 10 % validation",
         "early stopping dopiero od {m} wierszy – tutaj za mało wierszy na 10 % do walidacji"),
+    "Nachbau in der Form von X (bei nur einem Feature liefert predict sonst eine flache Reihe)": (
+        "reconstruction in the shape of X (with a single feature predict would otherwise return a flat array)",
+        "rekonstrukcja w kształcie X (przy jednej cesze predict zwróciłby inaczej płaską tablicę)"),
     "Rekonstruktionsfehler (RMSE je Zeile): höher = auffälliger": (
         "reconstruction error (RMSE per row): higher = more anomalous",
         "błąd rekonstrukcji (RMSE dla wiersza): wyższy = bardziej nietypowy"),

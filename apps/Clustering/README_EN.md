@@ -205,8 +205,10 @@ Same steps 1–5 as for K-Means, another **method** in step 6. All three are uns
   the network's own non-linear compression (via PCA with more than 2 neurons). The threshold is saved with the model
   (`threshold_`); the code shown computes exactly the same.
 * **Layers and activation:** suggestion from the number of features (8 → 8,2,8; 11 → 16,3,16; 30 → 32,8,32), deeper
-  e.g. 32,16,4,16,32. `tanh` usually works better than `relu` in small networks. If the narrowest layer has at least
-  as many neurons as there are features, the network can simply pass the rows through – the app warns.
+  e.g. 32,16,4,16,32; if the number of features changes (step 4), the suggestion follows – your own layers stay.
+  `tanh` usually works better than `relu` in small networks: with relu a neuron in the bottleneck often "dies" (always
+  outputs 0) – the app reports it. If the narrowest layer has at least as many neurons as there are features, the
+  network can simply pass the rows through – the app warns (also with a single feature).
 * **Training on small data too:** batch_size = rows/20 (8 … 200), i.e. about 20 learning steps per epoch – with the
   scikit-learn default (200 rows per step) the network made only one or two steps per epoch on a few hundred rows and
   hardly found unusual combinations. Early stopping only from 200 rows on (otherwise too few rows would be left for
@@ -348,6 +350,7 @@ conclusion = pl.assess_scoring(recipe, result, report, comparison)
 | `pd.get_dummies(...)` | pandas ≥ 2: True/False instead of 0/1 | `dtype=float` |
 | `LocalOutlierFactor().fit_predict(X)`, later `lof.predict(new)` | without `novelty=True` there is no `predict` for new data (and with `novelty=True` no `fit_predict`) | `LocalOutlierFactor(novelty=True)`; the score of the training rows from `negative_outlier_factor_` |
 | `IsolationForest(contamination=0.1, behaviour='new')` from tutorials | `behaviour` no longer exists since scikit-learn 0.24; 10 % "anomalies" are almost always too many | `contamination='auto'` (threshold 0.5) or a deliberately small share – step 7 shows the knee |
+| `score = ((X - ae.predict(X)) ** 2).mean(axis=1)` (autoencoder) | with a single feature `MLPRegressor.predict` returns a flat array – `X - predict(X)` becomes an n × n matrix (wrong score, lots of memory) | `ae.predict(X).reshape(X.shape)` |
 
 ## Files
 
@@ -386,7 +389,7 @@ Extending:
 
 ```bash
 pip install pytest
-pytest -q                                  # 385 tests, approx. 6 minutes
+pytest -q                                  # 389 tests, approx. 7 minutes
 python tests/synthetic.py                  # synthetic college data (777 rows, not real data)
 ```
 
@@ -402,6 +405,7 @@ python tests/synthetic.py                  # synthetic college data (777 rows, n
 | `tests/test_audit_regressions.py` … `test_audit4_regressions.py` | regression tests from the four audits of the base app, applied to clustering (numbers, dates, CSV detection, formula limits, configurations, ZIP protection, no code from names in the code shown, language switch, safe loading, only K-Means models) |
 | `tests/test_audit5_regressions.py` | audit 5 (clustering app): export code = app even after removed rows/columns, no unasked comparison group, ID columns as row names, "as in the course" text with the real groups, no Markdown from foreign models, a damaged `preprocessing.json` is refused, empty clusters, note on changed settings |
 | `tests/test_audit6_regressions.py` | audit 6 (anomaly detection, Bybit script): positive group in step 10 as in training, eps start value after a new preparation, eps suggestion never 0, memory protection for DBSCAN and LOF (training and eps table, code = app), identical rows, small data, eps line in the k-distance chart, open interest without look-ahead, fine open interest grid, no open interest with 1-minute candles |
+| `tests/test_audit7_regressions.py` | audit 7 (autoencoder): layers and min_samples (DBSCAN) follow the number of features, a single feature (score = true reconstruction error, code = app), dead neurons in the bottleneck are reported |
 | `tests/test_app.py` | click test of the interface (all 10 steps as in the course; semicolon CSV, changed settings, unusable values, overwrite protection; new columns, chart errors, export) |
 | `tests/test_app_anomaly.py` | click test of the three anomaly models through steps 4–10 and of the Bybit CSV with its example configuration up to scoring new data |
 | `tests/test_charts.py` | the charts of step 3 and the cluster charts (elbow/silhouette, silhouette plot, sizes, profiles, PCA, cross table) |

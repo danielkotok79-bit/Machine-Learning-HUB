@@ -520,7 +520,9 @@ def autoencoder_model_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
     return "\n".join(head + [
         f"{v} = {anomaly_code(cfg, n_rows)}",
         f"{v}.fit(X, X)   # " + tx("Autoencoder: Eingabe = Ziel – das Netz lernt, die Zeilen nachzubauen (kein Label)"),
-        f"score = np.sqrt(((X - {v}.predict(X)) ** 2).mean(axis=1))   # "
+        f"X_rec = {v}.predict(X).reshape(X.shape)   # "
+        + tx("Nachbau in der Form von X (bei nur einem Feature liefert predict sonst eine flache Reihe)"),
+        "score = np.sqrt(((X - X_rec) ** 2).mean(axis=1))   # "
         + tx("Rekonstruktionsfehler (RMSE je Zeile): höher = auffälliger"),
         f"threshold = np.percentile(score, {_float(100 * (1 - c))})   # "
         + tx("contamination {pct}: die auffälligsten {pct} der Trainingszeilen", pct=pl.share_text(c)),
@@ -695,7 +697,7 @@ def autoencoder_eval_code(cfg: pl.ClusterConfig, n_features: int) -> str:
     act = cfg.ae_activation if cfg.ae_activation in pl.AE_ACTIVATIONS else "tanh"
     b = min(layers)
     L = ["# " + tx("Was das Netz nicht nachbauen konnte: Eingabe minus Nachbau je Feature (skaliert)"),
-         f"recon = X - {v}.predict(X)",
+         f"recon = X - {v}.predict(X).reshape(X.shape)",
          "for i in top:",
          "    worst = np.argsort(-np.abs(recon[i]), kind='stable')[:3]",
          "    print(i, [(feature_columns[j], round(recon[i, j], 1)) for j in worst])", "",
@@ -840,8 +842,8 @@ def predict_code(folder: str, model: str = pl.MODEL_KMEANS) -> str:
         new_score = {pl.MODEL_IFOREST: f"-{v}.score_samples(X_new)", pl.MODEL_LOF: f"-{v}.score_samples(X_new)",
                      pl.MODEL_DBSCAN: f"NearestNeighbors(n_neighbors=1, metric={v}.metric).fit({v}.components_)"
                                       f".kneighbors(X_new)[0][:, 0] / {v}.eps",
-                     pl.MODEL_AUTOENCODER: f"np.sqrt(((X_new - {v}.predict(X_new)) ** 2).mean(axis=1))   "
-                                           f"# anomaly_new = score_new > {v}.threshold_"}[model]
+                     pl.MODEL_AUTOENCODER: f"np.sqrt(((X_new - {v}.predict(X_new).reshape(X_new.shape)) ** 2)"
+                                           f".mean(axis=1))   # anomaly_new = score_new > {v}.threshold_"}[model]
         return ("import pipeline as pl\n\n"
                 f"{v}, recipe = pl.load_bundle({folder!r})\n"
                 f"df_new, _ = pl.read_csv({tx('neue_daten.csv')!r})\n"

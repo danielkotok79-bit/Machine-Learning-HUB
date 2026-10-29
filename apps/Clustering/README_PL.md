@@ -202,8 +202,10 @@ nietypowy (`Anomalia = 1`), gdy jego wskaźnik przekracza **próg**.
   kompresję sieci (przy więcej niż 2 neuronach przez PCA). Próg jest zapisywany razem z modelem (`threshold_`);
   pokazany kod liczy dokładnie to samo.
 * **Warstwy i aktywacja:** propozycja na podstawie liczby cech (8 → 8,2,8; 11 → 16,3,16; 30 → 32,8,32), głębiej np.
-  32,16,4,16,32. `tanh` w małych sieciach zwykle działa lepiej niż `relu`. Jeśli najwęższa warstwa ma co najmniej tyle
-  neuronów, ile jest cech, sieć może po prostu przepuścić wiersze – aplikacja ostrzega.
+  32,16,4,16,32; gdy liczba cech się zmieni (krok 4), propozycja się dostosowuje – własne warstwy zostają. `tanh` w
+  małych sieciach zwykle działa lepiej niż `relu`: przy relu neuron w wąskim gardle często „umiera” (zawsze daje 0) –
+  aplikacja to zgłasza. Jeśli najwęższa warstwa ma co najmniej tyle neuronów, ile jest cech, sieć może po prostu
+  przepuścić wiersze – aplikacja ostrzega (także przy jednej cesze).
 * **Trening także na małych danych:** batch_size = liczba wierszy/20 (8 … 200), czyli ok. 20 kroków uczenia na epokę –
   przy domyślnym ustawieniu scikit-learn (200 wierszy na krok) sieć przy kilkuset wierszach robiła tylko jeden–dwa kroki
   na epokę i prawie nie znajdowała nietypowych kombinacji. Early stopping dopiero od 200 wierszy (inaczej do walidacji
@@ -346,6 +348,7 @@ podsumowanie = pl.assess_scoring(recipe, result, report, comparison)
 | `pd.get_dummies(...)` | pandas ≥ 2: True/False zamiast 0/1 | `dtype=float` |
 | `LocalOutlierFactor().fit_predict(X)`, później `lof.predict(nowe)` | bez `novelty=True` nie ma `predict` dla nowych danych (a z `novelty=True` nie ma `fit_predict`) | `LocalOutlierFactor(novelty=True)`; wskaźnik wierszy treningowych z `negative_outlier_factor_` |
 | `IsolationForest(contamination=0.1, behaviour='new')` z poradników | `behaviour` nie istnieje od scikit-learn 0.24; 10 % „anomalii” to prawie zawsze za dużo | `contamination='auto'` (próg 0.5) albo świadomie mały udział – krok 7 pokazuje załamanie |
+| `score = ((X - ae.predict(X)) ** 2).mean(axis=1)` (autoenkoder) | przy jednej cesze `MLPRegressor.predict` zwraca płaską tablicę – `X - predict(X)` staje się macierzą n × n (zły wskaźnik, dużo pamięci) | `ae.predict(X).reshape(X.shape)` |
 
 ## Pliki
 
@@ -384,7 +387,7 @@ Rozszerzanie:
 
 ```bash
 pip install pytest
-pytest -q                                  # 385 testów, ok. 6 minut
+pytest -q                                  # 389 testów, ok. 7 minut
 python tests/synthetic.py                  # syntetyczne dane College (777 wierszy, nie są to prawdziwe dane)
 ```
 
@@ -400,6 +403,7 @@ python tests/synthetic.py                  # syntetyczne dane College (777 wiers
 | `tests/test_audit_regressions.py` … `test_audit4_regressions.py` | testy regresji z czterech audytów aplikacji bazowej, przeniesione na klastrowanie (liczby, daty, rozpoznawanie CSV, limity formuł, konfiguracje, ochrona ZIP, brak kodu z nazw w pokazywanym kodzie, zmiana języka, bezpieczne wczytywanie, tylko modele K-Means) |
 | `tests/test_audit5_regressions.py` | audyt 5 (aplikacja Clustering): kod eksportu = aplikacja także po usunięciu wierszy/kolumn, brak nieproszonej grupy porównawczej, kolumny ID jako nazwa wiersza, tekst „jak w kursie” z prawdziwymi grupami, brak Markdown z obcych modeli, odrzucanie uszkodzonego `preprocessing.json`, puste klastry, uwaga o zmienionych ustawieniach |
 | `tests/test_audit6_regressions.py` | audyt 6 (wykrywanie anomalii, skrypt Bybit): grupa pozytywna w kroku 10 jak w treningu, wartość startowa eps po nowym przygotowaniu, propozycja eps nigdy 0, ochrona pamięci dla DBSCAN i LOF (trening i tabela eps, kod = aplikacja), identyczne wiersze, małe dane, linia eps na wykresie k-odległości, open interest bez zaglądania w przyszłość, drobna siatka OI, brak OI przy świecach 1-minutowych |
+| `tests/test_audit7_regressions.py` | audyt 7 (autoenkoder): warstwy i min_samples (DBSCAN) podążają za liczbą cech, jedna cecha (wskaźnik = prawdziwy błąd rekonstrukcji, kod = aplikacja), martwe neurony w wąskim gardle są zgłaszane |
 | `tests/test_app.py` | test klikania interfejsu (wszystkie 10 kroków jak w kursie; CSV ze średnikiem, zmienione ustawienia, nieużyteczne wartości, ochrona przed nadpisaniem; nowe kolumny, błędy rysowania, eksport) |
 | `tests/test_app_anomaly.py` | test klikania trzech modeli anomalii przez kroki 4–10 oraz CSV z Bybit z przykładową konfiguracją aż do oceny nowych danych |
 | `tests/test_charts.py` | wykresy kroku 3 i wykresy klastrów (łokieć/Silhouette, wykres Silhouette, wielkości, profile, PCA, tabela krzyżowa) |

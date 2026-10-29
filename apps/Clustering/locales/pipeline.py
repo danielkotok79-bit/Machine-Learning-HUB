@@ -840,6 +840,24 @@ T = {
         ":orange[**Brak prawdziwego wąskiego gardła:**] liczba neuronów w najwęższej warstwie ({b}) nie jest mniejsza "
         "niż liczba cech ({p}) – sieć może przepuścić wiersze prawie bez zmian, więc nietypowe wiersze ledwo się "
         "wyróżniają. Wybierz mniej neuronów w środku (np. {s})."),
+    ":orange[**Tote Neuronen im Engpass:**] {d} von {b} Neuronen geben für alle Zeilen denselben Wert aus (bei relu: "
+    "immer 0) – der Engpass ist damit enger als eingestellt, ungewöhnliche Kombinationen fallen weniger auf. tanh "
+    "wählen (Standard), einen anderen Seed oder mehr Neuronen in der Mitte.": (
+        ":orange[**Dead neurons in the bottleneck:**] {d} of {b} neurons output the same value for every row (with "
+        "relu: always 0) – the bottleneck is narrower than set, so unusual combinations stand out less. Choose tanh "
+        "(default), another seed or more neurons in the middle.",
+        ":orange[**Martwe neurony w wąskim gardle:**] {d} z {b} neuronów daje dla wszystkich wierszy tę samą wartość "
+        "(przy relu: zawsze 0) – wąskie gardło jest przez to węższe niż ustawione, więc nietypowe kombinacje słabiej "
+        "się wyróżniają. Wybierz tanh (domyślnie), inny seed albo więcej neuronów w środku."),
+    ":orange[**Nur ein Feature:**] Ein Autoencoder hat hier nichts zu verdichten – er lernt fast den Wert selbst "
+    "nachzubauen; auffällig werden nur Werte am Rand des Trainingsbereichs. Für ein einzelnes Feature ist Isolation "
+    "Forest die einfachere Wahl.": (
+        ":orange[**Only one feature:**] an autoencoder has nothing to compress here – it learns to rebuild the value "
+        "itself almost exactly; only values at the edge of the training range stand out. For a single feature, "
+        "Isolation Forest is the simpler choice.",
+        ":orange[**Tylko jedna cecha:**] autoenkoder nie ma tu czego kompresować – uczy się niemal dokładnie odtwarzać "
+        "samą wartość; wyróżniają się tylko wartości na skraju zakresu z treningu. Dla pojedynczej cechy prostszym "
+        "wyborem jest Isolation Forest."),
     "Schichten: ganze Zahlen mit Komma getrennt, z. B. 16,3,16.": (
         "Layers: whole numbers separated by commas, e.g. 16,3,16.",
         "Warstwy: liczby całkowite oddzielone przecinkami, np. 16,3,16."),

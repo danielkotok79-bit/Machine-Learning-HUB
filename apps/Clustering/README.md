@@ -211,8 +211,10 @@ Auffällig (`Anomalie = 1`) ist ein Score über der **Schwelle**.
   (bei mehr als 2 Neuronen per PCA). Die Schwelle wird mit dem Modell gespeichert (`threshold_`); der angezeigte Code
   rechnet exakt dasselbe.
 * **Schichten und Aktivierung:** Vorschlag aus der Zahl der Features (8 → 8,2,8; 11 → 16,3,16; 30 → 32,8,32), tiefer
-  z. B. 32,16,4,16,32. `tanh` klappt bei kleinen Netzen meist besser als `relu`. Hat die engste Schicht mindestens so
-  viele Neuronen wie es Features gibt, kann das Netz die Zeilen einfach durchreichen – die App warnt.
+  z. B. 32,16,4,16,32; ändert sich die Zahl der Features (Schritt 4), passt sich der Vorschlag an – eigene Schichten
+  bleiben. `tanh` klappt bei kleinen Netzen meist besser als `relu`: Mit relu „stirbt“ oft ein Neuron im Engpass (gibt
+  immer 0 aus) – die App meldet das. Hat die engste Schicht mindestens so viele Neuronen wie es Features gibt, kann das
+  Netz die Zeilen einfach durchreichen – die App warnt (bei nur einem Feature ebenso).
 * **Training auch bei wenigen Zeilen:** batch_size = Zeilen/20 (8 … 200), also etwa 20 Lernschritte je Epoche – mit
   dem scikit-learn-Standard (200 Zeilen je Schritt) machte das Netz bei einigen hundert Zeilen nur ein bis zwei Schritte
   je Epoche und fand ungewöhnliche Kombinationen kaum. Early Stopping erst ab 200 Zeilen (sonst blieben zu wenige Zeilen
@@ -356,6 +358,7 @@ fazit = pl.assess_scoring(recipe, result, report, comparison)
 | `pd.get_dummies(...)` | pandas ≥ 2: True/False statt 0/1 | `dtype=float` |
 | `LocalOutlierFactor().fit_predict(X)`, später `lof.predict(neu)` | ohne `novelty=True` gibt es kein `predict` für neue Daten (mit `novelty=True` kein `fit_predict`) | `LocalOutlierFactor(novelty=True)`; Score der Trainingszeilen aus `negative_outlier_factor_` |
 | `IsolationForest(contamination=0.1, behaviour='new')` aus Tutorials | `behaviour` gibt es seit scikit-learn 0.24 nicht mehr; 10 % „Anomalien“ sind fast immer zu viele | `contamination='auto'` (Schwelle 0.5) oder ein bewusst kleiner Anteil – Schritt 7 zeigt den Knick |
+| `score = ((X - ae.predict(X)) ** 2).mean(axis=1)` (Autoencoder) | mit nur einem Feature liefert `MLPRegressor.predict` eine flache Reihe – `X - predict(X)` wird zur n × n-Matrix (falscher Score, viel Speicher) | `ae.predict(X).reshape(X.shape)` |
 
 ## Dateien
 
@@ -395,7 +398,7 @@ Erweitern:
 
 ```bash
 pip install pytest
-pytest -q                                  # 385 Tests, ca. 6 Minuten
+pytest -q                                  # 389 Tests, ca. 7 Minuten
 python tests/synthetic.py                  # synthetische College-Daten (777 Zeilen, keine echten Daten)
 ```
 
@@ -411,6 +414,7 @@ python tests/synthetic.py                  # synthetische College-Daten (777 Zei
 | `tests/test_audit_regressions.py` … `test_audit4_regressions.py` | Regressionstests aus den vier Audits des Grundgerüsts, übertragen auf Clustering (Zahlen, Datum, CSV-Erkennung, Formel-Grenzen, Konfigurationen, ZIP-Schutz, kein Code aus Namen im angezeigten Code, Sprachwechsel, sicheres Laden, nur K-Means-Modelle) |
 | `tests/test_audit5_regressions.py` | Audit 5 (Clustering-App): Export-Code = App auch nach entfernten Zeilen/Spalten, keine ungefragte Vergleichsgruppe, ID-Spalten als Bezeichnung, Text „Wie im Kurs“ mit den echten Gruppen, kein Markdown aus fremden Modellen, beschädigte `preprocessing.json` wird abgelehnt, leere Cluster, Hinweis auf geänderte Einstellungen |
 | `tests/test_audit6_regressions.py` | Audit 6 (Anomalieerkennung, Bybit-Skript): positive Gruppe in Schritt 10 wie im Training, eps-Startwert nach neuer Vorbereitung, eps-Vorschlag nie 0, Speicherschutz für DBSCAN und LOF (Training und eps-Tabelle, Code = App), gleiche Zeilen, kleine Daten, eps-Linie im k-Distanz-Bild, Open Interest ohne Blick in die Zukunft, feines OI-Raster, kein OI bei 1-Minuten-Kerzen |
+| `tests/test_audit7_regressions.py` | Audit 7 (Autoencoder): Schichten und min_samples (DBSCAN) folgen der Zahl der Features, ein einziges Feature (Score = echter Rekonstruktionsfehler, Code = App), tote Neuronen im Engpass werden gemeldet |
 | `tests/test_app.py` | Klick-Test der Oberfläche (alle 10 Schritte wie im Kurs; Semikolon-CSV, geänderte Einstellungen, unbrauchbare Werte, Schutz vor Überschreiben; neue Spalten, Fehler beim Zeichnen, Export) |
 | `tests/test_app_anomaly.py` | Klick-Test der drei Anomalie-Modelle durch die Schritte 4–10 und der Bybit-CSV mit ihrer Beispiel-Konfiguration bis zur Bewertung neuer Daten |
 | `tests/test_charts.py` | Diagramme von Schritt 3 und die Cluster-Diagramme (Elbow/Silhouette, Silhouetten-Diagramm, Größen, Profile, PCA, Kreuztabelle) |

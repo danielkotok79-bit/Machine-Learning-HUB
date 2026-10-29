@@ -1880,9 +1880,10 @@ def make_anomaly_model(cfg: ClusterConfig, n: int, p: int | None = None):
 
 def reconstruction(model, X: np.ndarray) -> np.ndarray:
     """Autoencoder: Eingabe minus Nachbau je Zeile und Feature (in den skalierten Features) – was das Netz nicht
-    nachbauen konnte."""
+    nachbauen konnte. Bei nur einem Feature liefert predict eine flache Reihe (n,) statt einer Spalte (n, 1) – ohne
+    reshape würde X − predict(X) zu einer n × n-Matrix (falscher Score, n² Speicher)."""
     X = np.asarray(X, dtype="float64")
-    return X - model.predict(X)
+    return X - np.asarray(model.predict(X)).reshape(X.shape)
 
 
 def reconstruction_error(model, X: np.ndarray) -> np.ndarray:
@@ -2135,8 +2136,10 @@ def train_anomaly(cfg: ClusterConfig, prep: PrepResult, progress=None):
         score, flag, labels = anomaly_scores(model, X, cfg.model, training=True)
     notes = list(dict.fromkeys(str(w.message) for w in caught
                                if issubclass(w.category, (UserWarning, RuntimeWarning, ConvergenceWarning))))
-    if cfg.model == MODEL_AUTOENCODER:  # „Maximum iterations reached“ erklärt autoencoder_notes verständlicher
-        notes = [w for w in notes if not w.startswith("Stochastic Optimizer: Maximum iterations")]
+    if cfg.model == MODEL_AUTOENCODER:  # „Maximum iterations reached“ erklärt autoencoder_notes verständlicher; bei
+        notes = [w for w in notes  # nur einem Feature ist das Ziel X eine Spalte – scikit-learn macht daraus selbst
+                 if not w.startswith(("Stochastic Optimizer: Maximum iterations",  # eine Reihe (gleiches Modell)
+                                      "A column-vector y was passed"))]
     finite = score[np.isfinite(score)]
     info = {
         "model": cfg.model, "n_rows": int(n), "n_features": int(p), "n_anomalies": int(flag.sum()),
@@ -2158,7 +2161,10 @@ def train_anomaly(cfg: ClusterConfig, prep: PrepResult, progress=None):
                     n_iter=int(model.n_iter_), loss=float(model.loss_), epochs=int(cfg.ae_epochs),
                     batch_size=ae_batch_size(n), early_stopping=bool(model.early_stopping),
                     early_requested=bool(cfg.ae_early_stopping),
-                    best_validation=float(best) if best is not None and np.isfinite(best) else None)
+                    best_validation=float(best) if best is not None and np.isfinite(best) else None,
+                    # Neuronen im Engpass mit demselben Wert für alle Zeilen (relu: „tot“, immer 0) – der Engpass ist
+                    # dann enger als eingestellt
+                    dead_code=int(np.sum(np.ptp(autoencoder_codes(model, X), axis=0) == 0)))
     if progress:
         progress(0.4, tx("{name} fertig – {n} auffällige Zeilen", name=model_name(cfg.model), n=info["n_anomalies"]),
                  None)
@@ -2264,6 +2270,11 @@ def score_text(v) -> str:
     return "∞" if np.isinf(v) else f"{v:.4g}"
 
 
+ONE_FEATURE_NOTE = N_(":orange[**Nur ein Feature:**] Ein Autoencoder hat hier nichts zu verdichten – er lernt fast den "
+                      "Wert selbst nachzubauen; auffällig werden nur Werte am Rand des Trainingsbereichs. Für ein "
+                      "einzelnes Feature ist Isolation Forest die einfachere Wahl.")  # Schritt 6 (Warnung) und 6/7
+
+
 def autoencoder_notes(info: dict) -> list[str]:
     """Schritt 6/7, Autoencoder: Aufbau des Netzes, Training (Epochen, Loss, Validierung) und Warnung, wenn der Engpass
     nicht enger ist als die Zahl der Features – dann kann das Netz die Zeilen einfach durchreichen."""
@@ -2275,6 +2286,12 @@ def autoencoder_notes(info: dict) -> list[str]:
     if best is not None:
         text += tx(" Early Stopping: bestes R² auf den Validierungszeilen {r}.", r=f"{best:.3f}")
     notes = [text]
+    dead = int(info.get("dead_code") or 0)
+    if dead:
+        notes.append(tx(":orange[**Tote Neuronen im Engpass:**] {d} von {b} Neuronen geben für alle Zeilen denselben Wert "
+                        "aus (bei relu: immer 0) – der Engpass ist damit enger als eingestellt, ungewöhnliche "
+                        "Kombinationen fallen weniger auf. tanh wählen (Standard), einen anderen Seed oder mehr Neuronen "
+                        "in der Mitte.", d=dead, b=b))
     if info.get("early_requested") and not info.get("early_stopping", True):
         notes.append(tx("Early Stopping aus: erst ab {m} Zeilen sinnvoll (10 % = mindestens {v} Zeilen zur Validierung) – "
                         "bei {n} Zeilen lernt das Netz mit allen Zeilen und endet, wenn der Trainingsfehler nicht mehr "
@@ -2291,6 +2308,8 @@ def autoencoder_notes(info: dict) -> list[str]:
                         "Netz kann die Zeilen fast unverändert durchreichen, ungewöhnliche Zeilen fallen dann kaum auf. "
                         "In der Mitte weniger Neuronen wählen (z. B. {s}).",
                         b=b, p=p, s=layers_text(default_ae_layers(p))))
+    elif p == 1:
+        notes.append(tx(ONE_FEATURE_NOTE))
     return notes
 
 

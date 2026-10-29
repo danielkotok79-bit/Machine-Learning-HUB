@@ -104,7 +104,7 @@ Wersja polska i niemiecka trzeciego dokumentu to jeden dwujęzyczny plik (najpie
 
 ## Testy
 
-**1073 automatycznych testów** (pytest, w tym testy całego interfejsu przez Streamlit `AppTest`) – uruchamiane
+**1077 automatycznych testów** (pytest, w tym testy całego interfejsu przez Streamlit `AppTest`) – uruchamiane
 osobno dla każdej aplikacji:
 
 ```bash
@@ -116,7 +116,7 @@ pytest -q
 | Aplikacja | Testy |
 |---|---|
 | Supervised | 310 |
-| Clustering | 385 |
+| Clustering | 389 |
 | NLP | 188 |
 | Deep Learning | 190 |
 

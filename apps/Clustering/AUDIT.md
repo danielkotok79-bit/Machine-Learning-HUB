@@ -371,7 +371,7 @@ przykład deep learningu bez nadzoru), README w trzech językach.
 |---|---|
 | Gdzie | w aplikacji Clustering obok Isolation Forest, LOF i DBSCAN – te same kroki i ten sam CSV (np. z Bybit), więc metody da się porównać bezpośrednio; nie w aplikacji Deep Learning (Keras), która jest zbudowana wokół etykiety |
 | Biblioteka | scikit-learn `MLPRegressor` (optymalizator Adam), bez TensorFlow – lekko i deterministycznie przy tym samym seedzie, więc pokazany kod liczy dokładnie to samo co aplikacja (testy parytetu); zapis `.skops` (zaufany dodatkowo typ `AdamOptimizer`, stan optymalizatora) |
-| Architektura | warstwy jako tekst „16,3,16”; propozycja z liczby cech p: na zewnątrz potęga 2 ≥ p (8 … 64 neuronów), wąskie gardło ≈ p/4 (2 … 8, zawsze mniej niż p); aktywacja `tanh` (w próbach na danych typu oszustwa average precision 0.94–0.98 wobec 0.70–0.88 dla `relu`), early stopping (10 % wierszy do walidacji, zostają wagi najlepszej epoki; od 200 wierszy), `batch_size` = wiersze/20 w granicach 8 … 200, 300 epok – oba progi z przeglądu przed scaleniem (niżej) |
+| Architektura | warstwy jako tekst „16,3,16”; propozycja z liczby cech p: na zewnątrz potęga 2 ≥ p (8 … 64 neuronów), wąskie gardło ≈ p/4 (2 … 8, zawsze mniej niż p); aktywacja `tanh` (pomiar z audytu 7, 5 seedów: na danych typu oszustwa average precision 0.93 – jak `relu` 0.94; na nietypowych kombinacjach 0.86 wobec 0.45, bo przy `relu` neurony w wąskim gardle często „umierają”), early stopping (10 % wierszy do walidacji, zostają wagi najlepszej epoki; od 200 wierszy), `batch_size` = wiersze/20 w granicach 8 … 200, 300 epok – oba progi z przeglądu przed scaleniem (niżej) |
 | Wskaźnik | błąd rekonstrukcji = RMSE dla wiersza w skalowanych cechach (przy StandardScaler w odchyleniach standardowych) |
 | Próg | autoenkoder nie ma wbudowanego progu → zawsze stały udział (contamination, domyślnie 1 %) = kwantyl błędów w treningu; zapisany w modelu jako `threshold_` (jak `offset_` w IF/LOF) i w `preprocessing.json` |
 | Krok 6/7 | krzywa uczenia (loss na epokę, R² walidacji z najlepszą epoką); progi dla udziałów i załamanie krzywej jak przy IF/LOF; uwagi: budowa sieci, epoki, loss, R², ostrzeżenie „brak prawdziwego wąskiego gardła”, zrozumiały komunikat zamiast surowego ConvergenceWarning „Maximum iterations” |
@@ -432,3 +432,58 @@ Early stopping przy małych danych (`batch_size` jak teraz): 40 wierszy 0.42 z /
 385 testów (362 + 23: 13 w `tests/test_autoencoder.py`, 7 nowych przypadków w `tests/test_anomaly.py`, 1 w
 `tests/test_app_anomaly.py`, 2 w `tests/test_i18n.py`) – wszystkie przechodzą (Python 3.13, pandas 3.1,
 scikit-learn 1.9, skops 0.16, Streamlit 1.66). Uruchomienie: `pytest -q` (ok. 6 minut).
+
+# Audyt 7 – autoenkoder (wersja 3) (29.10.2026)
+
+**Zakres:** cały kod wersji 3 (commity cf4ea21 i e0fe3a0): autoenkoder w `pipeline.py` (warstwy, parametry,
+`batch_size`, early stopping, wskaźnik i próg, wąskie gardło i jego mapa, najgorzej odtworzone cechy, uwagi w krokach
+6/7, zapis i odczyt, ocena nowych danych), krok 6 w `app.py` (pola autoenkodera, krzywa uczenia), kroki 7–10 dla
+autoenkodera, generowany kod (`codegen.py`), wykresy, tłumaczenia, launcher i testy.
+**Metoda:** przegląd każdej zmiany względem audytu 6; fuzzing – 100 losowych przebiegów przez cały pipeline (1–12 cech,
+10–1500 wierszy, kategorie z rzadką wartością, luki, stała kolumna, różne warstwy, obie aktywacje, early stopping
+włączony i wyłączony, contamination 0–50 %, trzy warianty skalowania) z kontrolą „kod = aplikacja”, zapisem `.skops`
+bez pickle i oceną nowych danych; przejścia kliknięciami (AppTest) po polsku i niemiecku, także ze zmianą cech w kroku
+4; pomiary skuteczności (average precision) na danych typu oszustwa i na nietypowych kombinacjach cech; sprawdzenie,
+czy wiersze walidacyjne early stopping są częściej zgłaszane. Każdy potwierdzony błąd jest poprawiony i ma test
+regresyjny (`tests/test_audit7_regressions.py`), który na kodzie sprzed audytu nie przechodzi z powodu zachowania.
+
+**Wynik:** 4 naprawione problemy – 2 średnie, 2 drobne – i poprawka dokumentacji. Przy ustawieniach domyślnych i co
+najmniej dwóch cechach wyniki autoenkodera się nie zmieniają (B2 dotyczy tylko jednej cechy, C2 to tylko uwaga).
+
+| # | Waga | Problem | Skutek | Poprawka |
+|---|---|---|---|---|
+| B1 | średnia | Propozycja warstw w kroku 6 była wpisywana tylko raz | po zmianie cech w kroku 4 zostawała propozycja dla starej liczby cech: z 2 cech 8,1,8, po przejściu na 8 cech nadal 8,1,8 (wąskie gardło 1 zamiast 2) – bez ostrzeżenia; na nietypowych kombinacjach average precision 0.22 zamiast 0.85–0.90 | propozycja liczona od nowa, gdy zmieni się liczba cech, a w polu stoi jeszcze stara propozycja (jak eps w audycie 6); własne warstwy zostają |
+| B2 | średnia | Jedna cecha: `MLPRegressor.predict` zwraca wtedy płaską tablicę (n,), a nie kolumnę (n, 1) | `X − predict(X)` dawało macierz n × n: wskaźnik = odległość od wszystkich rekonstrukcji, a nie błąd rekonstrukcji (korelacja z prawdziwym błędem 0.45); pamięć n² (5000 wierszy = 200 MB, 100 000 wierszy = 80 GB → awaria); angielskie ostrzeżenie scikit-learn „A column-vector y was passed…” w aplikacji; pokazywany kod kończył się w kroku 8 błędem `IndexError` | `reconstruction` dopasowuje kształt (`reshape(X.shape)`), w kodzie `X_rec = autoencoder.predict(X).reshape(X.shape)` (także w kroku 8 i w kodzie kroku 10); ostrzeżenie odfiltrowane (scikit-learn samo spłaszcza cel – ten sam model); uwaga w kroku 6 i 6/7: przy jednej cesze autoenkoder nie ma czego kompresować, prostszy jest Isolation Forest |
+| C1 | niska | To samo co B1 dla `min_samples` (DBSCAN, reguła 2 × liczba cech) – kod z wersji 2, znalezione przy okazji | po zmianie z 2 na 8 cech zostawało 5 zamiast 16, choć podpowiedź pola mówiła „tutaj 16” | jak B1; wartość startowa eps liczy się dalej z aktualnym `min_samples` |
+| C2 | niska | `relu`: neuron w wąskim gardle często „umiera” (dla wszystkich wierszy 0) | wąskie gardło węższe niż ustawione, bez żadnego sygnału: przy 2 neuronach i nietypowych kombinacjach average precision 0.18 i 0.29 z martwym neuronem (2 z 5 seedów), 0.67–0.95 bez; na danych typu oszustwa martwe neurony też się zdarzają (1 z 2, 1–2 z 4), tam skuteczność zostaje wysoka – oszustwa są skrajne | trening liczy neurony o stałej wartości (`dead_code`), krok 6/7 pokazuje uwagę „Martwe neurony w wąskim gardle” z podpowiedzią (tanh, inny seed, więcej neuronów) |
+| D1 | dokumentacja | Uzasadnienie `tanh` w „Decyzjach” wersji 3 (average precision 0.94–0.98 wobec 0.70–0.88 dla `relu`) pochodziło sprzed zmiany `batch_size` | po zmianie na danych typu oszustwa obie aktywacje dają podobny wynik (0.93 / 0.94, 5 seedów), na nietypowych kombinacjach `tanh` 0.86, `relu` 0.45 (0.14–0.95 – martwe neurony, C2) | wiersz poprawiony; `tanh` zostaje domyślną aktywacją |
+
+## Co sprawdzono i działa poprawnie
+
+* **Fuzzing po poprawkach (100 przebiegów):** bez błędów; wskaźnik, anomalie, próg, progi dla udziałów, rekonstrukcja,
+  wąskie gardło i jego mapa w pokazywanym kodzie identyczne z aplikacją; `.skops` bez pickle dla sieci z early stopping
+  i bez, `relu`, jednej warstwy i głębokiej sieci; żadne angielskie ostrzeżenie scikit-learn nie trafia do aplikacji.
+* **Wiersze walidacyjne early stopping** (10 % odłożonych, sieć się na nich nie uczy) nie są częściej zgłaszane:
+  mediana błędu taka sama jak dla wierszy treningowych (np. 0.248 / 0.239), udział wśród zgłoszonych 4–17 % przy 10 %
+  ogółem (małe liczby).
+* **Rozbieżność uczenia:** dane bez skalowania z wartościami rzędu 10⁹, `relu`, learning rate 1 – bez NaN i bez awarii
+  (sieć niczego się nie uczy; aplikacja ostrzega o braku skalowania).
+* **Jedna cecha po poprawce** przez kroki 4–10 po polsku (AppTest): bez błędów i bez niemieckich resztek, z uwagą
+  „Tylko jedna cecha”.
+* **Propozycja contamination z kroku 7** dla autoenkodera (przejęcie → krok 6 → nowy trening) działa; propozycje
+  mieszczą się w zakresie pola (0,1–50 %).
+* **Generowany kod:** zmienne bloku autoenkodera (`k`, `W`, `b`, `code`, `recon`) nie kolidują z resztą skryptu.
+
+## Uwagi (bez zmian)
+
+* Przy jednej cesze pokazywany kod przy `fit(X, X)` wyświetli ostrzeżenie scikit-learn o kolumnie jako celu –
+  nieszkodliwe (ten sam model); w aplikacji jest odfiltrowane.
+* Przy early stopping uwaga „epoki: …, loss …” podaje ostatnią epokę, a model ma wagi najlepszej epoki – krzywa uczenia
+  zaznacza ją wprost.
+* Bardzo duże sieci (np. 9 warstw po 1024 neurony) na dużych danych mogą się uczyć godzinami – aplikacja ostrzega
+  dopiero od 100 000 wierszy i nie szacuje czasu; trening da się przerwać tylko zatrzymaniem aplikacji.
+
+## Testy (stan po audycie 7)
+
+389 testów (385 + 4 w `tests/test_audit7_regressions.py`) – wszystkie przechodzą (Python 3.13, pandas 3.1,
+scikit-learn 1.9, skops 0.16, Streamlit 1.66). Uruchomienie: `pytest -q` (ok. 7 minut).
