@@ -1153,17 +1153,18 @@ T = {
         "ustawia kroki 2, 4 i 6 – symbol jako nazwa wiersza, wszystkie wskaźniki jako cechy, StandardScaler i "
         "Isolation Forest z 5 % nietypowych tokenów."),
     "**Unsupervised Learning:** Die Modelle bekommen keine Antwort – kein Label, kein y. K-Means sucht Gruppen "
-    "von Zeilen, die sich in den Features ähneln; Isolation Forest, LOF und DBSCAN suchen Zeilen, die zu keiner "
-    "Gruppe passen (Anomalien). Eine bekannte Einteilung (im Kurs die Spalte *Private*, bei Betrugsdaten z. B. "
-    "*Class*) geht nicht ins Modell; sie dient nur dem Vergleich in Schritt 8.": (
+    "von Zeilen, die sich in den Features ähneln; Isolation Forest, LOF, DBSCAN und der Autoencoder (ein "
+    "neuronales Netz) suchen Zeilen, die zu keiner Gruppe passen (Anomalien). Eine bekannte Einteilung (im Kurs "
+    "die Spalte *Private*, bei Betrugsdaten z. B. *Class*) geht nicht ins Modell; sie dient nur dem Vergleich in "
+    "Schritt 8.": (
         "**Unsupervised learning:** the models get no answer – no label, no y. K-Means looks for groups of rows "
-        "that are similar in the features; Isolation Forest, LOF and DBSCAN look for rows that fit no group "
-        "(anomalies). A known grouping (in the course the column *Private*, in fraud data e.g. *Class*) does not go "
-        "into the model; it is only used for the comparison in step 8.",
+        "that are similar in the features; Isolation Forest, LOF, DBSCAN and the autoencoder (a neural network) "
+        "look for rows that fit no group (anomalies). A known grouping (in the course the column *Private*, in "
+        "fraud data e.g. *Class*) does not go into the model; it is only used for the comparison in step 8.",
         "**Uczenie nienadzorowane:** modele nie dostają odpowiedzi – brak etykiety, brak y. K-Means szuka grup "
-        "wierszy podobnych w cechach; Isolation Forest, LOF i DBSCAN szukają wierszy, które nie pasują do żadnej "
-        "grupy (anomalii). Znany podział (w kursie kolumna *Private*, w danych o oszustwach np. *Class*) nie "
-        "trafia do modelu; służy tylko do porównania w kroku 8."),
+        "wierszy podobnych w cechach; Isolation Forest, LOF, DBSCAN i autoenkoder (sieć neuronowa) szukają "
+        "wierszy, które nie pasują do żadnej grupy (anomalii). Znany podział (w kursie kolumna *Private*, w danych "
+        "o oszustwach np. *Class*) nie trafia do modelu; służy tylko do porównania w kroku 8."),
     "Features (X) – daraus berechnet das Modell Ähnlichkeit und Auffälligkeit": (
         "Features (X) – the model computes similarity and anomalies from these",
         "Cechy (X) – z nich model liczy podobieństwo i nietypowość"),
@@ -1213,17 +1214,19 @@ T = {
         "Model nigdy nie widział '{g}'. Pokazano, ile wierszy każdej grupy uznano za nietypowe – przy dwóch "
         "grupach rzadsza liczy się jako 'pozytywna' (anomalie są rzadkie)."),
     "Gespeichert werden **zwei Dateien** in `models/<name>/`: das Modell (`model.skops` oder `model.joblib` – "
-    "K-Means mit den Cluster-Zentren, Isolation Forest, LOF oder DBSCAN) und `preprocessing.json` – das Rezept "
-    "aus Schritt 2 und 4 (Spalten-Aktionen, Füllwerte, Kategorien/Dummy-Spalten, Scaler) mit den Einstellungen "
+    "K-Means mit den Cluster-Zentren, Isolation Forest, LOF, DBSCAN oder Autoencoder) und `preprocessing.json` – "
+    "das Rezept aus Schritt 2 und 4 (Spalten-Aktionen, Füllwerte, Kategorien/Dummy-Spalten, Scaler) mit den Einstellungen "
     "aus Schritt 6, den Cluster-Namen aus Schritt 8, der Schwelle und den Kennzahlen. Ohne das Rezept lassen "
     "sich neue Daten nicht korrekt zuordnen oder bewerten.": (
         "**Two files** are saved in `models/<name>/`: the model (`model.skops` or `model.joblib` – K-Means with the "
-        "cluster centres, Isolation Forest, LOF or DBSCAN) and `preprocessing.json` – the recipe from steps 2 and 4 "
+        "cluster centres, Isolation Forest, LOF, DBSCAN or autoencoder) and `preprocessing.json` – the recipe from "
+        "steps 2 and 4 "
         "(column actions, fill values, categories/dummy columns, scaler) with the settings from step 6, the cluster "
         "names from step 8, the threshold and the metrics. Without the recipe, new data cannot be assigned or "
         "scored correctly.",
         "Zapisywane są **dwa pliki** w `models/<name>/`: model (`model.skops` albo `model.joblib` – K-Means z "
-        "centrami klastrów, Isolation Forest, LOF albo DBSCAN) i `preprocessing.json` – receptura z kroków 2 i 4 "
+        "centrami klastrów, Isolation Forest, LOF, DBSCAN albo autoenkoder) i `preprocessing.json` – receptura z "
+        "kroków 2 i 4 "
         "(akcje kolumn, wartości uzupełniające, kategorie/kolumny dummy, scaler) z ustawieniami z kroku 6, nazwami "
         "klastrów z kroku 8, progiem i miarami. Bez receptury nowych danych nie da się poprawnie przypisać ani "
         "ocenić."),
@@ -1472,4 +1475,134 @@ T = {
     "Positiv = '{pos}' – die seltenere Gruppe (Anomalien sind selten).": (
         "Positive = '{pos}' – the rarer group (anomalies are rare).",
         "Pozytywna = '{pos}' – rzadsza grupa (anomalie są rzadkie)."),
+    # Autoencoder
+    "**So arbeitet ein Autoencoder** (neuronales Netz, unsupervised)\n\n1. Das Netz bekommt jede Zeile als "
+    "**Eingabe** und soll **dieselbe Zeile als Ausgabe** liefern – ein Label braucht es\n   nicht.\n2. Dazwischen "
+    "liegt ein **Engpass** (z. B. 16 → 3 → 16 Neuronen): Der *Encoder* verdichtet die Features auf wenige\n   "
+    "Zahlen, der *Decoder* baut daraus die Zeile wieder auf. Dabei lernt das Netz die typischen Zusammenhänge der "
+    "Daten.\n3. **Training:** Epoche für Epoche (Optimierer Adam) wird der Fehler zwischen Eingabe und Nachbau "
+    "kleiner. *Early\n   Stopping* hält 10 % der Zeilen zurück und behält die Gewichte der Epoche, in der das Netz "
+    "diese Zeilen am besten\n   nachbaut.\n4. **Score = Rekonstruktionsfehler** (RMSE je Zeile, in den skalierten "
+    "Features): Normale Zeilen baut das Netz gut nach,\n   ungewöhnliche nicht – auch wenn jedes Feature für sich "
+    "normal ist, die Kombination aber nicht passt.\n5. **Schwelle:** ein fester Anteil (*contamination*, Standard "
+    "1 %) – ein Autoencoder hat keine eingebaute Schwelle.\n\nWichtig: Skalierung in Schritt 4 (StandardScaler) "
+    "und ein echter Engpass – weniger Neuronen in der Mitte als Features,\nsonst kann das Netz die Zeilen einfach "
+    "durchreichen.": (
+        "**How an autoencoder works** (neural network, unsupervised)\n\n1. The network gets every row as **input** "
+        "and is supposed to return **the same row as output** – it needs no label.\n2. In between there is a "
+        "**bottleneck** (e.g. 16 → 3 → 16 neurons): the *encoder* compresses the features into a few numbers, the "
+        "*decoder* rebuilds the row from them. Doing so, the network learns the typical relationships in the "
+        "data.\n3. **Training:** epoch by epoch (optimiser Adam) the error between input and reconstruction gets "
+        "smaller. *Early stopping* holds back 10 % of the rows and keeps the weights of the epoch in which the "
+        "network reconstructs these rows best.\n4. **Score = reconstruction error** (RMSE per row, in the scaled "
+        "features): the network reconstructs normal rows well, unusual ones not – even if every feature is normal "
+        "on its own but the combination does not fit.\n5. **Threshold:** a fixed share (*contamination*, default "
+        "1 %) – an autoencoder has no built-in threshold.\n\nImportant: scaling in step 4 (StandardScaler) and a "
+        "real bottleneck – fewer neurons in the middle than features, otherwise the network can simply pass the "
+        "rows through.",
+        "**Jak działa autoenkoder** (sieć neuronowa, bez nadzoru)\n\n1. Sieć dostaje każdy wiersz jako **wejście** i "
+        "ma zwrócić **ten sam wiersz jako wyjście** – etykieta nie jest potrzebna.\n2. Pomiędzy jest **wąskie "
+        "gardło** (np. 16 → 3 → 16 neuronów): *enkoder* kompresuje cechy do kilku liczb, *dekoder* odbudowuje z nich "
+        "wiersz. Przy tym sieć uczy się typowych zależności w danych.\n3. **Trening:** epoka po epoce (optymalizator "
+        "Adam) błąd między wejściem a rekonstrukcją maleje. *Early stopping* odkłada 10 % wierszy i zachowuje wagi "
+        "z epoki, w której sieć najlepiej odtwarza te wiersze.\n4. **Wskaźnik = błąd rekonstrukcji** (RMSE dla "
+        "wiersza, w skalowanych cechach): typowe wiersze sieć odtwarza dobrze, nietypowe nie – także wtedy, gdy "
+        "każda cecha z osobna jest normalna, ale ich kombinacja nie pasuje.\n5. **Próg:** stały udział "
+        "(*contamination*, domyślnie 1 %) – autoenkoder nie ma wbudowanego progu.\n\nWażne: skalowanie w kroku 4 "
+        "(StandardScaler) i prawdziwe wąskie gardło – mniej neuronów w środku niż cech, inaczej sieć może po prostu "
+        "przepuścić wiersze."),
+    "Schichten (Neuronen je Schicht)": ("Layers (neurons per layer)", "Warstwy (neurony w każdej warstwie)"),
+    "Aktivierung": ("Activation", "Aktywacja"),
+    "Epochen (max_iter)": ("Epochs (max_iter)", "Epoki (max_iter)"),
+    "Early Stopping (10 % der Zeilen zur Validierung)": (
+        "Early stopping (10 % of the rows for validation)",
+        "Early stopping (10 % wierszy do walidacji)"),
+    "{n} Zeilen: Der Autoencoder lernt Epoche für Epoche über alle Zeilen – das kann einige Minuten dauern. Tipp: "
+    "Stichprobe in der Seitenleiste oder weniger Epochen.": (
+        "{n} rows: the autoencoder learns epoch by epoch over all rows – this can take a few minutes. Tip: sample in "
+        "the sidebar or fewer epochs.",
+        "{n} wierszy: autoenkoder uczy się epoka po epoce na wszystkich wierszach – to może potrwać kilka minut. "
+        "Wskazówka: próbka w pasku bocznym albo mniej epok."),
+    "'am schlechtesten nachgebaut' = Eingabe minus Nachbau des Netzes in den skalierten Features – ein Blick ins "
+    "Modell: Dort steht auch ein Feature mit normalem Wert, wenn es nicht zu den übrigen Features der Zeile passt.": (
+        "'worst reconstructed' = input minus the network's reconstruction in the scaled features – a look into the "
+        "model: a feature with a normal value can appear here if it does not fit the other features of the row.",
+        "'najgorzej odtworzone' = wejście minus rekonstrukcja sieci w skalowanych cechach – wgląd w model: może tu "
+        "być także cecha o normalnej wartości, jeśli nie pasuje do pozostałych cech wiersza."),
+    "**Schwelle:** fester Anteil auffälliger Zeilen": (
+        "**Threshold:** fixed share of anomalous rows",
+        "**Próg:** stały udział nietypowych wierszy"),
+    "Verborgene Schichten mit Komma getrennt – symmetrisch mit dem Engpass in der Mitte, z. B. 16,3,16 oder 32,8,32 "
+    "oder tiefer 32,16,4,16,32. Leer = Vorschlag für {p} Features ({d}).": (
+        "Hidden layers separated by commas – symmetric with the bottleneck in the middle, e.g. 16,3,16 or 32,8,32 or "
+        "deeper 32,16,4,16,32. Empty = suggestion for {p} features ({d}).",
+        "Warstwy ukryte oddzielone przecinkami – symetrycznie, z wąskim gardłem w środku, np. 16,3,16 albo 32,8,32 "
+        "albo głębiej 32,16,4,16,32. Puste = propozycja dla {p} cech ({d})."),
+    "tanh (Standard) bildet weich auf −1 … 1 ab und klappt bei wenigen Neuronen meist besser; relu = max(0, x), der "
+    "Standard großer Netze.": (
+        "tanh (default) maps smoothly to −1 … 1 and usually works better with few neurons; relu = max(0, x), the "
+        "standard of large networks.",
+        "tanh (domyślnie) odwzorowuje łagodnie na −1 … 1 i przy niewielu neuronach zwykle działa lepiej; relu = "
+        "max(0, x), standard dużych sieci."),
+    "Höchstens so viele Durchläufe durch die Trainingsdaten – mit Early Stopping endet das Training früher, wenn das "
+    "Netz nicht mehr besser wird.": (
+        "At most this many passes through the training data – with early stopping, training ends earlier when the "
+        "network stops improving.",
+        "Najwyżej tyle przejść przez dane treningowe – z early stopping trening kończy się wcześniej, gdy sieć "
+        "przestaje się poprawiać."),
+    "Gleicher Seed = gleiche Startgewichte = gleiches Ergebnis.": (
+        "Same seed = same initial weights = same result.",
+        "Ten sam seed = te same wagi startowe = ten sam wynik."),
+    "Strafe auf große Gewichte (L2) – größer = glatteres Netz, das Einzelheiten weniger auswendig lernt (Standard "
+    "0.0001).": (
+        "Penalty on large weights (L2) – larger = smoother network that memorises details less (default 0.0001).",
+        "Kara za duże wagi (L2) – większa = gładsza sieć, która mniej zapamiętuje szczegóły (domyślnie 0.0001)."),
+    "Schrittweite des Optimierers Adam (Standard 0.001).": (
+        "Step size of the optimiser Adam (default 0.001).",
+        "Krok optymalizatora Adam (domyślnie 0.001)."),
+    "Hält 10 % der Zeilen zurück und beendet das Training, wenn das Netz sie 10 Epochen lang nicht besser nachbaut – "
+    "die Gewichte der besten Epoche bleiben. Schützt davor, dass das Netz auch Ausreißer auswendig lernt.": (
+        "Holds back 10 % of the rows and stops training when the network has not reconstructed them better for 10 "
+        "epochs – the weights of the best epoch are kept. Protects against the network memorising outliers too.",
+        "Odkłada 10 % wierszy i kończy trening, gdy sieć przez 10 epok nie odtwarza ich lepiej – zostają wagi "
+        "najlepszej epoki. Chroni przed tym, by sieć zapamiętała także wartości odstające."),
+    "Kein echter Engpass: Die engste Schicht hat {b} Neuronen bei {p} Features – das Netz kann die Zeilen fast "
+    "unverändert durchreichen, ungewöhnliche Zeilen fallen dann kaum auf. In der Mitte weniger Neuronen wählen "
+    "(z. B. {d}).": (
+        "No real bottleneck: the narrowest layer has {b} neurons for {p} features – the network can pass the rows "
+        "through almost unchanged, so unusual rows hardly stand out. Choose fewer neurons in the middle (e.g. {d}).",
+        "Brak prawdziwego wąskiego gardła: liczba neuronów w najwęższej warstwie ({b}) nie jest mniejsza niż liczba "
+        "cech ({p}) – sieć może przepuścić wiersze prawie bez zmian, więc nietypowe wiersze ledwo się wyróżniają. "
+        "Wybierz mniej neuronów w środku (np. {d})."),
+    "Netz: {p} Features → {layers} → {p} Features · Engpass {b} Neuronen.": (
+        "Network: {p} features → {layers} → {p} features · bottleneck {b} neurons.",
+        "Sieć: {p} cech → {layers} → {p} cech · neurony w wąskim gardle: {b}."),
+    "Lernkurve des Autoencoders": ("Learning curve of the autoencoder", "Krzywa uczenia autoenkodera"),
+    "Engpass mit 1 Neuron – keine 2D-Karte des Netzes.": (
+        "Bottleneck with 1 neuron – no 2D map of the network.",
+        "Wąskie gardło z 1 neuronem – brak mapy 2D sieci."),
+    "**Was das Netz gelernt hat:** jede Zeile so, wie der Encoder sie im Engpass verdichtet ({b} Neuronen{how}) – "
+    "eine nichtlineare Verdichtung, anders als PCA. Ähnliche Zeilen liegen beieinander. Auffällige Zeilen liegen oft "
+    "am Rand – oder mitten in der Wolke: Dann hat der Decoder sie schlecht nachgebaut, obwohl ihr Code normal "
+    "aussieht.": (
+        "**What the network has learned:** every row as the encoder compresses it in the bottleneck ({b} "
+        "neurons{how}) – a non-linear compression, unlike PCA. Similar rows lie close together. Anomalous rows "
+        "often lie at the edge – or in the middle of the cloud: then the decoder reconstructed them badly although "
+        "their code looks normal.",
+        "**Czego nauczyła się sieć:** każdy wiersz tak, jak enkoder kompresuje go w wąskim gardle (neurony: "
+        "{b}{how}) – kompresja nieliniowa, inaczej niż PCA. Podobne wiersze leżą blisko siebie. Nietypowe "
+        "wiersze często leżą na brzegu – albo w środku chmury: wtedy dekoder źle je odtworzył, choć ich kod wygląda "
+        "normalnie."),
+    "Ohne Skalierung (Schritt 4) bestimmen Features mit großen Zahlen fast allein den Rekonstruktionsfehler – und "
+    "neuronale Netze lernen mit großen Zahlen schlecht. In Schritt 4 StandardScaler wählen.": (
+        "Without scaling (step 4), features with large numbers almost alone determine the reconstruction error – and "
+        "neural networks learn badly with large numbers. Choose StandardScaler in step 4.",
+        "Bez skalowania (krok 4) cechy o dużych liczbach niemal same decydują o błędzie rekonstrukcji – a sieci "
+        "neuronowe źle uczą się na dużych liczbach. Wybierz StandardScaler w kroku 4."),
+    "Am schlechtesten nachgebaut": ("Worst reconstructed", "Najgorzej odtworzone"),
+    "Eingabe minus Nachbau des Netzes (skaliert)": (
+        "input minus the network's reconstruction (scaled)",
+        "wejście minus rekonstrukcja sieci (skalowane)"),
+    ", per PCA auf 2 Achsen": (", via PCA on 2 axes", ", przez PCA na 2 osie"),
+    "am schlechtesten nachgebaut": ("worst reconstructed", "najgorzej odtworzone"),
 }

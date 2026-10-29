@@ -620,11 +620,11 @@ T = {
         "Core points: {c} of {n} rows ({pct}).",
         "Punkty rdzeniowe: {c} z {n} wierszy ({pct})."),
     "Dieses Modell stammt nicht aus der Clustering-Version (Aufgabe: {task}) – hier lassen sich nur Modelle "
-    "laden, die mit dieser App gespeichert wurden (K-Means, Isolation Forest, LOF, DBSCAN).": (
+    "laden, die mit dieser App gespeichert wurden (K-Means, Isolation Forest, LOF, DBSCAN, Autoencoder).": (
         "This model does not come from the clustering version (task: {task}) – only models saved with this app can "
-        "be loaded here (K-Means, Isolation Forest, LOF, DBSCAN).",
+        "be loaded here (K-Means, Isolation Forest, LOF, DBSCAN, autoencoder).",
         "Ten model nie pochodzi z wersji do klastrowania (zadanie: {task}) – tutaj można wczytać tylko modele "
-        "zapisane w tej aplikacji (K-Means, Isolation Forest, LOF, DBSCAN)."),
+        "zapisane w tej aplikacji (K-Means, Isolation Forest, LOF, DBSCAN, autoenkoder)."),
     "Die Modelldatei enthält kein {name}-Modell ({type}).": (
         "The model file does not contain a {name} model ({type}).",
         "Plik modelu nie zawiera modelu {name} ({type})."),
@@ -789,4 +789,54 @@ T = {
         "the same time.",
         "Udział szumu dla eps: eps od {e} pominięte – DBSCAN trzymałby jednocześnie w pamięci zbyt wiele par "
         "sąsiadów."),
+    # Autoencoder
+    "Anomalien finden mit einem neuronalen Netz (Deep Learning, unsupervised): Es lernt, jede Zeile durch einen "
+    "Engpass hindurch nachzubauen – normale Muster gelingen, ungewöhnliche Zeilen nicht. Score = "
+    "Rekonstruktionsfehler; findet auch ungewöhnliche Kombinationen von Features, die einzeln normal aussehen.": (
+        "Find anomalies with a neural network (deep learning, unsupervised): it learns to reconstruct every row "
+        "through a bottleneck – normal patterns work, unusual rows do not. Score = reconstruction error; also finds "
+        "unusual combinations of features that look normal one by one.",
+        "Wykrywanie anomalii siecią neuronową (deep learning, bez nadzoru): sieć uczy się odtwarzać każdy wiersz "
+        "przez wąskie gardło – typowe wzorce się udają, nietypowe wiersze nie. Wskaźnik = błąd rekonstrukcji; "
+        "wykrywa też nietypowe kombinacje cech, które pojedynczo wyglądają normalnie."),
+    "**Netz:** {p} Features → Schichten {layers} → {p} Features, Engpass {b} Neuronen · {e} Epochen, Loss "
+    "{loss}.": (
+        "**Network:** {p} features → layers {layers} → {p} features, bottleneck {b} neurons · {e} epochs, loss "
+        "{loss}.",
+        "**Sieć:** {p} cech → warstwy {layers} → {p} cech, neurony w wąskim gardle: {b} · epoki: {e}, loss {loss}."),
+    " Early Stopping: bestes R² auf den Validierungszeilen {r}.": (
+        " Early stopping: best R² on the validation rows {r}.",
+        " Early stopping: najlepsze R² na wierszach walidacyjnych {r}."),
+    "Schichten: 1 bis {n} Schichten mit je 1 bis {m} Neuronen, z. B. 16,3,16.": (
+        "Layers: 1 to {n} layers with 1 to {m} neurons each, e.g. 16,3,16.",
+        "Warstwy: od 1 do {n} warstw, każda z 1 do {m} neuronów, np. 16,3,16."),
+    "Das Training hat die Höchstzahl von {e} Epochen erreicht, der Fehler sank zuletzt noch leicht – mehr Epochen "
+    "(Schritt 6) können den Nachbau etwas verbessern.": (
+        "Training reached the maximum of {e} epochs and the error was still falling slightly – more epochs (step 6) "
+        "can improve the reconstruction a little.",
+        "Trening osiągnął maksymalną liczbę {e} epok, a błąd jeszcze lekko spadał – więcej epok (krok 6) może nieco "
+        "poprawić rekonstrukcję."),
+    ":orange[**Kein echter Engpass:**] Die engste Schicht hat {b} Neuronen bei {p} Features – das Netz kann die "
+    "Zeilen fast unverändert durchreichen, ungewöhnliche Zeilen fallen dann kaum auf. In der Mitte weniger Neuronen "
+    "wählen (z. B. {s}).": (
+        ":orange[**No real bottleneck:**] the narrowest layer has {b} neurons for {p} features – the network can pass "
+        "the rows through almost unchanged, so unusual rows hardly stand out. Choose fewer neurons in the middle "
+        "(e.g. {s}).",
+        ":orange[**Brak prawdziwego wąskiego gardła:**] liczba neuronów w najwęższej warstwie ({b}) nie jest mniejsza "
+        "niż liczba cech ({p}) – sieć może przepuścić wiersze prawie bez zmian, więc nietypowe wiersze ledwo się "
+        "wyróżniają. Wybierz mniej neuronów w środku (np. {s})."),
+    "Schichten: ganze Zahlen mit Komma getrennt, z. B. 16,3,16.": (
+        "Layers: whole numbers separated by commas, e.g. 16,3,16.",
+        "Warstwy: liczby całkowite oddzielone przecinkami, np. 16,3,16."),
+    "Neuron 1 im Engpass": ("Neuron 1 in the bottleneck", "Neuron 1 w wąskim gardle"),
+    "Neuron 2 im Engpass": ("Neuron 2 in the bottleneck", "Neuron 2 w wąskim gardle"),
+    "Code-PC{i} ({pct} der Streuung im Engpass)": (
+        "Code PC{i} ({pct} of the variance in the bottleneck)",
+        "Kod PC{i} ({pct} zmienności w wąskim gardle)"),
+    "Das Autoencoder-Modell ist unvollständig (Ausgänge oder Schwelle threshold_ fehlen) – bitte in der App neu "
+    "trainieren und speichern.": (
+        "The autoencoder model is incomplete (outputs or threshold threshold_ missing) – please retrain and save it "
+        "in the app.",
+        "Model autoenkodera jest niekompletny (brak wyjść albo progu threshold_) – wytrenuj go ponownie w aplikacji i "
+        "zapisz."),
 }

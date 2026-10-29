@@ -131,4 +131,14 @@ T = {
     "Rauschen (Anomalie)": ("Noise (anomaly)", "Szum (anomalia)"),
     "auffällig": ("anomalous", "nietypowe"),
     "abgeschnitten – höchster Wert {v}": ("cut off – highest value {v}", "obcięto – najwyższa wartość {v}"),
+    # Autoencoder
+    "Epoche": ("Epoch", "Epoka"),
+    "Loss (quadratischer Fehler)": ("Loss (squared error)", "Loss (błąd kwadratowy)"),
+    "Training: Fehler je Epoche": ("Training: error per epoch", "Trening: błąd w każdej epoce"),
+    "Anomalien im Engpass des Autoencoders ({b} Neuronen)": (
+        "Anomalies in the autoencoder's bottleneck ({b} neurons)",
+        "Anomalie w wąskim gardle autoenkodera (neurony: {b})"),
+    "R² des Nachbaus (Validierung)": ("R² of the reconstruction (validation)", "R² rekonstrukcji (walidacja)"),
+    "Early Stopping: Validierungszeilen": ("Early stopping: validation rows", "Early stopping: wiersze walidacyjne"),
+    "beste Epoche {e}: R² {r}": ("best epoch {e}: R² {r}", "najlepsza epoka {e}: R² {r}"),
 }

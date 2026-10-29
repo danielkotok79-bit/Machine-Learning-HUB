@@ -355,3 +355,55 @@ i C1–C5, 3 sprawdzają nową ochronę pamięci z B2 (samej awarii z braku pami
 w teście – zmierzono ją osobno). Symulowane API Bybit (`tests/synthetic.py`) zwraca teraz open interest w żądanym
 interwale (dane co 5 minut, spadek w trakcie świecy krachu); `tests/test_bybit_features.py` sprawdza dodatkowo
 drobną siatkę OI. Uruchomienie: `pytest -q` (ok. 5 minut).
+
+---
+
+# Wersja 3 – autoenkoder: sieć neuronowa bez nadzoru (29.10.2026)
+
+**Zakres:** czwarta metoda wykrywania anomalii w kroku 6 – **autoenkoder**, sieć neuronowa scikit-learn
+(`MLPRegressor`) uczona z wejściem = celem; kroki 6–10 i pokazywany kod dla autoenkodera, wykresy (krzywa uczenia, mapa
+wąskiego gardła), 57 nowych tekstów EN/PL (3 zmienione), karta w launcherze i tabela „rodzaje uczenia” (autoenkoder jako
+przykład deep learningu bez nadzoru), README w trzech językach.
+
+## Decyzje
+
+| Temat | Decyzja |
+|---|---|
+| Gdzie | w aplikacji Clustering obok Isolation Forest, LOF i DBSCAN – te same kroki i ten sam CSV (np. z Bybit), więc metody da się porównać bezpośrednio; nie w aplikacji Deep Learning (Keras), która jest zbudowana wokół etykiety |
+| Biblioteka | scikit-learn `MLPRegressor` (optymalizator Adam), bez TensorFlow – lekko i deterministycznie przy tym samym seedzie, więc pokazany kod liczy dokładnie to samo co aplikacja (testy parytetu); zapis `.skops` (zaufany dodatkowo typ `AdamOptimizer`, stan optymalizatora) |
+| Architektura | warstwy jako tekst „16,3,16”; propozycja z liczby cech p: na zewnątrz potęga 2 ≥ p (8 … 64 neuronów), wąskie gardło ≈ p/4 (2 … 8, zawsze mniej niż p); aktywacja `tanh` (w próbach na danych typu oszustwa average precision 0.94–0.98 wobec 0.70–0.88 dla `relu`), early stopping (10 % wierszy do walidacji, zostają wagi najlepszej epoki), 300 epok |
+| Wskaźnik | błąd rekonstrukcji = RMSE dla wiersza w skalowanych cechach (przy StandardScaler w odchyleniach standardowych) |
+| Próg | autoenkoder nie ma wbudowanego progu → zawsze stały udział (contamination, domyślnie 1 %) = kwantyl błędów w treningu; zapisany w modelu jako `threshold_` (jak `offset_` w IF/LOF) i w `preprocessing.json` |
+| Krok 6/7 | krzywa uczenia (loss na epokę, R² walidacji z najlepszą epoką); progi dla udziałów i załamanie krzywej jak przy IF/LOF; uwagi: budowa sieci, epoki, loss, R², ostrzeżenie „brak prawdziwego wąskiego gardła”, zrozumiały komunikat zamiast surowego ConvergenceWarning „Maximum iterations” |
+| Krok 8 | **najgorzej odtworzone cechy** (wejście − rekonstrukcja: wgląd w model, inaczej niż odchylenia z) i **mapa 2D wąskiego gardła** (2 neurony bezpośrednio, więcej → PCA, 1 → brak mapy) |
+
+## Co sprawdzono
+
+* **Skuteczność:** dane typu oszustwa (`anomaly_like`): average precision 0.93, wśród 10 najbardziej nietypowych
+  wierszy co najmniej 9 to wbudowane oszustwa; dane Bybit (11 cech): krach z symulacji na 1. miejscu w kroku 10 przy
+  każdej z 10 sprawdzonych architektur (tanh i relu).
+* **Kod = aplikacja** dla trzech konfiguracji (domyślna, relu z własnymi parametrami bez early stopping, głęboka
+  12-6-3-6-12): wskaźnik, anomalie, próg, progi dla udziałów, załamanie, rekonstrukcja, wąskie gardło i jego mapa; krok
+  10 bez aplikacji; cały skrypt z kroku 9 w osobnym procesie – te same anomalie.
+* **Zapis i odczyt:** `.skops` z pliku ZIP bez pickle oraz `.joblib`; ponowna ocena danych treningowych w kroku 10 daje
+  te same wskaźniki; model bez `threshold_` albo z inną liczbą wyjść niż wejść jest odrzucany.
+* **Interfejs** (AppTest) przez kroki 4–10 po niemiecku, angielsku i polsku bez niemieckich resztek; krok 6: błędne
+  warstwy → komunikat i zablokowany trening, brak wąskiego gardła → ostrzeżenie; launcher w trzech językach.
+* **Czas:** 1500 wierszy × 8 cech ok. 1 s, 3500 × 11 ok. 2 s (300 epok, early stopping).
+
+## Uwagi
+
+* `MLPRegressor` liczy na CPU; przy bardzo dużych danych (od ok. 100 000 wierszy) trening trwa minuty – aplikacja
+  podpowiada próbkę albo mniej epok. Postęp nie jest pokazywany w trakcie (jedno wywołanie `fit`, aby pokazany kod
+  pozostał identyczny z aplikacją).
+* Wynik zależy od seeda (inne wagi startowe) – przy porównaniach seed zostaje stały.
+* W nowych danych z innym reżimem (np. po krachu) autoenkoder zgłasza zwykle więcej wierszy niż Isolation Forest –
+  reaguje na każdą zmianę zależności między cechami.
+* Wersja w Keras/TensorFlow (GPU, dowolne warstwy) pasowałaby do aplikacji Deep Learning – bez bezpośredniego
+  porównania z IF/LOF/DBSCAN i bez identycznego wyniku pokazanego kodu.
+
+## Testy (stan wersji 3)
+
+382 testy (362 + 20: 10 w `tests/test_autoencoder.py`, 7 nowych przypadków w `tests/test_anomaly.py`, 1 w
+`tests/test_app_anomaly.py`, 2 w `tests/test_i18n.py`) – wszystkie przechodzą (Python 3.13, pandas 3.1,
+scikit-learn 1.9, skops 0.16, Streamlit 1.66). Uruchomienie: `pytest -q` (ok. 6 minut).

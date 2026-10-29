@@ -29,7 +29,7 @@ import pipeline as pl  # noqa: E402
 from synthetic import anomaly_like, college_like, mall_like  # noqa: E402
 
 pytestmark = pytest.mark.filterwarnings("error::DeprecationWarning", "error::FutureWarning")
-IF, LOF, DB = pl.MODEL_IFOREST, pl.MODEL_LOF, pl.MODEL_DBSCAN
+IF, LOF, DB, AE = pl.MODEL_IFOREST, pl.MODEL_LOF, pl.MODEL_DBSCAN, pl.MODEL_AUTOENCODER
 ANOMALY_ACTIONS = {"ID": (pl.A_KEEP, "", "")}
 
 
@@ -90,6 +90,13 @@ def assert_same(r):
         np.testing.assert_array_equal(ns["thresholds"], curve["thresholds"])
         np.testing.assert_array_equal(ns["desc"], curve["sorted"])
         assert ns["knee"] == curve["knee"]
+    if cfg.model == AE:  # Autoencoder: Nachbau je Feature und Engpass des Netzes
+        np.testing.assert_array_equal(ns["recon"], pl.reconstruction(r["model"], prep.X))
+        np.testing.assert_array_equal(ns["code"], pl.autoencoder_codes(r["model"], prep.X))
+        proj = pl.code_projection(prep, r["model"], seed=cfg.seed)
+        if proj is not None and len(proj["rows"]) == len(prep.X):
+            np.testing.assert_allclose(ns["code_xy"], proj["coords"], rtol=1e-12, atol=1e-12)
+        assert ns["autoencoder"].threshold_ == info["threshold"]
     prof = pl.anomaly_profiles(prep, hist["flag"])
     cols = ["Alle"] + [j for j in (0, 1) if (hist["flag"].astype(int) == j).any()]
     np.testing.assert_allclose(ns["profile"].to_numpy(), prof["means"][cols].to_numpy(), rtol=1e-9, atol=1e-9)
@@ -267,7 +274,8 @@ def test_pca_keeps_the_anomalies_in_the_picture(tmp_path):
 
 
 # --- Speichern, Laden, neue Daten -----------------------------------------------------------------------------------
-@pytest.mark.parametrize("key, fmt", [(IF, ".skops"), (LOF, ".skops"), (DB, ".skops"), (IF, ".joblib")])
+@pytest.mark.parametrize("key, fmt", [(IF, ".skops"), (LOF, ".skops"), (DB, ".skops"), (AE, ".skops"), (IF, ".joblib"),
+                                      (AE, ".joblib")])
 def test_bundle_roundtrip_and_new_data(tmp_path, key, fmt):
     prep, viz = prepare(tmp_path)
     # LOF: mehr Nachbarn als die Gruppe der Ausreißer groß ist – sonst sind sie sich gegenseitig 'normal'
@@ -293,7 +301,7 @@ def test_bundle_roundtrip_and_new_data(tmp_path, key, fmt):
     text = " ".join(fz["meaning"])
     assert "im Training" in text and "Am auffälligsten" in text and "Vergleich mit 'Class'" in text
     assert ("Verteilung (DBSCAN)" in text) == (key == DB)
-    if key == IF:  # auf den Trainingszeilen: derselbe Score wie im Training
+    if key in (IF, AE):  # auf den Trainingszeilen: derselbe Score wie im Training
         res_train, _, _ = pl.score_new(loaded, rec2, pl.read_csv(tmp_path / "daten.csv")[0])
         np.testing.assert_allclose(res_train[pl.RESULT_SCORE].to_numpy()[prep.index], np.round(hist["score"], 4))
 
@@ -352,7 +360,12 @@ def test_broken_anomaly_recipes_are_refused(tmp_path, broken):
     pl.ClusterConfig(model=LOF, contamination=0.03, n_neighbors=15, metric="manhattan"),
     pl.ClusterConfig(model=DB, eps=0.9, min_samples=12),
     pl.ClusterConfig(model=DB, eps=2.5, min_samples=6, metric="manhattan", curve=False),
-], ids=["if-auto", "if-fixed", "lof-auto", "lof-manhattan", "dbscan", "dbscan-manhattan-no-grid"])
+    pl.ClusterConfig(model=AE),
+    pl.ClusterConfig(model=AE, contamination=0.03, ae_layers="16,4,16", ae_activation="relu", ae_epochs=120,
+                     ae_alpha=1e-3, ae_learning_rate=2e-3, ae_early_stopping=False, seed=7),
+    pl.ClusterConfig(model=AE, ae_layers="12,6,3,6,12"),
+], ids=["if-auto", "if-fixed", "lof-auto", "lof-manhattan", "dbscan", "dbscan-manhattan-no-grid", "ae-default",
+        "ae-relu-custom", "ae-deep-code3"])
 def test_generated_code_matches_the_app(tmp_path, cfg):
     r = run_both(tmp_path, anomaly_like(), cfg, actions=ANOMALY_ACTIONS, group="Class", name="ID")
     assert pl.MODEL_CLASSES[cfg.model].__name__ + "(" in r["code"]
@@ -398,7 +411,7 @@ def test_knick_in_the_code_is_knee_index():
         assert ns["knick"](np.asarray(y, dtype=float)) == pl.knee_index(y)
 
 
-@pytest.mark.parametrize("key", [IF, LOF, DB])
+@pytest.mark.parametrize("key", [IF, LOF, DB, AE])
 def test_predict_code_scores_like_the_app(tmp_path, monkeypatch, key):
     prep, viz = prepare(tmp_path)
     cfg = pl.ClusterConfig(model=key, contamination=0.02 if key != DB else 0.0, eps=pl.suggest_eps(prep.X, 10),
@@ -419,7 +432,7 @@ def test_predict_code_scores_like_the_app(tmp_path, monkeypatch, key):
     X_new = pl.prepare_new_data(new, pl.load_bundle(folder)[1])[0]
     from sklearn.neighbors import NearestNeighbors
 
-    ns = {pl.MODEL_VARS[key]: model, "X_new": X_new, "NearestNeighbors": NearestNeighbors}
+    ns = {pl.MODEL_VARS[key]: model, "X_new": X_new, "NearestNeighbors": NearestNeighbors, "np": np}
     np.testing.assert_allclose(eval(formula, ns), rep["score"])  # noqa: S307 – Formel im Kommentar stimmt
 
 
@@ -454,7 +467,7 @@ def test_anomaly_charts_and_edge_cases(tmp_path):
     plt.close("all")
 
 
-@pytest.mark.parametrize("key", [IF, LOF, DB])
+@pytest.mark.parametrize("key", [IF, LOF, DB, AE])
 def test_exported_script_runs(tmp_path, key):
     """Schritt 9: die ganze Pipeline als Skript – läuft für sich allein und rechnet dasselbe wie die App."""
     import os

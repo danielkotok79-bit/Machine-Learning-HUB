@@ -1,4 +1,4 @@
-# DATA-Analysis-Clustering (Streamlit + scikit-learn: K-Means, Isolation Forest, LOF, DBSCAN)
+# DATA-Analysis-Clustering (Streamlit + scikit-learn: K-Means, Isolation Forest, LOF, DBSCAN, autoencoder)
 
 Streamlit app for tabular CSV data: load, prepare, visualise and split into groups (clusters) with **K-Means** –
 **unsupervised learning**: there is no label, K-Means itself looks for rows that are similar. Afterwards the app
@@ -6,7 +6,8 @@ describes the clusters (profiles, 2D map), compares them – if available – wi
 to the clusters. For every step the app shows the matching Python code.
 
 **Anomaly detection:** instead of looking for groups, the app finds the *most unusual rows* with **Isolation
-Forest**, **Local Outlier Factor (LOF)** or **DBSCAN** (noise = anomaly) – with a score, a threshold, the features
+Forest**, **Local Outlier Factor (LOF)**, **DBSCAN** (noise = anomaly) or an **autoencoder** (a neural network – deep
+learning without a label) – with a score, a threshold, the features
 that make a row stand out and the comparison with a known grouping (e.g. *Class* in fraud data). New data are scored
 with the same threshold. For crypto data, `tools/bybit_features.py` builds a ready-to-use CSV from public Bybit market
 data (see [Bybit → CSV](#bybit--csv-toolsbybit_featurespy)).
@@ -104,9 +105,9 @@ descriptions).
 | 3 · Analysis & visualisation | choice of columns · overview, count plot, histogram, box plot, scatter, heat map, correlation with one column, pair plot, share per category, group statistics, joint plot, 2D density, lmplot, histogram per group |
 | 4 · Preparation 2 – clustering data | **features**, optionally a **known grouping** (only for comparison, e.g. Private) and a **row name** (e.g. the college name); missing values per column; dummies and scaling (default: StandardScaler, drop_first off) – learned from all rows, no split; notes on strongly correlated columns and columns without variation. A comparison group is only suggested for a column named like one (Private, species, label, segment …); an ID column (e.g. CustomerID = 1, 2, 3 …) is suggested as the row name, not as a feature – if chosen as a feature, the app warns |
 | 5 · Save data | data after step 2, clustering data after step 4 (unscaled or scaled) or – after training – data with **cluster number, cluster name and distance** to the centre (K-Means) or with **anomaly (1 = anomalous) and anomaly score** (DBSCAN: also the cluster); international or for Excel |
-| 6 · Model & training | **choose the method** · **K-Means**: K (n_clusters), init (k-means++/random), n_init, max_iter, algorithm, seed; optionally the elbow and silhouette curve for step 7 (the curves grow during training) · **Isolation Forest**: n_estimators, max_samples, seed, contamination (auto or a fixed share) · **LOF**: n_neighbors, metric, contamination · **DBSCAN**: eps (starting value from the k-distance), min_samples, metric, noise share per eps for step 7 – the matching scikit-learn code is shown live |
-| 7 · Choosing K or the threshold | K-Means: **elbow method** (inertia by K) and **silhouette** by K with assessment and suggestion (*Use K = …*), Davies-Bouldin, Calinski-Harabasz, explained variance (R²) and the **silhouette plot** · Isolation Forest/LOF: **distribution of the score** with the threshold, **score curve** of the most anomalous rows with its knee (*Use contamination = …*), threshold per share · DBSCAN: **k-distance** with its knee (*Use eps = …*), noise share and number of clusters per eps |
-| 8 · Evaluation | K-Means: cluster sizes, **naming the clusters**, **profiles** (means in original units, heat map of the deviation from the average in σ, a text per cluster), **separating power per feature (R²)**, **2D map (PCA)** with colour = cluster or known grouping, two features against each other, **comparison with the known grouping** (cross table, mapping cluster → group, accuracy, naive prediction, ARI, NMI, confusion matrix, classification_report – also the comparison as in the course), **typical members** of each cluster, single case · anomaly models: **the most anomalous rows** with the score and the features that deviate most from the average (z), **profile** anomalous vs. normal, **PCA picture** (anomalies always included), DBSCAN clusters, **comparison with the known grouping** (share anomalous per group; with two groups precision, recall, ROC-AUC, average precision), single case |
+| 6 · Model & training | **choose the method** · **K-Means**: K (n_clusters), init (k-means++/random), n_init, max_iter, algorithm, seed; optionally the elbow and silhouette curve for step 7 (the curves grow during training) · **Isolation Forest**: n_estimators, max_samples, seed, contamination (auto or a fixed share) · **LOF**: n_neighbors, metric, contamination · **DBSCAN**: eps (starting value from the k-distance), min_samples, metric, noise share per eps for step 7 · **Autoencoder**: layers (suggestion from the number of features, e.g. 16,3,16), activation, epochs, alpha, learning rate, early stopping, contamination; after training the **learning curve** – the matching scikit-learn code is shown live |
+| 7 · Choosing K or the threshold | K-Means: **elbow method** (inertia by K) and **silhouette** by K with assessment and suggestion (*Use K = …*), Davies-Bouldin, Calinski-Harabasz, explained variance (R²) and the **silhouette plot** · Isolation Forest/LOF/autoencoder: **distribution of the score** with the threshold, **score curve** of the most anomalous rows with its knee (*Use contamination = …*), threshold per share · DBSCAN: **k-distance** with its knee (*Use eps = …*), noise share and number of clusters per eps |
+| 8 · Evaluation | K-Means: cluster sizes, **naming the clusters**, **profiles** (means in original units, heat map of the deviation from the average in σ, a text per cluster), **separating power per feature (R²)**, **2D map (PCA)** with colour = cluster or known grouping, two features against each other, **comparison with the known grouping** (cross table, mapping cluster → group, accuracy, naive prediction, ARI, NMI, confusion matrix, classification_report – also the comparison as in the course), **typical members** of each cluster, single case · anomaly models: **the most anomalous rows** with the score and the features that deviate most from the average (z), **profile** anomalous vs. normal, **PCA picture** (anomalies always included), DBSCAN clusters, for the autoencoder the **worst reconstructed features** and the **2D map of the bottleneck**, **comparison with the known grouping** (share anomalous per group; with two groups precision, recall, ROC-AUC, average precision), single case |
 | 9 · Save & load model | `models/<name>/model.skops` (safe, default) or `model.joblib` + `preprocessing.json` (recipe, settings, cluster names or threshold and share of anomalous rows, metrics, mapping to the comparison group), ZIP download, the whole pipeline as a Python script |
 | 10 · Assign / score new data | new CSV or form → same preparation → K-Means: **nearest cluster centre** (`kmeans.predict`), distance, notes, distribution compared with training · anomaly models: **anomaly and score with the threshold from training** (DBSCAN: cluster of the nearest core point or noise), share of anomalous rows compared with training · comparison with the known grouping (if included), CSV download and **conclusion** |
 
@@ -168,7 +169,7 @@ sensibly in step 8. From 20,000 rows the curve is computed on a fixed sample, th
   K-Means keeps working with all columns.
 * **Names** of the clusters (e.g. "small & private") are saved with the model and used in step 10 and in the export.
 
-## Anomaly detection: Isolation Forest, LOF, DBSCAN
+## Anomaly detection: Isolation Forest, LOF, DBSCAN, autoencoder
 
 Same steps 1–5 as for K-Means, another **method** in step 6. All three are unsupervised: they learn what the rows
 *normally* look like and give every row an **anomaly score** – higher = more anomalous. A row is anomalous
@@ -179,6 +180,7 @@ Same steps 1–5 as for K-Means, another **method** in step 6. All three are uns
 | **Isolation Forest** | random trees split the data at random points – unusual rows are alone after a few splits | `−score_samples`, 0 … 1 (around 0.5 normal) | contamination = auto → 0.5, otherwise the quantile for the chosen share | the standard for tables; fast, also with many rows and features; needs no scaling | finds global rather than local outliers |
 | **Local Outlier Factor (LOF)** | density around a row compared with the density around its `n_neighbors` neighbours | LOF ≈ 1 normal, clearly above 1 anomalous | auto → 1.5, otherwise the quantile | local outliers next to dense groups | if the outliers form a small group of their own, `n_neighbors` must be larger than that group; slower with very many rows; scale the data |
 | **DBSCAN** | core point = at least `min_samples` rows within the radius `eps`; whatever belongs to no cluster is **noise** | distance to the nearest core point in multiples of eps | 1 (= eps): noise ⇔ score above 1 | clusters of any shape and outliers in one step; no K needed | `eps` depends on the scaling and the number of features – step 7 (k-distance) shows which fits |
+| **Autoencoder** | neural network with input = target: rebuilds every row through a **bottleneck** (e.g. 16 → 3 → 16 neurons) | **reconstruction error** (RMSE per row, in the scaled features) | fixed share (contamination, default 1 %) – quantile of the training errors | unusual **combinations** of features that look normal one by one; non-linear relationships, many features | needs scaling and a real bottleneck (fewer neurons in the middle than features); training takes longer, the result depends on the seed |
 
 * **contamination is a decision, not a truth:** how many rows should be reported? Better a few clear anomalies
   (0.5–2 %) than a long list. Step 7 shows the **knee of the score curve** – after it the rows hardly differ any more –
@@ -195,6 +197,16 @@ Same steps 1–5 as for K-Means, another **method** in step 6. All three are uns
   preparation (e.g. another scaler), another `min_samples` or `metric` – so is a suggestion applied in step 7; an eps
   typed in by hand stays. With many identical rows (e.g. only categorical features) the k-distance is often 0; step 7
   then suggests the smallest eps (1e-6): identical rows form the clusters, rare combinations are noise.
+* **Autoencoder = deep learning without a label:** the network (scikit-learn `MLPRegressor`, optimiser Adam, no
+  TensorFlow) learns only the normal patterns; the **reconstruction error** shows what does not fit. After training,
+  step 6 shows the **learning curve** (error per epoch; with early stopping the R² on 10 % held-back rows – the model
+  keeps the weights of the best epoch). Step 8 shows the **worst reconstructed features** of a row (a look into the
+  model: a normal value can appear there if it does not fit the other features) and the **2D map of the bottleneck** –
+  the network's own non-linear compression (via PCA with more than 2 neurons). The threshold is saved with the model
+  (`threshold_`); the code shown computes exactly the same.
+* **Layers and activation:** suggestion from the number of features (8 → 8,2,8; 11 → 16,3,16; 30 → 32,8,32), deeper
+  e.g. 32,16,4,16,32. `tanh` usually works better than `relu` in small networks. If the narrowest layer has at least
+  as many neurons as there are features, the network can simply pass the rows through – the app warns.
 * **Do not clip what you want to monitor.** *Clip values* in step 2 cuts off exactly the extreme values that make an
   anomaly – for anomaly detection only correct impossible values.
 * **Scaling:** LOF and DBSCAN work with distances → StandardScaler in step 4. Isolation Forest splits one feature at
@@ -311,7 +323,7 @@ result, report, comparison = pl.assign_new(kmeans, recipe, df_new)
 conclusion = pl.assess_assignment(recipe, result, report, comparison)
 ```
 
-Anomaly models (Isolation Forest, LOF, DBSCAN) score instead of assigning – with the threshold from training:
+Anomaly models (Isolation Forest, LOF, DBSCAN, autoencoder) score instead of assigning – with the threshold from training:
 
 ```python
 model, recipe = pl.load_bundle("models/my_anomaly_model")
@@ -370,7 +382,7 @@ Extending:
 
 ```bash
 pip install pytest
-pytest -q                                  # 362 tests, approx. 5 minutes
+pytest -q                                  # 382 tests, approx. 6 minutes
 python tests/synthetic.py                  # synthetic college data (777 rows, not real data)
 ```
 
@@ -378,7 +390,8 @@ python tests/synthetic.py                  # synthetic college data (777 rows, n
 |---|---|
 | `tests/test_clustering.py` | K-Means as in the course (= scikit-learn directly), reproducibility, elbow and silhouette (clear groups are found, no suggestion without structure, samples for large data), assessment (small/dominating clusters, not converged, duplicate rows), profiles in original units, separating power = explained variance, PCA, comparison with known groups, outliers and close calls in new data |
 | `tests/test_codegen_parity.py` | the Python code shown computes **exactly** the same as the app: X, clusters, inertia, elbow/silhouette curve, profiles, comparison, export – also in edge cases (thousands separators, dates as numbers, inf, group fill values, clip values, new columns) |
-| `tests/test_anomaly.py` | Isolation Forest, LOF, DBSCAN: score ⇔ threshold, contamination, novelty, noise = anomaly, eps too small, curves and suggestions for step 7, most anomalous rows, profile, PCA, saving/loading (.skops/.joblib), new data, no mix-up with K-Means, damaged recipes – and the code shown computes **exactly** the same (score, anomalies, threshold, k-distance, eps grid, profiles, export, step 10); the exported script runs; charts in edge cases |
+| `tests/test_anomaly.py` | Isolation Forest, LOF, DBSCAN, autoencoder: score ⇔ threshold, contamination, novelty, noise = anomaly, eps too small, curves and suggestions for step 7, most anomalous rows, profile, PCA, saving/loading (.skops/.joblib), new data, no mix-up with K-Means, damaged recipes – and the code shown computes **exactly** the same (score, anomalies, threshold, k-distance, eps grid, profiles, export, step 10); the exported script runs; charts in edge cases |
+| `tests/test_autoencoder.py` | autoencoder: layers (suggestion, validation), threshold = quantile of the reconstruction errors, contamination 1 % if not given, finds the built-in fraud cases, bottleneck = encoder output (tanh, relu), 2D map, worst reconstructed features, saving/loading without pickle, incomplete models, learning curve, configuration, step 6 checks the layers |
 | `tests/test_bybit_features.py` | the Bybit script with a simulated API (no network): paging within the API limits, retries/403/cache, no look-ahead, the running candle is left out, metrics recomputed, cross-section, spot, unknown symbols, the example configuration fits the CSV, the built-in crash is the most anomalous row |
 | `tests/test_pipeline.py` | the whole pipeline with LendingClub-like data, saving/loading (.skops/.joblib, ZIP), new data (unknown categories, outliers, missing columns), the exported script runs |
 | `tests/test_new_features.py` | year + month, new columns, *clip values*, new columns for new data, saving data, conclusion |
@@ -400,7 +413,7 @@ python tests/synthetic.py                  # synthetic college data (777 rows, n
 * **Use locally only.** The path field reads every file the logged-in user has access to, and `models/` is the same
   for all users of the app. So do not put the app on the internet without a login. Load models only from trusted
   sources (a ZIP may be at most 2 GB unpacked). `.skops` is loaded without running code; `.joblib` is pickle and is
-  loaded from an uploaded ZIP only after explicit confirmation. Only models of this app (K-Means, Isolation Forest, LOF, DBSCAN) are loaded – the app
+  loaded from an uploaded ZIP only after explicit confirmation. Only models of this app (K-Means, Isolation Forest, LOF, DBSCAN, autoencoder) are loaded – the app
   refuses models of the supervised or deep-learning version with a clear message, as well as an incomplete or damaged
   `preprocessing.json` and a recipe that does not match the model.
 * **K-Means has limits:** it tends to find round groups of similar size and assigns every row to a cluster – outliers
@@ -410,6 +423,8 @@ python tests/synthetic.py                  # synthetic college data (777 rows, n
 * LOF and DBSCAN compare every row with its neighbours – with very many rows (from about 50,000) this takes time and
   memory; Isolation Forest stays fast. The k-distance for step 7 uses a sample from 20,000 rows, the eps grid exists
   only up to 20,000 rows.
+* The autoencoder learns epoch by epoch over all rows – with very many rows (from about 100,000) this takes a few
+  minutes. Tip: sample in the sidebar or fewer epochs.
 * **Memory protection:** DBSCAN (scikit-learn) keeps all neighbourhoods in memory at the same time – with too large
   an eps or many identical rows this grows with the square of the number of rows. The app estimates the number of
   neighbour pairs from 400 random rows and refuses training above 40 million pairs (about 1 GB) with a note; in the

@@ -46,7 +46,7 @@ def apply_suggestion(at, prefix):
     return True
 
 
-@pytest.mark.parametrize("model", ["iforest", "lof", "dbscan"])
+@pytest.mark.parametrize("model", ["iforest", "lof", "dbscan", "autoencoder"])
 def test_anomaly_workflow(folder, model):
     anomaly_like(1000, seed=3).to_csv(folder / "train.csv", index=False)
     anomaly_like(150, share=0.05, seed=9).to_csv(folder / "neu.csv", index=False)
@@ -72,6 +72,10 @@ def test_anomaly_workflow(folder, model):
     if model in ("iforest", "lof"):
         at.checkbox(key="w_contam_auto").uncheck().run()
         at.number_input(key="w_contam_pct").set_value(2.0).run()
+    elif model == "autoencoder":  # keine eingebaute Schwelle: nur der Anteil, Schichten aus der Zahl der Features
+        assert not [c for c in at.checkbox if c.key == "w_contam_auto"]
+        assert at.session_state["w_ae_layers"] == "8,2,8"
+        at.number_input(key="w_contam_pct").set_value(2.0).run()
     else:
         assert at.session_state["w_eps"] > 0 and at.session_state["w_min_samples"] == 16  # 2 × 8 Features
     button(at, "Training starten").click().run()
@@ -81,6 +85,9 @@ def test_anomaly_workflow(folder, model):
     assert any("fertig" in s.value for s in at.success)
     sidebar = [m.value for m in at.sidebar.markdown] + [c.value for c in at.sidebar.caption]
     assert any("trainiert (" in v and "auffällig" in v for v in sidebar)
+    if model == "autoencoder":  # Lernkurve und Aufbau des Netzes
+        assert any(s.value == "Lernkurve des Autoencoders" for s in at.subheader)
+        assert any("Engpass 2 Neuronen" in m.value for m in at.markdown)
 
     # 7) Schwelle bzw. eps: Vorschlag übernehmen und neu trainieren
     go(at, 6)
@@ -101,6 +108,7 @@ def test_anomaly_workflow(folder, model):
     assert ("Cluster und Rauschen" in heads) == (model == "dbscan")
     top = next(d.value for d in at.dataframe if "Anomalie-Score" in d.value.columns)
     assert top["Anomalie-Score"].is_monotonic_decreasing and len(top) == 20
+    assert ("am schlechtesten nachgebaut" in top.columns) == (model == "autoencoder")
     assert {"Precision", "Recall", "ROC-AUC"} <= {m.label for m in at.metric}
     button(at, "Zufällige Zeile ziehen").click().run()
     ok(at, "Einzelfall")
@@ -138,6 +146,7 @@ def test_anomaly_workflow(folder, model):
     assert len(pr["res"]) == 150 and {"Anomalie", "Anomalie-Score", "Hinweis"} <= set(pr["res"].columns)
     assert ("Cluster" in pr["res"].columns) == (model == "dbscan")
     assert pr["cmp"]["binary"] and pr["cmp"]["n"] == 150
+    assert pr["cmp"]["positive"] == "1" and pr["cmp"]["positive_source"] == "training"  # wie im Training
     assert any(h.value == "Fazit" for h in at.subheader)
     assert any("Was die Bewertung aussagt" in m.value for m in at.markdown)
     at.radio(key="w_pred_mode").set_value("Einzelner Datensatz (Formular)").run()

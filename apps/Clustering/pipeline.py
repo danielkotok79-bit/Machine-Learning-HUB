@@ -3,7 +3,8 @@ pipeline.py – Rechenlogik des DATA-Analysis-Clustering (ohne Streamlit)
 =====================================================================
 
 Alle Schritte einer Cluster-Analyse mit K-Means und der Anomalieerkennung mit Isolation Forest, Local Outlier
-Factor (LOF) und DBSCAN (scikit-learn, Unsupervised Learning) für Tabellen (CSV) als wiederverwendbare Funktionen.
+Factor (LOF), DBSCAN und einem Autoencoder (neuronales Netz, MLPRegressor) – scikit-learn, Unsupervised Learning – für
+Tabellen (CSV) als wiederverwendbare Funktionen.
 Die Streamlit-App (app.py) ruft nur diese Funktionen auf – das Modul lässt sich genauso im Jupyter Notebook
 verwenden:
 
@@ -48,6 +49,7 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor, NearestNeighbors
+from sklearn.neural_network import MLPRegressor
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score, classification_report, confusion_matrix
 from sklearn.metrics import roc_auc_score, average_precision_score
@@ -386,13 +388,16 @@ MAX_K = 50  # höchstens so viele Cluster
 SETTING_TYPES = {
     "w_k": (int, 2, MAX_K), "w_k_max": (int, 3, 30), "w_n_init": (int, 1, 100), "w_max_iter": (int, 10, 100_000),
     "w_seed": (int, 0, 1_000_000),
-    # Anomalieerkennung (Isolation Forest, LOF, DBSCAN) – contamination in Prozent
+    # Anomalieerkennung (Isolation Forest, LOF, DBSCAN, Autoencoder) – contamination in Prozent
     "w_n_estimators": (int, 10, 2000), "w_max_samples": (int, 0, 10_000_000), "w_n_neighbors": (int, 2, 500),
     "w_min_samples": (int, 2, 1000), "w_eps": (float, 1e-6, 1e9), "w_contam_pct": (float, 0.1, 50.0),
     "w_drop_first": (bool, None, None), "w_curve": (bool, None, None), "w_contam_auto": (bool, None, None),
+    # Autoencoder
+    "w_ae_epochs": (int, 10, 5000), "w_ae_alpha": (float, 0.0, 10.0), "w_ae_lr": (float, 1e-5, 1.0),
+    "w_ae_early": (bool, None, None),
     "w_viz_cols": (list, None, None), "w_features": (list, None, None),
     **{k: (str, None, None) for k in ("w_group", "w_name_col", "w_scaler", "w_init", "w_algorithm", "w_model",
-                                      "w_metric")},
+                                      "w_metric", "w_ae_layers", "w_ae_activation")},
 }
 
 
@@ -1539,12 +1544,14 @@ MODEL_KMEANS = "kmeans"
 MODEL_IFOREST = "iforest"
 MODEL_LOF = "lof"
 MODEL_DBSCAN = "dbscan"
+MODEL_AUTOENCODER = "autoencoder"
 MODEL_NAMES = {MODEL_KMEANS: "K-Means", MODEL_IFOREST: "Isolation Forest", MODEL_LOF: "Local Outlier Factor (LOF)",
-               MODEL_DBSCAN: "DBSCAN"}
-ANOMALY_MODELS = (MODEL_IFOREST, MODEL_LOF, MODEL_DBSCAN)  # liefern je Zeile einen Anomalie-Score
+               MODEL_DBSCAN: "DBSCAN", MODEL_AUTOENCODER: "Autoencoder"}
+ANOMALY_MODELS = (MODEL_IFOREST, MODEL_LOF, MODEL_DBSCAN, MODEL_AUTOENCODER)  # liefern je Zeile einen Anomalie-Score
 MODEL_CLASSES = {MODEL_KMEANS: KMeans, MODEL_IFOREST: IsolationForest, MODEL_LOF: LocalOutlierFactor,
-                 MODEL_DBSCAN: DBSCAN}
-MODEL_VARS = {MODEL_KMEANS: "kmeans", MODEL_IFOREST: "iforest", MODEL_LOF: "lof", MODEL_DBSCAN: "dbscan"}  # im Code
+                 MODEL_DBSCAN: DBSCAN, MODEL_AUTOENCODER: MLPRegressor}
+MODEL_VARS = {MODEL_KMEANS: "kmeans", MODEL_IFOREST: "iforest", MODEL_LOF: "lof", MODEL_DBSCAN: "dbscan",
+              MODEL_AUTOENCODER: "autoencoder"}  # Variable im erzeugten Code
 MODEL_WHY = {
     MODEL_KMEANS: N_("Gruppen (Cluster) ähnlicher Zeilen finden – K gibt man vor, Schritt 7 hilft bei der Wahl. "
                      "Ausreißer zeigt Schritt 10: Zeilen weit weg von allen Zentren."),
@@ -1555,8 +1562,15 @@ MODEL_WHY = {
                   "auch lokale Ausreißer neben dichten Gruppen. Bei sehr vielen Zeilen langsamer."),
     MODEL_DBSCAN: N_("Cluster beliebiger Form plus Rauschen: Zeilen in dünn besetzten Bereichen sind Rauschen = "
                      "Anomalien. Kein K nötig, dafür eps (Radius) und min_samples – eps zeigt Schritt 7 (k-Distanz)."),
+    MODEL_AUTOENCODER: N_("Anomalien finden mit einem neuronalen Netz (Deep Learning, unsupervised): Es lernt, jede "
+                          "Zeile durch einen Engpass hindurch nachzubauen – normale Muster gelingen, ungewöhnliche "
+                          "Zeilen nicht. Score = Rekonstruktionsfehler; findet auch ungewöhnliche Kombinationen von "
+                          "Features, die einzeln normal aussehen."),
 }
 METRICS = ["euclidean", "manhattan"]  # Abstandsmaß für LOF und DBSCAN
+AE_ACTIVATIONS = ["tanh", "relu"]  # Autoencoder: Aktivierung der verborgenen Schichten (tanh: bei wenigen Neuronen meist besser)
+AE_DEFAULT_CONTAMINATION = 0.01  # Autoencoder: keine eingebaute Schwelle – ohne Angabe die auffälligsten 1 %
+AE_MAX_LAYERS, AE_MAX_UNITS = 9, 1024
 INITS = ["k-means++", "random"]
 ALGORITHMS = ["lloyd", "elkan"]
 K_MAX_DEFAULT = 10  # Elbow-/Silhouette-Kurve: K = 1 … 10
@@ -1586,13 +1600,20 @@ class ClusterConfig:
     curve: bool = True  # Kurve für Schritt 7: K-Means Elbow + Silhouette, DBSCAN Rauschanteil je eps
     k_max: int = K_MAX_DEFAULT
     # Anomalieerkennung
-    contamination: float = 0.0  # Anteil auffälliger Zeilen (IF, LOF): 0 = 'auto'
+    contamination: float = 0.0  # Anteil auffälliger Zeilen (IF, LOF, Autoencoder): 0 = 'auto' (Autoencoder: 1 %)
     n_estimators: int = 100  # Isolation Forest: Anzahl Bäume
     max_samples: int = 0  # Isolation Forest: Zeilen je Baum, 0 = 'auto' = min(256, Zeilen)
     n_neighbors: int = 20  # LOF: Anzahl Nachbarn
     eps: float = 0.5  # DBSCAN: Radius der Nachbarschaft (in den skalierten Features)
     min_samples: int = 5  # DBSCAN: so viele Zeilen (sie selbst eingeschlossen) im Radius eps → Kernpunkt
     metric: str = "euclidean"  # LOF, DBSCAN
+    # Autoencoder (MLPRegressor, Eingabe = Ziel)
+    ae_layers: str = ""  # Neuronen je verborgener Schicht, z. B. "16,3,16" – leer = aus der Zahl der Features
+    ae_activation: str = "tanh"
+    ae_epochs: int = 300  # max_iter: höchstens so viele Durchläufe durch die Trainingsdaten
+    ae_alpha: float = 1e-4  # L2-Strafe auf die Gewichte (wie MLPRegressor)
+    ae_learning_rate: float = 1e-3  # learning_rate_init (Adam)
+    ae_early_stopping: bool = True  # 10 % der Zeilen zur Validierung, Ende ohne Verbesserung
 
 
 def model_name(key) -> str:
@@ -1601,7 +1622,8 @@ def model_name(key) -> str:
 
 
 def is_anomaly(key) -> bool:
-    """Isolation Forest, LOF und DBSCAN liefern je Zeile einen Anomalie-Score (K-Means: Cluster und Abstand)."""
+    """Isolation Forest, LOF, DBSCAN und Autoencoder liefern je Zeile einen Anomalie-Score (K-Means: Cluster und
+    Abstand)."""
     return key in ANOMALY_MODELS
 
 
@@ -1754,11 +1776,53 @@ def train_kmeans(cfg: ClusterConfig, prep: PrepResult, progress=None):
 
 
 # ---------------------------------------------------------------------------
-# 6b) Anomalieerkennung – Isolation Forest, Local Outlier Factor (LOF), DBSCAN
+# 6b) Anomalieerkennung – Isolation Forest, Local Outlier Factor (LOF), DBSCAN, Autoencoder
 # ---------------------------------------------------------------------------
-def anomaly_params(cfg: ClusterConfig, n: int) -> dict:
+def default_ae_layers(p: int) -> tuple[int, ...]:
+    """Startwert für die Schichten des Autoencoders aus der Zahl der Features p: außen die nächste Zweierpotenz ≥ p
+    (8 … 64 Neuronen), in der Mitte ein Engpass mit etwa p/4 Neuronen (2 … 8, immer weniger als p) – z. B.
+    11 Features → (16, 3, 16), 30 Features → (32, 8, 32)."""
+    p = max(int(p), 1)
+    width = int(min(64, max(8, 2 ** int(np.ceil(np.log2(p))))))
+    code = int(min(8, max(2, round(p / 4))))
+    return width, (code if code < p else max(1, p - 1)), width
+
+
+def layers_text(layers) -> str:
+    """(16, 3, 16) → '16,3,16' (so steht es im Eingabefeld und in der Konfiguration)."""
+    return ",".join(str(int(v)) for v in layers)
+
+
+def parse_layers(text, p: int | None = None) -> tuple[int, ...]:
+    """'16, 3, 16' → (16, 3, 16) – Neuronen je verborgener Schicht. Leer → default_ae_layers(p).
+    Wirft ValueError mit verständlichem Text, wenn die Angabe nicht passt."""
+    text = str(text or "").strip()
+    if not text:
+        return default_ae_layers(p or 8)
+    parts = [t for t in re.split(r"[,;\s]+", text) if t]
+    try:
+        layers = tuple(int(t) for t in parts)
+    except ValueError:
+        raise ValueError(tx("Schichten: ganze Zahlen mit Komma getrennt, z. B. 16,3,16.")) from None
+    if not 1 <= len(layers) <= AE_MAX_LAYERS or not all(1 <= v <= AE_MAX_UNITS for v in layers):
+        raise ValueError(tx("Schichten: 1 bis {n} Schichten mit je 1 bis {m} Neuronen, z. B. 16,3,16.",
+                            n=AE_MAX_LAYERS, m=AE_MAX_UNITS))
+    return layers
+
+
+def anomaly_params(cfg: ClusterConfig, n: int, p: int | None = None) -> dict:
     """Parameter des Anomalie-Modells – genau diese Werte stehen auch im erzeugten Code (codegen.anomaly_code).
-    contamination 0 = 'auto'. Werte über der Zeilenzahl begrenzt scikit-learn selbst (mit Warnung) – hier ausdrücklich."""
+    contamination 0 = 'auto'. Werte über der Zeilenzahl begrenzt scikit-learn selbst (mit Warnung) – hier ausdrücklich.
+    p (Zahl der Features) braucht nur der Autoencoder, wenn keine Schichten angegeben sind."""
+    if cfg.model == MODEL_AUTOENCODER:  # MLPRegressor mit Eingabe = Ziel; die Schwelle setzt train_anomaly
+        act = cfg.ae_activation if cfg.ae_activation in AE_ACTIVATIONS else "tanh"
+        q = {"hidden_layer_sizes": parse_layers(cfg.ae_layers, p), "activation": act}
+        if float(cfg.ae_alpha) != 1e-4:
+            q["alpha"] = float(cfg.ae_alpha)
+        if float(cfg.ae_learning_rate) != 1e-3:
+            q["learning_rate_init"] = float(cfg.ae_learning_rate)
+        q.update(max_iter=int(cfg.ae_epochs), early_stopping=bool(cfg.ae_early_stopping), random_state=int(cfg.seed))
+        return q
     contamination = float(cfg.contamination) if cfg.contamination and cfg.contamination > 0 else "auto"
     metric = cfg.metric if cfg.metric in METRICS else "euclidean"
     if cfg.model == MODEL_IFOREST:
@@ -1784,11 +1848,47 @@ def anomaly_params(cfg: ClusterConfig, n: int) -> dict:
     raise ValueError(tx("Unbekanntes Modell: {model}", model=cfg.model))
 
 
-def make_anomaly_model(cfg: ClusterConfig, n: int):
-    """IsolationForest(…), LocalOutlierFactor(…, novelty=True) oder DBSCAN(…) mit den Einstellungen aus Schritt 6."""
+def make_anomaly_model(cfg: ClusterConfig, n: int, p: int | None = None):
+    """IsolationForest(…), LocalOutlierFactor(…, novelty=True), DBSCAN(…) oder MLPRegressor(…) (Autoencoder) mit den
+    Einstellungen aus Schritt 6."""
     if not is_anomaly(cfg.model):
         raise ValueError(tx("Unbekanntes Modell: {model}", model=cfg.model))
-    return MODEL_CLASSES[cfg.model](**anomaly_params(cfg, n))
+    return MODEL_CLASSES[cfg.model](**anomaly_params(cfg, n, p))
+
+
+def reconstruction(model, X: np.ndarray) -> np.ndarray:
+    """Autoencoder: Eingabe minus Nachbau je Zeile und Feature (in den skalierten Features) – was das Netz nicht
+    nachbauen konnte."""
+    X = np.asarray(X, dtype="float64")
+    return X - model.predict(X)
+
+
+def reconstruction_error(model, X: np.ndarray) -> np.ndarray:
+    """Autoencoder-Score: Rekonstruktionsfehler je Zeile als RMSE über die Features – bei StandardScaler in
+    Standardabweichungen (um 0.3 gut nachgebaut, über 1 deutlich daneben)."""
+    return np.sqrt(np.mean(reconstruction(model, X) ** 2, axis=1))
+
+
+AE_ACT_FUNCS = {"tanh": np.tanh, "relu": lambda v: np.maximum(v, 0.0), "identity": lambda v: v,
+                "logistic": lambda v: 1.0 / (1.0 + np.exp(-v))}
+
+
+def code_layer(model) -> int:
+    """Index der engsten verborgenen Schicht (Engpass) des Autoencoders."""
+    sizes = model.hidden_layer_sizes
+    sizes = [int(sizes)] if np.isscalar(sizes) else [int(v) for v in sizes]
+    return int(np.argmin(sizes))
+
+
+def autoencoder_codes(model, X: np.ndarray) -> np.ndarray:
+    """Ausgabe des Engpasses je Zeile – die gelernte Verdichtung der Features (Encoder-Teil des Netzes): dieselbe
+    Rechnung wie in MLPRegressor, Schicht für Schicht Gewichte · Eingabe + Bias und die Aktivierung."""
+    act = AE_ACT_FUNCS[model.activation]
+    a = np.asarray(X, dtype="float64")
+    k = code_layer(model)
+    for w, b in zip(model.coefs_[:k + 1], model.intercepts_[:k + 1]):
+        a = act(a @ w + b)
+    return a
 
 
 def core_distance(model, X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -1809,8 +1909,12 @@ def anomaly_scores(model, X: np.ndarray, key: str, training: bool = False):
          Training (jede Zeile ohne sich selbst als Nachbarn); neue Daten: score_samples und predict (novelty=True).
     DBSCAN: Score = Abstand zum nächsten Kernpunkt in Vielfachen von eps (über 1 = Rauschen). Trainingszeilen
          behalten die Cluster aus dem Training (labels_); eine neue Zeile bekommt den Cluster des nächsten
-         Kernpunkts, wenn er höchstens eps entfernt ist – sonst −1 (Rauschen = Anomalie)."""
+         Kernpunkts, wenn er höchstens eps entfernt ist – sonst −1 (Rauschen = Anomalie).
+    Autoencoder: Score = Rekonstruktionsfehler (RMSE je Zeile), Anomalie = Score über threshold_ aus dem Training."""
     X = np.asarray(X, dtype="float64")
+    if key == MODEL_AUTOENCODER:
+        score = reconstruction_error(model, X)
+        return score, score > float(model.threshold_), None
     if key == MODEL_IFOREST:
         return -model.score_samples(X), model.predict(X) == -1, None
     if key == MODEL_LOF:
@@ -1832,7 +1936,10 @@ def anomaly_scores(model, X: np.ndarray, key: str, training: bool = False):
 
 def anomaly_threshold(model, key: str) -> float:
     """Schwelle auf der Skala des Scores – auffällig ist ein Score darüber. IF/LOF: −offset_ (contamination = auto:
-    0,5 bzw. 1,5; sonst das passende Quantil der Trainings-Scores), DBSCAN: 1 (= eps)."""
+    0,5 bzw. 1,5; sonst das passende Quantil der Trainings-Scores), DBSCAN: 1 (= eps), Autoencoder: threshold_
+    (Quantil der Rekonstruktionsfehler im Training)."""
+    if key == MODEL_AUTOENCODER:
+        return float(model.threshold_)
     return 1.0 if key == MODEL_DBSCAN else float(-model.offset_)
 
 
@@ -1865,7 +1972,7 @@ def anomaly_curve(cfg: ClusterConfig, X: np.ndarray, score: np.ndarray, progress
     höchstens CURVE_ROWS Zeilen) zusätzlich Cluster und Rauschanteil für eps = Quantile der k-Distanz."""
     n = len(X)
     score = np.asarray(score, dtype="float64")
-    if cfg.model in (MODEL_IFOREST, MODEL_LOF):
+    if cfg.model in (MODEL_IFOREST, MODEL_LOF, MODEL_AUTOENCODER):
         thresholds = np.quantile(score, [1 - c for c in CONTAM_LEVELS])
         top = max(int(np.ceil(KNEE_TOP * n)), min(n, 20))
         desc = np.sort(score)[::-1][:top]
@@ -1969,7 +2076,11 @@ def size_problem(cfg: ClusterConfig, X: np.ndarray) -> str | None:
 
 
 def train_anomaly(cfg: ClusterConfig, prep: PrepResult, progress=None):
-    """6) Isolation Forest, LOF oder DBSCAN auf allen Zeilen trainieren – unsupervised, ohne Label.
+    """6) Isolation Forest, LOF, DBSCAN oder Autoencoder auf allen Zeilen trainieren – unsupervised, ohne Label.
+
+    Autoencoder: MLPRegressor mit Eingabe = Ziel (fit(X, X)); Schwelle = Quantil der Rekonstruktionsfehler für
+    contamination (ohne Angabe 1 %), gespeichert als model.threshold_. Leere Schichten und contamination 0 werden dabei
+    in cfg eingetragen – so stehen sie im Rezept und im angezeigten Code.
 
     Rückgabe: (Modell, history mit Score, Anomalie ja/nein, DBSCAN-Clustern und den Daten für Schritt 7, info)."""
     X = prep.X
@@ -1978,6 +2089,9 @@ def train_anomaly(cfg: ClusterConfig, prep: PrepResult, progress=None):
         raise ValueError(tx("Unbekanntes Modell: {model}", model=cfg.model))
     if cfg.contamination and not 0 < float(cfg.contamination) <= MAX_CONTAMINATION:
         raise ValueError(tx("contamination muss zwischen 0 und 0.5 liegen (Anteil auffälliger Zeilen, z. B. 0.01 = 1 %)."))
+    if cfg.model == MODEL_AUTOENCODER:
+        cfg.ae_layers = layers_text(parse_layers(cfg.ae_layers, p))
+        cfg.contamination = float(cfg.contamination or AE_DEFAULT_CONTAMINATION)
     if cfg.model == MODEL_DBSCAN and not (np.isfinite(cfg.eps) and cfg.eps > 0):
         raise ValueError(tx("eps muss größer als 0 sein."))
     if not np.ptp(X, axis=0).any():  # Isolation Forest meldete hier sonst ALLE Zeilen als auffällig
@@ -1991,10 +2105,16 @@ def train_anomaly(cfg: ClusterConfig, prep: PrepResult, progress=None):
         progress(0.05, tx("Trainiere {name} …", name=model_name(cfg.model)), None)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        model = make_anomaly_model(cfg, n).fit(X)
+        if cfg.model == MODEL_AUTOENCODER:  # Eingabe = Ziel: das Netz lernt, die Zeilen nachzubauen
+            model = make_anomaly_model(cfg, n, p).fit(X, X)
+            model.threshold_ = float(np.percentile(reconstruction_error(model, X), 100 * (1 - cfg.contamination)))
+        else:
+            model = make_anomaly_model(cfg, n, p).fit(X)
         score, flag, labels = anomaly_scores(model, X, cfg.model, training=True)
     notes = list(dict.fromkeys(str(w.message) for w in caught
                                if issubclass(w.category, (UserWarning, RuntimeWarning, ConvergenceWarning))))
+    if cfg.model == MODEL_AUTOENCODER:  # „Maximum iterations reached“ erklärt autoencoder_notes verständlicher
+        notes = [w for w in notes if not w.startswith("Stochastic Optimizer: Maximum iterations")]
     finite = score[np.isfinite(score)]
     info = {
         "model": cfg.model, "n_rows": int(n), "n_features": int(p), "n_anomalies": int(flag.sum()),
@@ -2010,6 +2130,11 @@ def train_anomaly(cfg: ClusterConfig, prep: PrepResult, progress=None):
         info.update(k=k, sizes=np.bincount(labels[labels >= 0], minlength=k).tolist() if k else [],
                     n_core=int(len(model.core_sample_indices_)), eps=float(model.eps),
                     min_samples=int(model.min_samples))
+    if cfg.model == MODEL_AUTOENCODER:
+        best = getattr(model, "best_validation_score_", None)
+        info.update(layers=[int(v) for v in model.hidden_layer_sizes], code_size=int(min(model.hidden_layer_sizes)),
+                    n_iter=int(model.n_iter_), loss=float(model.loss_), epochs=int(cfg.ae_epochs),
+                    best_validation=float(best) if best is not None and np.isfinite(best) else None)
     if progress:
         progress(0.4, tx("{name} fertig – {n} auffällige Zeilen", name=model_name(cfg.model), n=info["n_anomalies"]),
                  None)
@@ -2115,6 +2240,27 @@ def score_text(v) -> str:
     return "∞" if np.isinf(v) else f"{v:.4g}"
 
 
+def autoencoder_notes(info: dict) -> list[str]:
+    """Schritt 6/7, Autoencoder: Aufbau des Netzes, Training (Epochen, Loss, Validierung) und Warnung, wenn der Engpass
+    nicht enger ist als die Zahl der Features – dann kann das Netz die Zeilen einfach durchreichen."""
+    layers, b, p = info.get("layers") or [], int(info.get("code_size") or 0), int(info["n_features"])
+    text = tx("**Netz:** {p} Features → Schichten {layers} → {p} Features, Engpass {b} Neuronen · {e} Epochen, Loss "
+              "{loss}.", p=p, layers=" – ".join(str(v) for v in layers), b=b, e=info.get("n_iter", "?"),
+              loss=score_text(info.get("loss", float("nan"))))
+    if info.get("best_validation") is not None:
+        text += tx(" Early Stopping: bestes R² auf den Validierungszeilen {r}.", r=f"{info['best_validation']:.3f}")
+    notes = [text]
+    if info.get("epochs") and info.get("n_iter", 0) >= info["epochs"]:
+        notes.append(tx("Das Training hat die Höchstzahl von {e} Epochen erreicht, der Fehler sank zuletzt noch leicht – "
+                        "mehr Epochen (Schritt 6) können den Nachbau etwas verbessern.", e=info["epochs"]))
+    if layers and b >= p > 1:
+        notes.append(tx(":orange[**Kein echter Engpass:**] Die engste Schicht hat {b} Neuronen bei {p} Features – das "
+                        "Netz kann die Zeilen fast unverändert durchreichen, ungewöhnliche Zeilen fallen dann kaum auf. "
+                        "In der Mitte weniger Neuronen wählen (z. B. {s}).",
+                        b=b, p=p, s=layers_text(default_ae_layers(p))))
+    return notes
+
+
 def threshold_assessment(curve: dict | None, info: dict, cfg: ClusterConfig) -> dict:
     """Fazit zu Schritt 7 für die Anomalie-Modelle: Wie viele Zeilen sind auffällig, passt die Schwelle (IF, LOF) bzw.
     eps (DBSCAN)? Rückgabe wie k_assessment: {"notes": [Markdown], "suggest": [(Text, Wert)]} – Wert = contamination
@@ -2122,9 +2268,11 @@ def threshold_assessment(curve: dict | None, info: dict, cfg: ClusterConfig) -> 
     n, k, share = info["n_rows"], info["n_anomalies"], info["share"]
     notes, suggest = [], []
     curve = curve or {}
-    if cfg.model in (MODEL_IFOREST, MODEL_LOF):
+    if cfg.model in (MODEL_IFOREST, MODEL_LOF, MODEL_AUTOENCODER):
         notes.append(tx("**{k} von {n} Zeilen auffällig ({pct})** – Schwelle: Score über {thr}.",
                         k=_n(k), n=_n(n), pct=share_text(share), thr=score_text(info["threshold"])))
+        if cfg.model == MODEL_AUTOENCODER:
+            notes.extend(autoencoder_notes(info))
         if not cfg.contamination:
             notes.append(tx(N_("contamination = auto: Die Schwelle kommt aus dem Verfahren selbst – Score 0.5 wie im "
                                "Original-Paper zu Isolation Forest.") if cfg.model == MODEL_IFOREST else
@@ -2247,6 +2395,42 @@ def feature_separation(prep: PrepResult, labels: np.ndarray, k: int) -> pd.DataF
     return pd.DataFrame(rows).sort_values("R²", ascending=False, ignore_index=True)
 
 
+def plot_rows(n: int, max_points: int = 5000, seed: int = RANDOM_STATE, priority=None) -> np.ndarray:
+    """Zeilen für ein Streudiagramm: alle – oder eine feste Stichprobe von max_points Zeilen, in der die Zeilen aus
+    priority (z. B. die Anomalien, höchstens die Hälfte des Bildes) immer dabei sind; sonst fehlten seltene Ausreißer."""
+    if n <= max_points:
+        return np.arange(n)
+    rng = np.random.default_rng(int(seed))
+    rows = rng.choice(n, max_points, replace=False)
+    if priority is not None:  # Anomalien zuerst, der Rest zufällig
+        must = np.flatnonzero(np.asarray(priority, dtype=bool))
+        if len(must) > max_points // 2:
+            must = rng.choice(must, max_points // 2, replace=False)
+        rows = np.concatenate([must, rows[~np.isin(rows, must)][: max_points - len(must)]])
+    return np.sort(rows)
+
+
+def code_projection(prep: PrepResult, model, max_points: int = 5000, seed: int = RANDOM_STATE,
+                    priority: np.ndarray | None = None) -> dict | None:
+    """Autoencoder, Schritt 8: die Zeilen im Engpass des Netzes – seine eigene, nichtlineare Verdichtung der Features.
+    Engpass mit 2 Neuronen: die Ausgaben direkt; mit mehr: PCA der Ausgaben auf 2 Achsen; mit 1 Neuron: None (keine
+    2D-Karte). Rückgabe wie pca_projection (coords, rows) plus die Achsentitel."""
+    codes = autoencoder_codes(model, prep.X)
+    b = codes.shape[1]
+    if b < 2:
+        return None
+    rows = plot_rows(len(codes), max_points, seed, priority)
+    if b == 2:
+        xy, axes, ratio = codes[rows], (tx("Neuron 1 im Engpass"), tx("Neuron 2 im Engpass")), None
+    else:
+        pca = PCA(n_components=2, random_state=int(seed)).fit(codes)
+        ratio = np.nan_to_num(pca.explained_variance_ratio_, nan=0.0).tolist()
+        xy = pca.transform(codes[rows])
+        axes = tuple(tx("Code-PC{i} ({pct} der Streuung im Engpass)", i=i + 1, pct=f"{ratio[i]:.0%}") for i in range(2))
+    return {"coords": xy, "rows": rows, "labels": np.zeros(len(rows), dtype=int), "centers": np.empty((0, 2)),
+            "explained": ratio or [0.0, 0.0], "axes": axes, "code_size": int(b), "n": int(len(codes))}
+
+
 def pca_projection(prep: PrepResult, model, max_points: int = 5000, seed: int = RANDOM_STATE,
                    labels: np.ndarray | None = None, priority: np.ndarray | None = None) -> dict:
     """PCA auf 2 Dimensionen – nur für die Darstellung. Die Modelle rechnen weiter mit allen Features.
@@ -2258,17 +2442,7 @@ def pca_projection(prep: PrepResult, model, max_points: int = 5000, seed: int = 
     n, p = X.shape
     n_comp = min(2, p)
     pca = PCA(n_components=n_comp, random_state=int(seed)).fit(X)
-    if n > max_points:
-        rng = np.random.default_rng(int(seed))
-        rows = rng.choice(n, max_points, replace=False)
-        if priority is not None:  # Anomalien zuerst (höchstens die Hälfte des Bildes), der Rest zufällig
-            must = np.flatnonzero(np.asarray(priority, dtype=bool))
-            if len(must) > max_points // 2:
-                must = rng.choice(must, max_points // 2, replace=False)
-            rows = np.concatenate([must, rows[~np.isin(rows, must)][: max_points - len(must)]])
-        rows = np.sort(rows)
-    else:
-        rows = np.arange(n)
+    rows = plot_rows(n, max_points, seed, priority)
     centers_in = getattr(model, "cluster_centers_", None)
     coords = pca.transform(X[rows])
     centers = pca.transform(centers_in) if centers_in is not None else np.empty((0, n_comp))
@@ -2352,18 +2526,32 @@ def row_deviations(prep: PrepResult, rows, top: int = 3) -> list[list[tuple[str,
     return out
 
 
-def deviation_text(devs) -> str:
+def deviation_text(devs, unit: str = " σ") -> str:
     """[('vol_z', 3.2), ('ret_z', -2.9)] → 'vol_z +3.2 σ · ret_z −2.9 σ'."""
-    return " · ".join(f"{c} " + f"{z:+.1f}".replace("-", "−") + " σ" for c, z in devs)
+    return " · ".join(f"{c} " + f"{z:+.1f}".replace("-", "−") + unit for c, z in devs)
 
 
-def top_anomalies(prep: PrepResult, score, flag, n: int = 15, labels=None) -> pd.DataFrame:
+def recon_deviations(prep: PrepResult, recon: np.ndarray, rows, top: int = 3) -> list[list[tuple[str, float]]]:
+    """Autoencoder: je Zeile die Features, die das Netz am schlechtesten nachgebaut hat – Eingabe minus Nachbau in
+    den skalierten Features (StandardScaler: Standardabweichungen). Anders als row_deviations ein Blick ins Modell:
+    auch ein Feature mit normalem Wert kann hier stehen, wenn es nicht zu den übrigen Features der Zeile passt."""
+    cols = prep.recipe["feature_columns"]
+    out = []
+    for r in np.asarray(recon, dtype="float64")[np.asarray(rows, dtype=int)].reshape(len(rows), -1):
+        idx = np.argsort(-np.abs(r), kind="stable")[:top]
+        out.append([(cols[j], float(r[j])) for j in idx])
+    return out
+
+
+def top_anomalies(prep: PrepResult, score, flag, n: int = 15, labels=None, recon=None) -> pd.DataFrame:
     """Die n auffälligsten Zeilen (höchster Score): Zeile im Datensatz nach Schritt 2, Bezeichnung, Score und die
-    Features mit der größten Abweichung vom Durchschnitt."""
+    Features mit der größten Abweichung vom Durchschnitt – beim Autoencoder (recon = reconstruction()) zusätzlich die
+    am schlechtesten nachgebauten Features."""
     score = np.asarray(score, dtype="float64")
     order = np.argsort(-score, kind="stable")[:n]
+    worst = recon_deviations(prep, recon, order) if recon is not None else [None] * len(order)
     rows = []
-    for rank, (i, devs) in enumerate(zip(order, row_deviations(prep, order)), 1):
+    for rank, (i, devs, bad) in enumerate(zip(order, row_deviations(prep, order), worst), 1):
         row = {"Rang": rank, "Zeile": int(prep.index[i])}
         if prep.names is not None:
             name = prep.names.iloc[i]
@@ -2372,6 +2560,8 @@ def top_anomalies(prep: PrepResult, score, flag, n: int = 15, labels=None) -> pd
             row["Cluster"] = int(labels[i])
         row.update({"Anomalie-Score": float(np.round(score[i], 4)), "Anomalie": bool(flag[i]),
                     "größte Abweichungen (z)": deviation_text(devs)})
+        if bad is not None:
+            row["am schlechtesten nachgebaut"] = deviation_text(bad, unit="")
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -2424,7 +2614,8 @@ MAX_BUNDLE_BYTES = 2 * 10**9  # entpackte Größe eines Modell-ZIPs
 # (Tree), LOF den Suchbaum der Nachbarn (KDTree/BallTree, wie in der Supervised-Version). Alles andere, was skops nicht
 # von sich aus kennt (z. B. fremder Code), wird abgelehnt.
 SKOPS_TRUSTED: set = {"sklearn.tree._tree.Tree", "sklearn.neighbors._kd_tree.KDTree",
-                      "sklearn.neighbors._ball_tree.BallTree"}
+                      "sklearn.neighbors._ball_tree.BallTree",
+                      "sklearn.neural_network._stochastic_optimizers.AdamOptimizer"}  # Autoencoder: Zustand von Adam
 SKOPS_TRUSTED_PREFIX = ("sklearn.metrics._dist_metrics.",)
 
 
@@ -2624,12 +2815,12 @@ def recipe_problem(recipe: dict) -> str | None:
 def check_recipe(recipe, model=None) -> None:
     """Nur Modelle der Clustering-Version laden – ein Modell der Supervised-Version hätte ein anderes Rezept. Prüft
     außerdem, ob das Rezept vollständig ist und (mit model) zum Modell passt: Modelltyp laut Rezept (K-Means, Isolation
-    Forest, LOF, DBSCAN), Zahl der Eingänge, bei K-Means die Zahl der Cluster."""
+    Forest, LOF, DBSCAN, Autoencoder), Zahl der Eingänge, bei K-Means die Zahl der Cluster."""
     if not isinstance(recipe, dict) or recipe.get("task") != T_CLUSTER:
         task = recipe.get("task") if isinstance(recipe, dict) else None
         raise ValueError(tx("Dieses Modell stammt nicht aus der Clustering-Version (Aufgabe: {task}) – hier lassen "
                             "sich nur Modelle laden, die mit dieser App gespeichert wurden (K-Means, Isolation Forest, "
-                            "LOF, DBSCAN).",
+                            "LOF, DBSCAN, Autoencoder).",
                             task=str(task or "?")[:40]))
     problem = recipe_problem(recipe)
     if problem:
@@ -2659,6 +2850,11 @@ def check_recipe(recipe, model=None) -> None:
     if key == MODEL_LOF and not getattr(model, "novelty", False):
         raise ValueError(tx("Das LOF-Modell wurde ohne novelty=True trainiert – damit lassen sich keine neuen Daten "
                             "bewerten."))
+    if key == MODEL_AUTOENCODER:
+        t = getattr(model, "threshold_", None)
+        if int(getattr(model, "n_outputs_", -1)) != n_in or not _numbers([t]) or not np.isfinite(t):
+            raise ValueError(tx("Das Autoencoder-Modell ist unvollständig (Ausgänge oder Schwelle threshold_ fehlen) – "
+                                "bitte in der App neu trainieren und speichern."))
 
 
 def load_bundle(folder, allow_pickle: bool = True):
@@ -2845,8 +3041,8 @@ def assign_new(model, recipe: dict, df_new: pd.DataFrame):
 
 
 def score_new(model, recipe: dict, df_new: pd.DataFrame):
-    """Neue Daten mit dem Anomalie-Modell aus dem Training bewerten (Isolation Forest, LOF, DBSCAN) – nichts wird neu
-    gelernt: gleiche Aufbereitung (Rezept), gleiche Schwelle wie im Training.
+    """Neue Daten mit dem Anomalie-Modell aus dem Training bewerten (Isolation Forest, LOF, DBSCAN, Autoencoder) –
+    nichts wird neu gelernt: gleiche Aufbereitung (Rezept), gleiche Schwelle wie im Training.
 
     Ergebnis: Daten + Anomalie (1 = auffällig), Anomalie-Score (höher = auffälliger), bei DBSCAN zusätzlich Cluster
     (−1 = Rauschen) und Hinweis (Datenqualität). Rückgabe: (Ergebnis-DataFrame, Bericht, Vergleich mit der bekannten

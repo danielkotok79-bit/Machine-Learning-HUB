@@ -19,6 +19,7 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor, NearestNeighbors
+from sklearn.neural_network import MLPRegressor
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score, classification_report, confusion_matrix
 from sklearn.metrics import roc_auc_score, average_precision_score"""
@@ -491,13 +492,41 @@ def _param(v) -> str:
 
 
 def anomaly_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
-    """IsolationForest(…), LocalOutlierFactor(…) oder DBSCAN(…) – genau die Parameter der App (pipeline.anomaly_params)."""
+    """IsolationForest(…), LocalOutlierFactor(…), DBSCAN(…) oder MLPRegressor(…) (Autoencoder) – genau die Parameter
+    der App (pipeline.anomaly_params)."""
     args = ", ".join(f"{k}={_param(v)}" for k, v in pl.anomaly_params(cfg, n_rows).items())
     return f"{pl.MODEL_CLASSES[cfg.model].__name__}({args})"
 
 
+def _activation_expr(name: str, x: str) -> str:
+    """Aktivierung einer verborgenen Schicht als Ausdruck – wie pipeline.AE_ACT_FUNCS."""
+    return {"tanh": f"np.tanh({x})", "relu": f"np.maximum({x}, 0)", "identity": x,
+            "logistic": f"1 / (1 + np.exp(-({x})))"}[name]
+
+
+def autoencoder_model_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
+    """Code für Schritt 6 mit dem Autoencoder: Netz mit Eingabe = Ziel trainieren, Rekonstruktionsfehler als Score,
+    Schwelle = Quantil für contamination – wie pipeline.train_anomaly()."""
+    v = pl.MODEL_VARS[cfg.model]
+    c = float(cfg.contamination or pl.AE_DEFAULT_CONTAMINATION)
+    return "\n".join([
+        f"{v} = {anomaly_code(cfg, n_rows)}",
+        f"{v}.fit(X, X)   # " + tx("Autoencoder: Eingabe = Ziel – das Netz lernt, die Zeilen nachzubauen (kein Label)"),
+        f"score = np.sqrt(((X - {v}.predict(X)) ** 2).mean(axis=1))   # "
+        + tx("Rekonstruktionsfehler (RMSE je Zeile): höher = auffälliger"),
+        f"threshold = np.percentile(score, {_float(100 * (1 - c))})   # "
+        + tx("contamination {pct}: die auffälligsten {pct} der Trainingszeilen", pct=pl.share_text(c)),
+        "anomaly = score > threshold   # " + tx("True = auffällig (Score über der Schwelle)"),
+        f"{v}.threshold_ = threshold   # " + tx("Schwelle mit dem Modell speichern – für neue Daten (Schritt 10)"),
+        f"print({tx('Epochen:')!r}, {v}.n_iter_, '· Loss:', {v}.loss_)",
+        f"print({tx('Schwelle:')!r}, threshold)",
+        f"print({tx('Anomalien:')!r}, anomaly.sum(), f'({{anomaly.mean():.2%}})')"])
+
+
 def anomaly_model_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
     """Code für Schritt 6 mit einem Anomalie-Modell: trainieren, Score und Anomalie (ja/nein) je Zeile."""
+    if cfg.model == pl.MODEL_AUTOENCODER:
+        return autoencoder_model_code(cfg, n_rows)
     v = pl.MODEL_VARS[cfg.model]
     L = [f"{v} = {anomaly_code(cfg, n_rows)}",
          f"{v}.fit(X)   # " + tx("Unsupervised: kein y – das Modell lernt nur, wie die Zeilen normalerweise aussehen")]
@@ -528,7 +557,7 @@ def anomaly_model_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
 
 def model_code(cfg: pl.ClusterConfig, n_rows: int) -> str:
     """Code für Schritt 6: K-Means auf allen Zeilen trainieren (wie im Kurs: kmeans.fit(...)) – oder ein
-    Anomalie-Modell (Isolation Forest, LOF, DBSCAN)."""
+    Anomalie-Modell (Isolation Forest, LOF, DBSCAN, Autoencoder)."""
     if pl.is_anomaly(cfg.model):
         return anomaly_model_code(cfg, n_rows)
     return "\n".join([
@@ -546,7 +575,7 @@ def anomaly_curve_code(cfg: pl.ClusterConfig, n_rows: int, curve: dict | None = 
     und Knick der Score-Kurve (IF, LOF) bzw. k-Distanz, ihr Knick und der Rauschanteil je eps (DBSCAN). curve: das
     Ergebnis aus der App – hat sie zu große eps übersprungen (Speicher), überspringt der Code dieselben."""
     L = [_knee_code(), ""]
-    if cfg.model in (pl.MODEL_IFOREST, pl.MODEL_LOF):
+    if cfg.model in (pl.MODEL_IFOREST, pl.MODEL_LOF, pl.MODEL_AUTOENCODER):
         L += [f"levels = {pl.CONTAM_LEVELS!r}   # " + tx("Anteil auffälliger Zeilen (contamination)"),
               "thresholds = np.quantile(score, [1 - c for c in levels])   # " + tx("Schwelle je Anteil"),
               "for c, t in zip(levels, thresholds):",
@@ -650,6 +679,39 @@ def curve_code(cfg: pl.ClusterConfig, n_rows: int, curve: dict | None = None) ->
 # ---------------------------------------------------------------------------
 # 8) Cluster-Auswertung
 # ---------------------------------------------------------------------------
+def autoencoder_eval_code(cfg: pl.ClusterConfig, n_features: int) -> str:
+    """Code für Schritt 8, nur Autoencoder: die am schlechtesten nachgebauten Features der auffälligsten Zeilen und die
+    Zeilen im Engpass des Netzes – wie pipeline.recon_deviations() und code_projection()."""
+    v = pl.MODEL_VARS[cfg.model]
+    layers = pl.parse_layers(cfg.ae_layers, n_features)
+    act = cfg.ae_activation if cfg.ae_activation in pl.AE_ACTIVATIONS else "tanh"
+    b = min(layers)
+    L = ["# " + tx("Was das Netz nicht nachbauen konnte: Eingabe minus Nachbau je Feature (skaliert)"),
+         f"recon = X - {v}.predict(X)",
+         "for i in top:",
+         "    worst = np.argsort(-np.abs(recon[i]), kind='stable')[:3]",
+         "    print(i, [(feature_columns[j], round(recon[i, j], 1)) for j in worst])", "",
+         "# " + tx("Engpass des Netzes (Encoder): die gelernte Verdichtung der Features"),
+         f"k = int(np.argmin({v}.hidden_layer_sizes))   # " + tx("engste Schicht"),
+         "code = X",
+         f"for W, b in zip({v}.coefs_[:k + 1], {v}.intercepts_[:k + 1]):",
+         f"    code = {_activation_expr(act, 'code @ W + b')}   # "
+         + tx("Gewichte · Eingabe + Bias, Aktivierung wie im Netz")]
+    if b >= 2:
+        if b == 2:
+            L.append("code_xy = code")
+        else:
+            L += [f"pca_code = PCA(n_components=2, random_state={int(cfg.seed)}).fit(code)   # "
+                  + tx("Engpass mit {b} Neuronen → 2 Achsen", b=b),
+                  "code_xy = pca_code.transform(code)"]
+        L += ["plt.figure(figsize=(9, 6))",
+              "plt.scatter(code_xy[~anomaly, 0], code_xy[~anomaly, 1], s=8, c='lightgray')",
+              "plt.scatter(code_xy[anomaly, 0], code_xy[anomaly, 1], s=20, c='red')   # " + tx("auffällig"),
+              f"plt.title({tx('Anomalien im Engpass des Autoencoders')!r})",
+              "plt.show()"]
+    return "\n".join(L)
+
+
 def anomaly_eval_code(recipe: dict, cfg: pl.ClusterConfig) -> str:
     """Code für Schritt 8 der Anomalie-Modelle: Anzahl, Profile normal gegen auffällig, die auffälligsten Zeilen mit
     den stärksten Abweichungen, PCA-Bild und – falls vorhanden – der Vergleich mit der bekannten Einteilung."""
@@ -674,6 +736,8 @@ def anomaly_eval_code(recipe: dict, cfg: pl.ClusterConfig) -> str:
               "plt.xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.0%})')",
               "plt.ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.0%})')",
               "plt.show()"]
+    if cfg.model == pl.MODEL_AUTOENCODER:
+        L += ["", autoencoder_eval_code(cfg, len(recipe["feature_columns"]))]
     g = recipe.get("group_col")
     if g:
         values = recipe.get("group_values") or []
@@ -767,7 +831,9 @@ def predict_code(folder: str, model: str = pl.MODEL_KMEANS) -> str:
         v = pl.MODEL_VARS[model]
         new_score = {pl.MODEL_IFOREST: f"-{v}.score_samples(X_new)", pl.MODEL_LOF: f"-{v}.score_samples(X_new)",
                      pl.MODEL_DBSCAN: f"NearestNeighbors(n_neighbors=1, metric={v}.metric).fit({v}.components_)"
-                                      f".kneighbors(X_new)[0][:, 0] / {v}.eps"}[model]
+                                      f".kneighbors(X_new)[0][:, 0] / {v}.eps",
+                     pl.MODEL_AUTOENCODER: f"np.sqrt(((X_new - {v}.predict(X_new)) ** 2).mean(axis=1))   "
+                                           f"# anomaly_new = score_new > {v}.threshold_"}[model]
         return ("import pipeline as pl\n\n"
                 f"{v}, recipe = pl.load_bundle({folder!r})\n"
                 f"df_new, _ = pl.read_csv({tx('neue_daten.csv')!r})\n"

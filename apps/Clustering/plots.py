@@ -1,6 +1,6 @@
 """
-plots.py – Diagramme (matplotlib/seaborn) für die Schritte 3, 7, 8 und 10 (K-Means und die Anomalie-Modelle
-Isolation Forest, LOF, DBSCAN – scikit-learn).
+plots.py – Diagramme (matplotlib/seaborn) für die Schritte 3, 6, 7, 8 und 10 (K-Means und die Anomalie-Modelle
+Isolation Forest, LOF, DBSCAN, Autoencoder – scikit-learn).
 
 Jede Funktion gibt eine matplotlib-Figure zurück:
     Streamlit:  st.pyplot(fig)        Jupyter:  fig   (oder fig.savefig("bild.png"))
@@ -764,7 +764,7 @@ def fig_cluster_shares(share_new, share_train=None, names=None):
 
 
 # ---------------------------------------------------------------------------
-# Anomalie-Modelle (Isolation Forest, LOF, DBSCAN): Schritte 7, 8 und 10
+# Anomalie-Modelle (Isolation Forest, LOF, DBSCAN, Autoencoder): Schritte 6, 7, 8 und 10
 # ---------------------------------------------------------------------------
 ANOMALY_COLOR, NORMAL_COLOR = "#e34948", "#9ec5f4"  # auffällig rot, normal hellblau (Rauschen bei DBSCAN rot)
 
@@ -875,6 +875,39 @@ def fig_kdist(curve: dict, eps: float):
     return fig
 
 
+def fig_learning_curve(model):
+    """Autoencoder, Schritt 6: links der Trainingsfehler (Loss) je Epoche, rechts – mit Early Stopping – das R² des
+    Nachbaus auf den zurückgehaltenen Validierungszeilen; die beste Epoche (deren Gewichte das Modell behält) markiert."""
+    loss = np.asarray(getattr(model, "loss_curve_", []) or [], dtype="float64")
+    val = getattr(model, "validation_scores_", None)
+    val = np.asarray(val, dtype="float64") if val is not None and len(val) else None
+    fig, axes = plt.subplots(1, 2 if val is not None else 1, figsize=(11.5 if val is not None else 8, 3.8))
+    a1 = axes[0] if val is not None else axes
+    epochs = np.arange(1, len(loss) + 1)
+    if len(loss):
+        a1.plot(epochs, loss, color=SERIES[0])
+        if (loss > 0).all():
+            a1.set_yscale("log")
+            _plain_log_axis(a1.yaxis)
+    a1.set_xlabel(tx("Epoche"))
+    a1.set_ylabel(tx("Loss (quadratischer Fehler)"))
+    a1.set_title(tx("Training: Fehler je Epoche"))
+    if val is not None:
+        a2 = axes[1]
+        a2.plot(np.arange(1, len(val) + 1), val, color=SERIES[2])
+        best = int(np.nanargmax(val)) if np.isfinite(val).any() else None
+        if best is not None:
+            a2.scatter([best + 1], [val[best]], s=64, color=SERIES[2], edgecolor=SURFACE, linewidth=1.5, zorder=3)
+            a2.annotate(tx("beste Epoche {e}: R² {r}", e=best + 1, r=f"{val[best]:.3f}"), (best + 1, val[best]),
+                        xytext=(-8, -16), textcoords="offset points", ha="right", fontsize=9, color=INK2, bbox=LABEL_BOX,
+                        zorder=4)
+        a2.set_xlabel(tx("Epoche"))
+        a2.set_ylabel(tx("R² des Nachbaus (Validierung)"))
+        a2.set_title(tx("Early Stopping: Validierungszeilen"))
+    fig.tight_layout()
+    return fig
+
+
 def fig_anomaly_pca(proj: dict, flag_rows, dbscan: bool = False):
     """Die Zeilen in 2D (PCA) – nur zur Darstellung. Normal hellblau, auffällig rot und obenauf. Bei DBSCAN die
     Cluster in ihren Farben, Rauschen rot. flag_rows = Anomalie ja/nein in der Reihenfolge von proj['rows']."""
@@ -895,9 +928,14 @@ def fig_anomaly_pca(proj: dict, flag_rows, dbscan: bool = False):
     ax.scatter(xy[flag, 0], xy[flag, 1], s=26, alpha=0.9, color=ANOMALY_COLOR, edgecolor=INK, linewidth=0.4,
                marker="X" if dbscan else "o", label=tx("Rauschen (Anomalie)") if dbscan else tx("auffällig"), zorder=4)
     ev = proj["explained"]
-    ax.set_xlabel(tx("PC1 ({pct} der Streuung)", pct=f"{ev[0]:.0%}"))
-    ax.set_ylabel(tx("PC2 ({pct} der Streuung)", pct=f"{ev[1]:.0%}"))
-    title = tx("Anomalien in 2D (PCA)")
+    if proj.get("axes"):  # Autoencoder: Engpass des Netzes statt PCA (pipeline.code_projection)
+        ax.set_xlabel(proj["axes"][0])
+        ax.set_ylabel(proj["axes"][1])
+        title = tx("Anomalien im Engpass des Autoencoders ({b} Neuronen)", b=proj.get("code_size", 2))
+    else:
+        ax.set_xlabel(tx("PC1 ({pct} der Streuung)", pct=f"{ev[0]:.0%}"))
+        ax.set_ylabel(tx("PC2 ({pct} der Streuung)", pct=f"{ev[1]:.0%}"))
+        title = tx("Anomalien in 2D (PCA)")
     if len(xy) < proj.get("n", len(xy)):
         title += tx(" ({n} Punkte, Stichprobe)", n=len(xy))
     ax.set_title(title)

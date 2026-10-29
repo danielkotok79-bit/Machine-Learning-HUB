@@ -279,9 +279,10 @@ def test_app_runs_in_english_and_polish(tmp_path, monkeypatch, ui_lang):
     i18n.set_lang("de")
 
 
-@pytest.mark.parametrize("ui_lang, model", [("en", "iforest"), ("pl", "lof"), ("en", "dbscan"), ("pl", "dbscan")])
+@pytest.mark.parametrize("ui_lang, model", [("en", "iforest"), ("pl", "lof"), ("en", "dbscan"), ("pl", "dbscan"),
+                                            ("en", "autoencoder"), ("pl", "autoencoder")])
 def test_anomaly_pages_in_english_and_polish(tmp_path, monkeypatch, ui_lang, model):
-    """Isolation Forest, LOF und DBSCAN durch die Schritte 4–10 – ohne deutsche Reste in der Oberfläche."""
+    """Isolation Forest, LOF, DBSCAN und Autoencoder durch die Schritte 4–10 – ohne deutsche Reste in der Oberfläche."""
     monkeypatch.setenv("CL_TEMPLATE_MODELS", str(tmp_path / "models"))
     anomaly_like(800, seed=3).to_csv(tmp_path / "train.csv", index=False)
     anomaly_like(120, share=0.05, seed=9).to_csv(tmp_path / "neu.csv", index=False)

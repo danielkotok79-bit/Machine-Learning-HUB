@@ -19,7 +19,7 @@ new data. Every step also shows the matching Python code, so the apps work as a 
 | App | Type of learning | Models | Example data |
 |---|---|---|---|
 | 📊 [**Supervised Learning**](apps/Supervised) | supervised – classification and regression | Gradient Boosting, Decision Tree + Random Forest, SVM, Logistic Regression, KNN, Linear Regression; random or time-based split, comparison with Elo | LendingClub, NBA/tennis |
-| 🔵 [**Clustering**](apps/Clustering) | unsupervised | K-Means (elbow, silhouette, cluster profiles, PCA map) · anomaly detection: Isolation Forest, LOF, DBSCAN | College data · crypto market data from Bybit (script included) |
+| 🔵 [**Clustering**](apps/Clustering) | unsupervised | K-Means (elbow, silhouette, cluster profiles, PCA map) · anomaly detection: Isolation Forest, LOF, DBSCAN, autoencoder (neural network) | College data · crypto market data from Bybit (script included) |
 | 📝 [**NLP – text classification**](apps/NLP) | supervised, text | Bag of Words / TF-IDF + Naive Bayes, Logistic Regression, Linear SVM | Yelp reviews, SMS spam |
 | 🧠 [**Deep Learning**](apps/Deeplearning) | supervised – classification and regression | Keras Sequential (Dense) on TensorFlow, EarlyStopping | LendingClub |
 
@@ -105,7 +105,7 @@ The Polish and German versions of the third document are one bilingual file (Pol
 
 ## Tests
 
-**1050 automated tests** (pytest, including Streamlit `AppTest` tests of the whole interface) – run per app:
+**1070 automated tests** (pytest, including Streamlit `AppTest` tests of the whole interface) – run per app:
 
 ```bash
 pip install pytest
@@ -116,7 +116,7 @@ pytest -q
 | App | Tests |
 |---|---|
 | Supervised | 310 |
-| Clustering | 362 |
+| Clustering | 382 |
 | NLP | 188 |
 | Deep Learning | 190 |
 
@@ -134,7 +134,7 @@ they were fixed and the regression tests that cover them.
 ├── docs/screenshots/
 └── apps/
     ├── Supervised/      📊 scikit-learn – six supervised models
-    ├── Clustering/      🔵 K-Means · Isolation Forest · LOF · DBSCAN
+    ├── Clustering/      🔵 K-Means · Isolation Forest · LOF · DBSCAN · Autoencoder
     ├── NLP/             📝 text classification
     └── Deeplearning/    🧠 Keras / TensorFlow
 ```

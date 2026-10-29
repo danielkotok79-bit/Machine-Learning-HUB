@@ -20,7 +20,7 @@ zum Lernen.
 | App | Art des Lernens | Modelle | Beispieldaten |
 |---|---|---|---|
 | 📊 [**Überwachtes Lernen**](apps/Supervised) | überwacht – Klassifikation und Regression | Gradient Boosting, Decision Tree + Random Forest, SVM, logistische Regression, KNN, lineare Regression; Split zufällig oder zeitlich, Vergleich mit Elo | LendingClub, NBA/Tennis |
-| 🔵 [**Clustering**](apps/Clustering) | unüberwacht | K-Means (Ellbogen, Silhouette, Cluster-Profile, PCA-Karte) · Anomalieerkennung: Isolation Forest, LOF, DBSCAN | College-Daten · Kryptomarkt-Daten von Bybit (Skript dabei) |
+| 🔵 [**Clustering**](apps/Clustering) | unüberwacht | K-Means (Ellbogen, Silhouette, Cluster-Profile, PCA-Karte) · Anomalieerkennung: Isolation Forest, LOF, DBSCAN, Autoencoder (neuronales Netz) | College-Daten · Kryptomarkt-Daten von Bybit (Skript dabei) |
 | 📝 [**NLP – Textklassifikation**](apps/NLP) | überwacht, Text | Bag of Words / TF-IDF + Naive Bayes, logistische Regression, lineare SVM | Yelp-Bewertungen, SMS-Spam |
 | 🧠 [**Deep Learning**](apps/Deeplearning) | überwacht – Klassifikation und Regression | Keras Sequential (Dense) mit TensorFlow, EarlyStopping | LendingClub |
 
@@ -107,7 +107,7 @@ polnische, dann der deutsche Teil).
 
 ## Tests
 
-**1050 automatische Tests** (pytest, darunter Tests der gesamten Oberfläche mit Streamlit `AppTest`) – je App:
+**1070 automatische Tests** (pytest, darunter Tests der gesamten Oberfläche mit Streamlit `AppTest`) – je App:
 
 ```bash
 pip install pytest
@@ -118,7 +118,7 @@ pytest -q
 | App | Tests |
 |---|---|
 | Supervised | 310 |
-| Clustering | 362 |
+| Clustering | 382 |
 | NLP | 188 |
 | Deep Learning | 190 |
 
@@ -136,7 +136,7 @@ Fehler, ihre Korrektur und die Regressionstests, die sie abdecken.
 ├── docs/screenshots/
 └── apps/
     ├── Supervised/      📊 scikit-learn – sechs Modelle des überwachten Lernens
-    ├── Clustering/      🔵 K-Means · Isolation Forest · LOF · DBSCAN
+    ├── Clustering/      🔵 K-Means · Isolation Forest · LOF · DBSCAN · Autoencoder
     ├── NLP/             📝 Textklassifikation
     └── Deeplearning/    🧠 Keras / TensorFlow
 ```

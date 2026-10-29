@@ -19,7 +19,7 @@ nowych danych. Na każdym kroku aplikacje pokazują też odpowiedni kod w Python
 | Aplikacja | Rodzaj uczenia | Modele | Przykładowe dane |
 |---|---|---|---|
 | 📊 [**Uczenie nadzorowane**](apps/Supervised) | nadzorowane – klasyfikacja i regresja | Gradient Boosting, drzewo decyzyjne + Random Forest, SVM, regresja logistyczna, KNN, regresja liniowa; podział losowy albo czasowy, porównanie z Elo | LendingClub, NBA/tenis |
-| 🔵 [**Klastrowanie**](apps/Clustering) | nienadzorowane | K-Means (metoda łokcia, silhouette, profile klastrów, mapa PCA) · wykrywanie anomalii: Isolation Forest, LOF, DBSCAN | dane uczelni (College) · dane rynku krypto z Bybit (skrypt w zestawie) |
+| 🔵 [**Klastrowanie**](apps/Clustering) | nienadzorowane | K-Means (metoda łokcia, silhouette, profile klastrów, mapa PCA) · wykrywanie anomalii: Isolation Forest, LOF, DBSCAN, autoenkoder (sieć neuronowa) | dane uczelni (College) · dane rynku krypto z Bybit (skrypt w zestawie) |
 | 📝 [**NLP – klasyfikacja tekstu**](apps/NLP) | nadzorowane, tekst | Bag of Words / TF-IDF + Naive Bayes, regresja logistyczna, liniowy SVM | recenzje Yelp, SMS spam |
 | 🧠 [**Deep Learning**](apps/Deeplearning) | nadzorowane – klasyfikacja i regresja | Keras Sequential (Dense) na TensorFlow, EarlyStopping | LendingClub |
 
@@ -104,7 +104,7 @@ Wersja polska i niemiecka trzeciego dokumentu to jeden dwujęzyczny plik (najpie
 
 ## Testy
 
-**1050 automatycznych testów** (pytest, w tym testy całego interfejsu przez Streamlit `AppTest`) – uruchamiane
+**1070 automatycznych testów** (pytest, w tym testy całego interfejsu przez Streamlit `AppTest`) – uruchamiane
 osobno dla każdej aplikacji:
 
 ```bash
@@ -116,7 +116,7 @@ pytest -q
 | Aplikacja | Testy |
 |---|---|
 | Supervised | 310 |
-| Clustering | 362 |
+| Clustering | 382 |
 | NLP | 188 |
 | Deep Learning | 190 |
 
@@ -134,7 +134,7 @@ ich poprawienia i testy regresyjne, które je pokrywają.
 ├── docs/screenshots/
 └── apps/
     ├── Supervised/      📊 scikit-learn – sześć modeli uczenia nadzorowanego
-    ├── Clustering/      🔵 K-Means · Isolation Forest · LOF · DBSCAN
+    ├── Clustering/      🔵 K-Means · Isolation Forest · LOF · DBSCAN · Autoencoder
     ├── NLP/             📝 klasyfikacja tekstu
     └── Deeplearning/    🧠 Keras / TensorFlow
 ```

@@ -262,4 +262,31 @@ T = {
     "größere eps übersprungen: DBSCAN hielte zu viele Nachbarpaare im Speicher": (
         "larger eps skipped: DBSCAN would keep too many neighbour pairs in memory",
         "większe eps pominięte: DBSCAN trzymałby w pamięci zbyt wiele par sąsiadów"),
+    # Autoencoder
+    "Was das Netz nicht nachbauen konnte: Eingabe minus Nachbau je Feature (skaliert)": (
+        "What the network could not reconstruct: input minus reconstruction per feature (scaled)",
+        "Czego sieć nie umiała odtworzyć: wejście minus rekonstrukcja dla każdej cechy (skalowane)"),
+    "Engpass des Netzes (Encoder): die gelernte Verdichtung der Features": (
+        "Bottleneck of the network (encoder): the learned compression of the features",
+        "Wąskie gardło sieci (enkoder): wyuczona kompresja cech"),
+    "engste Schicht": ("narrowest layer", "najwęższa warstwa"),
+    "Gewichte · Eingabe + Bias, Aktivierung wie im Netz": (
+        "weights · input + bias, activation as in the network",
+        "wagi · wejście + bias, aktywacja jak w sieci"),
+    "Autoencoder: Eingabe = Ziel – das Netz lernt, die Zeilen nachzubauen (kein Label)": (
+        "autoencoder: input = target – the network learns to reconstruct the rows (no label)",
+        "autoenkoder: wejście = cel – sieć uczy się odtwarzać wiersze (bez etykiety)"),
+    "Rekonstruktionsfehler (RMSE je Zeile): höher = auffälliger": (
+        "reconstruction error (RMSE per row): higher = more anomalous",
+        "błąd rekonstrukcji (RMSE dla wiersza): wyższy = bardziej nietypowy"),
+    "contamination {pct}: die auffälligsten {pct} der Trainingszeilen": (
+        "contamination {pct}: the most anomalous {pct} of the training rows",
+        "contamination {pct}: najbardziej nietypowe {pct} wierszy treningowych"),
+    "Schwelle mit dem Modell speichern – für neue Daten (Schritt 10)": (
+        "save the threshold with the model – for new data (step 10)",
+        "zapisz próg razem z modelem – dla nowych danych (krok 10)"),
+    "Epochen:": ("Epochs:", "Epoki:"),
+    "Engpass mit {b} Neuronen → 2 Achsen": ("bottleneck with {b} neurons → 2 axes", "wąskie gardło z {b} neuronami → 2 osie"),
+    "Anomalien im Engpass des Autoencoders": ("Anomalies in the autoencoder's bottleneck",
+                                               "Anomalie w wąskim gardle autoenkodera"),
 }

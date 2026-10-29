@@ -307,24 +307,26 @@ APPS = {
                  "de": "Clustering & Anomalieerkennung"},
         "desc": {
             "en": "Tabular data: preparation, visualisation, grouping with K-Means and anomaly detection with "
-                  "Isolation Forest, LOF and DBSCAN (unsupervised learning). Cluster profiles, the most unusual rows, "
-                  "comparison with a known grouping, assigning or scoring new data. Includes a Bybit script that "
-                  "builds crypto-market features. Languages: EN / PL / DE.",
+                  "Isolation Forest, LOF, DBSCAN and an autoencoder neural network (unsupervised learning). Cluster profiles, "
+                  "the most unusual rows, comparison with a known grouping, assigning or scoring new data. Includes a "
+                  "Bybit script that builds crypto-market features. Languages: EN / PL / DE.",
             "pl": "Dane tabelaryczne: przygotowanie, wizualizacja, podział na grupy za pomocą K-Means i wykrywanie "
-                  "anomalii (Isolation Forest, LOF, DBSCAN) – uczenie nienadzorowane. Profile klastrów, najbardziej "
-                  "nietypowe wiersze, porównanie ze znanym podziałem, przypisywanie lub ocena nowych danych. Ze "
-                  "skryptem Bybit, który buduje cechy rynku krypto. Języki: EN / PL / DE.",
+                  "anomalii (Isolation Forest, LOF, DBSCAN, autoenkoder – sieć neuronowa) – uczenie nienadzorowane. "
+                  "Profile klastrów, najbardziej nietypowe wiersze, porównanie ze znanym podziałem, przypisywanie lub "
+                  "ocena nowych danych. Ze skryptem Bybit, który buduje cechy rynku krypto. Języki: EN / PL / DE.",
             "de": "Tabellarische Daten: Aufbereitung, Visualisierung, Gruppierung mit K-Means und Anomalieerkennung "
-                  "mit Isolation Forest, LOF und DBSCAN (unüberwachtes Lernen). Cluster-Profile, die auffälligsten "
-                  "Zeilen, Vergleich mit einer bekannten Einteilung, Zuordnung bzw. Bewertung neuer Daten. Mit einem "
-                  "Bybit-Skript, das Kennzahlen des Kryptomarkts erzeugt. Sprachen: EN / PL / DE.",
+                  "mit Isolation Forest, LOF, DBSCAN und einem Autoencoder (neuronales Netz) – unüberwachtes Lernen. "
+                  "Cluster-Profile, die auffälligsten Zeilen, Vergleich mit einer bekannten Einteilung, Zuordnung bzw. "
+                  "Bewertung neuer Daten. Mit einem Bybit-Skript, das Kennzahlen des Kryptomarkts erzeugt. "
+                  "Sprachen: EN / PL / DE.",
         },
-        "models": "K-Means · Isolation Forest · LOF · DBSCAN",
+        "models": "K-Means · Isolation Forest · LOF · DBSCAN · Autoencoder",
         "keywords": ["klastrowanie", "clustering", "k-means", "kmeans", "nienadzorowane", "unsupervised",
                      "unüberwacht", "grupy", "groups", "gruppen", "klastry", "cluster", "anomalie", "anomalia",
                      "anomaly", "anomalies", "anomalien", "isolation forest", "lof", "local outlier factor", "dbscan",
                      "outlier", "outliers", "ausreißer", "odstające", "wykrywanie anomalii", "bybit", "krypto",
-                     "crypto", "trading"],
+                     "crypto", "trading", "autoencoder", "autoenkoder", "neural network", "sieć neuronowa",
+                     "neuronales netz", "deep learning"],
         "packages": SKLEARN_STACK,
     },
     "nlp": {
@@ -595,6 +597,7 @@ Mit Early Stopping musst du die Zahl der Epochen nicht genau raten. Du setzt ein
 | Recommender Systems            | Depends on the approach    | Often closer to supervised (matrix factorisation) |
 | NLP                            | Supervised in the course   | In general: supervised, unsupervised and self-supervised |
 | Keras (LendingClub)            | Supervised                 | The simplest proof that DL is a type of model, not of learning |
+| Autoencoder (Clustering app)   | Unsupervised               | A neural network without labels: learns to rebuild the rows; a large reconstruction error = anomaly |
 
 ### 3. What to choose for prediction?
 There is no single best approach. Order of decisions:
@@ -639,6 +642,7 @@ On financial data simple models often win; neural networks are not automatically
 | Recommender Systems            | Zależnie od podejścia   | Często bliżej nadzorowanego (faktoryzacja macierzy) |
 | NLP                            | W kursie nadzorowane    | Ogólnie: nadzorowane, nienadzorowane i samonadzorowane |
 | Keras (LendingClub)            | Nadzorowane             | Najprostszy dowód, że DL to rodzaj modelu, nie uczenia |
+| Autoenkoder (aplikacja Clustering) | Nienadzorowane      | Sieć neuronowa bez etykiet: uczy się odtwarzać wiersze; duży błąd rekonstrukcji = anomalia |
 
 ### 3. Co wybrać do predykcji?
 Nie ma jednego najlepszego podejścia. Kolejność decyzji:
@@ -683,6 +687,7 @@ Na danych finansowych proste modele często wygrywają; sieci neuronowe nie są 
 | Recommender Systems            | Je nach Ansatz             | Oft näher am überwachten Lernen (Matrixfaktorisierung) |
 | NLP                            | Im Kurs überwacht          | Allgemein: überwacht, unüberwacht und selbstüberwacht |
 | Keras (LendingClub)            | Überwacht                  | Der einfachste Beleg, dass DL eine Modellart ist, keine Lernart |
+| Autoencoder (Clustering-App)   | Unüberwacht                | Ein neuronales Netz ohne Labels: lernt, die Zeilen nachzubauen; großer Rekonstruktionsfehler = Anomalie |
 
 ### 3. Was wählen für Vorhersagen?
 Es gibt nicht den einen besten Ansatz. Reihenfolge der Entscheidungen:

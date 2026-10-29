@@ -1,4 +1,4 @@
-# DATA-Analysis-Clustering (Streamlit + scikit-learn: K-Means, Isolation Forest, LOF, DBSCAN)
+# DATA-Analysis-Clustering (Streamlit + scikit-learn: K-Means, Isolation Forest, LOF, DBSCAN, Autoencoder)
 
 Streamlit-App für tabellarische CSV-Daten: laden, aufbereiten, visualisieren und mit **K-Means** in Gruppen
 (Cluster) einteilen – **Unsupervised Learning**: Es gibt kein Label, K-Means sucht selbst nach Zeilen, die sich
@@ -7,8 +7,9 @@ bekannten Einteilung und ordnet neue Daten den Clustern zu. Zu jedem Schritt zei
 Python-Code.
 
 **Anomalieerkennung:** Statt Gruppen zu suchen, findet die App mit **Isolation Forest**, **Local Outlier Factor
-(LOF)** oder **DBSCAN** (Rauschen = Anomalie) die *ungewöhnlichsten Zeilen* – mit Score, Schwelle, den Features, die
-eine Zeile auffällig machen, und dem Vergleich mit einer bekannten Einteilung (z. B. *Class* bei Betrugsdaten). Neue
+(LOF)**, **DBSCAN** (Rauschen = Anomalie) oder einem **Autoencoder** (neuronales Netz – Deep Learning ohne Label) die
+*ungewöhnlichsten Zeilen* – mit Score, Schwelle, den Features, die eine Zeile auffällig machen, und dem Vergleich mit
+einer bekannten Einteilung (z. B. *Class* bei Betrugsdaten). Neue
 Daten werden mit derselben Schwelle bewertet. Für Kryptodaten baut `tools/bybit_features.py` aus öffentlichen
 Bybit-Marktdaten eine fertige CSV (siehe [Bybit → CSV](#bybit--csv-toolsbybit_featurespy)).
 
@@ -106,9 +107,9 @@ Das Skript holt öffentliche Marktdaten (ohne API-Schlüssel) und schreibt `bybi
 | 3 · Analyse & Visualisierung | Auswahl der Spalten · Überblick, Countplot, Histogramm, Boxplot, Scatter, Heatmap, Korrelation mit einer Spalte, Pairplot, Anteil je Kategorie, Gruppen-Statistik, Jointplot, Dichte 2D, lmplot, Histogramm je Gruppe |
 | 4 · Aufbereitung 2 – Clustering-Daten | **Features**, optional **bekannte Einteilung** (nur zum Vergleich, z. B. Private) und **Bezeichnung** der Zeilen (z. B. Name der Hochschule); fehlende Werte je Spalte; Dummies und Skalierung (Standard: StandardScaler, drop_first aus) – aus allen Zeilen gelernt, kein Split; Hinweise auf stark korrelierte Spalten und Spalten ohne Streuung. Als Vergleichsgruppe wird nur eine Spalte vorgeschlagen, die so heißt (Private, species, label, segment …); eine ID-Spalte (z. B. CustomerID = 1, 2, 3 …) wird als Bezeichnung vorgeschlagen, nicht als Feature – als Feature gewählt, warnt die App |
 | 5 · Daten speichern | Daten nach Schritt 2, Clustering-Daten nach Schritt 4 (unskaliert oder skaliert) oder – nach dem Training – Daten mit **Cluster-Nummer, Cluster-Name und Abstand** zum Zentrum (K-Means) bzw. mit **Anomalie (1 = auffällig) und Anomalie-Score** (bei DBSCAN auch der Cluster); international oder für Excel |
-| 6 · Modell & Training | **Methode wählen** · **K-Means**: K (n_clusters), init (k-means++/random), n_init, max_iter, algorithm, Seed; optional die Elbow- und Silhouette-Kurve für Schritt 7 (die Kurven wachsen beim Training mit) · **Isolation Forest**: n_estimators, max_samples, Seed, contamination (auto oder fester Anteil) · **LOF**: n_neighbors, metric, contamination · **DBSCAN**: eps (Startwert aus der k-Distanz), min_samples, metric, Rauschanteil je eps für Schritt 7 – der passende scikit-learn-Code wird live angezeigt |
-| 7 · Wahl von K bzw. Schwelle | K-Means: **Elbow-Methode** (Inertia je K) und **Silhouette** je K mit Einordnung und Vorschlag (*K = … übernehmen*), Davies-Bouldin, Calinski-Harabasz, erklärte Streuung (R²) und das **Silhouetten-Diagramm** · Isolation Forest/LOF: **Verteilung des Scores** mit Schwelle, **Score-Kurve** der auffälligsten Zeilen mit Knick (*contamination = … übernehmen*), Schwelle je Anteil · DBSCAN: **k-Distanz** mit Knick (*eps = … übernehmen*), Rauschanteil und Zahl der Cluster je eps |
-| 8 · Auswertung | K-Means: Größe der Cluster, **Cluster benennen**, **Profile** (Mittelwerte in Originaleinheiten, Heatmap der Abweichung vom Durchschnitt in σ, Text je Cluster), **Trennkraft je Feature (R²)**, **2D-Karte (PCA)** mit Farbe = Cluster oder bekannte Einteilung, zwei Features gegeneinander, **Vergleich mit der bekannten Einteilung** (Kreuztabelle, Zuordnung Cluster → Gruppe, Treffer, naive Vorhersage, ARI, NMI, Confusion Matrix, classification_report – auch der Vergleich wie im Kurs), **typische Vertreter** je Cluster, Einzelfall · Anomalie-Modelle: **die auffälligsten Zeilen** mit Score und den Features, die am stärksten vom Durchschnitt abweichen (z), **Profil** auffällig gegen normal, **PCA-Bild** (Anomalien immer im Bild), DBSCAN-Cluster, **Vergleich mit der bekannten Einteilung** (Anteil auffällig je Gruppe; bei zwei Gruppen Precision, Recall, ROC-AUC, Average Precision), Einzelfall |
+| 6 · Modell & Training | **Methode wählen** · **K-Means**: K (n_clusters), init (k-means++/random), n_init, max_iter, algorithm, Seed; optional die Elbow- und Silhouette-Kurve für Schritt 7 (die Kurven wachsen beim Training mit) · **Isolation Forest**: n_estimators, max_samples, Seed, contamination (auto oder fester Anteil) · **LOF**: n_neighbors, metric, contamination · **DBSCAN**: eps (Startwert aus der k-Distanz), min_samples, metric, Rauschanteil je eps für Schritt 7 · **Autoencoder**: Schichten (Vorschlag aus der Zahl der Features, z. B. 16,3,16), Aktivierung, Epochen, alpha, Lernrate, Early Stopping, contamination; nach dem Training die **Lernkurve** – der passende scikit-learn-Code wird live angezeigt |
+| 7 · Wahl von K bzw. Schwelle | K-Means: **Elbow-Methode** (Inertia je K) und **Silhouette** je K mit Einordnung und Vorschlag (*K = … übernehmen*), Davies-Bouldin, Calinski-Harabasz, erklärte Streuung (R²) und das **Silhouetten-Diagramm** · Isolation Forest/LOF/Autoencoder: **Verteilung des Scores** mit Schwelle, **Score-Kurve** der auffälligsten Zeilen mit Knick (*contamination = … übernehmen*), Schwelle je Anteil · DBSCAN: **k-Distanz** mit Knick (*eps = … übernehmen*), Rauschanteil und Zahl der Cluster je eps |
+| 8 · Auswertung | K-Means: Größe der Cluster, **Cluster benennen**, **Profile** (Mittelwerte in Originaleinheiten, Heatmap der Abweichung vom Durchschnitt in σ, Text je Cluster), **Trennkraft je Feature (R²)**, **2D-Karte (PCA)** mit Farbe = Cluster oder bekannte Einteilung, zwei Features gegeneinander, **Vergleich mit der bekannten Einteilung** (Kreuztabelle, Zuordnung Cluster → Gruppe, Treffer, naive Vorhersage, ARI, NMI, Confusion Matrix, classification_report – auch der Vergleich wie im Kurs), **typische Vertreter** je Cluster, Einzelfall · Anomalie-Modelle: **die auffälligsten Zeilen** mit Score und den Features, die am stärksten vom Durchschnitt abweichen (z), **Profil** auffällig gegen normal, **PCA-Bild** (Anomalien immer im Bild), DBSCAN-Cluster, beim Autoencoder die **am schlechtesten nachgebauten Features** und die **2D-Karte des Engpasses**, **Vergleich mit der bekannten Einteilung** (Anteil auffällig je Gruppe; bei zwei Gruppen Precision, Recall, ROC-AUC, Average Precision), Einzelfall |
 | 9 · Modell speichern & laden | `models/<name>/model.skops` (sicher, Standard) oder `model.joblib` + `preprocessing.json` (Rezept, Einstellungen, Cluster-Namen bzw. Schwelle und Anteil auffälliger Zeilen, Kennzahlen, Zuordnung zur Vergleichsgruppe), ZIP-Download, ganze Pipeline als Python-Skript |
 | 10 · Neue Daten zuordnen / bewerten | neue CSV oder Formular → gleiche Aufbereitung → K-Means: **nächstes Cluster-Zentrum** (`kmeans.predict`), Abstand, Hinweise, Verteilung im Vergleich zum Training · Anomalie-Modelle: **Anomalie und Score mit der Schwelle aus dem Training** (DBSCAN: Cluster des nächsten Kernpunkts oder Rauschen), Anteil auffälliger Zeilen im Vergleich zum Training · Vergleich mit der bekannten Einteilung (falls enthalten), CSV-Download und **Fazit** |
 
@@ -172,7 +173,7 @@ Zeilen (wie `silhouette_score(..., sample_size=5000)`); das Modell selbst nutzt 
 * **Namen** der Cluster (z. B. „klein & privat“) werden mit dem Modell gespeichert und in Schritt 10 und im Export
   ausgegeben.
 
-## Anomalieerkennung: Isolation Forest, LOF, DBSCAN
+## Anomalieerkennung: Isolation Forest, LOF, DBSCAN, Autoencoder
 
 Gleiche Schritte 1–5 wie bei K-Means, in Schritt 6 eine andere **Methode**. Alle drei sind unsupervised: Sie lernen,
 wie die Zeilen *normalerweise* aussehen, und geben jeder Zeile einen **Anomalie-Score** – höher = auffälliger.
@@ -183,6 +184,7 @@ Auffällig (`Anomalie = 1`) ist ein Score über der **Schwelle**.
 | **Isolation Forest** | Zufallsbäume schneiden die Daten an zufälligen Stellen – ungewöhnliche Zeilen sind nach wenigen Schnitten allein | `−score_samples`, 0 … 1 (um 0.5 normal) | contamination = auto → 0.5, sonst das Quantil für den gewählten Anteil | der Standard für Tabellen; schnell, auch bei vielen Zeilen und Features; braucht keine Skalierung | findet eher globale als lokale Ausreißer |
 | **Local Outlier Factor (LOF)** | Dichte um eine Zeile im Vergleich zur Dichte um ihre `n_neighbors` Nachbarn | LOF ≈ 1 normal, deutlich über 1 auffällig | auto → 1.5, sonst das Quantil | lokale Ausreißer neben dichten Gruppen | bilden die Ausreißer selbst eine kleine Gruppe, muss `n_neighbors` größer sein als diese Gruppe; langsamer bei sehr vielen Zeilen; skalieren |
 | **DBSCAN** | Kernpunkt = mindestens `min_samples` Zeilen im Radius `eps`; was zu keinem Cluster gehört, ist **Rauschen** | Abstand zum nächsten Kernpunkt in Vielfachen von eps | 1 (= eps): Rauschen ⇔ Score über 1 | Cluster beliebiger Form und Ausreißer in einem Schritt; kein K nötig | `eps` hängt von Skalierung und Zahl der Features ab – Schritt 7 (k-Distanz) zeigt, welches passt |
+| **Autoencoder** | neuronales Netz mit Eingabe = Ziel: baut jede Zeile durch einen **Engpass** hindurch nach (z. B. 16 → 3 → 16 Neuronen) | **Rekonstruktionsfehler** (RMSE je Zeile, in den skalierten Features) | fester Anteil (contamination, Standard 1 %) – Quantil der Fehler im Training | ungewöhnliche **Kombinationen** von Features, die einzeln normal aussehen; nichtlineare Zusammenhänge, viele Features | braucht Skalierung und einen echten Engpass (weniger Neuronen in der Mitte als Features); Training dauert länger, das Ergebnis hängt vom Seed ab |
 
 * **contamination ist eine Entscheidung, keine Wahrheit:** Wie viele Zeilen sollen gemeldet werden? Lieber wenige
   klare Anomalien (0.5–2 %) als eine lange Liste. Schritt 7 zeigt den **Knick der Score-Kurve** – dahinter
@@ -200,6 +202,17 @@ Auffällig (`Anomalie = 1`) ist ein Score über der **Schwelle**.
   übernommener Vorschlag; ein selbst eingegebenes eps bleibt. Bei vielen genau gleichen Zeilen (z. B. nur kategoriale
   Features) ist die k-Distanz oft 0; dann schlägt Schritt 7 das kleinste eps (1e-6) vor: Gleiche Zeilen bilden die
   Cluster, seltene Kombinationen sind Rauschen.
+* **Autoencoder = Deep Learning ohne Label:** Das Netz (scikit-learn `MLPRegressor`, Optimierer Adam, ohne
+  TensorFlow) lernt nur die normalen Muster; der **Rekonstruktionsfehler** zeigt, was nicht ins Muster passt.
+  Schritt 6 zeigt nach dem Training die **Lernkurve** (Fehler je Epoche, mit Early Stopping das R² auf 10 %
+  zurückgehaltenen Zeilen – das Modell behält die Gewichte der besten Epoche). Schritt 8 zeigt je Zeile die **am
+  schlechtesten nachgebauten Features** (ein Blick ins Modell: auch ein normaler Wert kann dort stehen, wenn er nicht
+  zu den übrigen Features passt) und die **2D-Karte des Engpasses** – die eigene, nichtlineare Verdichtung des Netzes
+  (bei mehr als 2 Neuronen per PCA). Die Schwelle wird mit dem Modell gespeichert (`threshold_`); der angezeigte Code
+  rechnet exakt dasselbe.
+* **Schichten und Aktivierung:** Vorschlag aus der Zahl der Features (8 → 8,2,8; 11 → 16,3,16; 30 → 32,8,32), tiefer
+  z. B. 32,16,4,16,32. `tanh` klappt bei kleinen Netzen meist besser als `relu`. Hat die engste Schicht mindestens so
+  viele Neuronen wie es Features gibt, kann das Netz die Zeilen einfach durchreichen – die App warnt.
 * **Nicht begrenzen, was überwacht werden soll.** *Werte begrenzen* in Schritt 2 schneidet genau die Extremwerte ab,
   die eine Anomalie ausmachen – für die Anomalieerkennung nur unmögliche Werte korrigieren.
 * **Skalierung:** LOF und DBSCAN rechnen mit Abständen → StandardScaler in Schritt 4. Isolation Forest schneidet je
@@ -318,7 +331,7 @@ result, report, comparison = pl.assign_new(kmeans, recipe, df_new)
 fazit = pl.assess_assignment(recipe, result, report, comparison)
 ```
 
-Anomalie-Modelle (Isolation Forest, LOF, DBSCAN) bewerten statt zuzuordnen – mit der Schwelle aus dem Training:
+Anomalie-Modelle (Isolation Forest, LOF, DBSCAN, Autoencoder) bewerten statt zuzuordnen – mit der Schwelle aus dem Training:
 
 ```python
 model, recipe = pl.load_bundle("models/mein_anomalie_modell")
@@ -378,7 +391,7 @@ Erweitern:
 
 ```bash
 pip install pytest
-pytest -q                                  # 362 Tests, ca. 5 Minuten
+pytest -q                                  # 382 Tests, ca. 6 Minuten
 python tests/synthetic.py                  # synthetische College-Daten (777 Zeilen, keine echten Daten)
 ```
 
@@ -386,7 +399,8 @@ python tests/synthetic.py                  # synthetische College-Daten (777 Zei
 |---|---|
 | `tests/test_clustering.py` | K-Means wie im Kurs (= scikit-learn direkt), Reproduzierbarkeit, Elbow und Silhouette (klare Gruppen werden gefunden, kein Vorschlag ohne Struktur, Stichproben bei großen Daten), Einordnung (kleine/dominierende Cluster, nicht konvergiert, doppelte Zeilen), Profile in Originaleinheiten, Trennkraft = erklärte Streuung, PCA, Vergleich mit bekannten Gruppen, Ausreißer und knappe Zuordnungen in neuen Daten |
 | `tests/test_codegen_parity.py` | der angezeigte Python-Code rechnet **exakt** dasselbe wie die App: X, Cluster, Inertia, Elbow-/Silhouette-Kurve, Profile, Vergleich, Export – auch in Grenzfällen (Tausendertrennzeichen, Datum als Zahl, inf, Gruppen-Füllwerte, Werte begrenzen, neue Spalten) |
-| `tests/test_anomaly.py` | Isolation Forest, LOF, DBSCAN: Score ⇔ Schwelle, contamination, novelty, Rauschen = Anomalie, eps zu klein, Kurven und Vorschläge für Schritt 7, auffälligste Zeilen, Profil, PCA, Speichern/Laden (.skops/.joblib), neue Daten, kein Vertauschen mit K-Means, beschädigte Rezepte – und der angezeigte Code rechnet **exakt** dasselbe (Score, Anomalien, Schwelle, k-Distanz, eps-Raster, Profile, Export, Schritt 10); das exportierte Skript läuft; Diagramme in Grenzfällen |
+| `tests/test_anomaly.py` | Isolation Forest, LOF, DBSCAN, Autoencoder: Score ⇔ Schwelle, contamination, novelty, Rauschen = Anomalie, eps zu klein, Kurven und Vorschläge für Schritt 7, auffälligste Zeilen, Profil, PCA, Speichern/Laden (.skops/.joblib), neue Daten, kein Vertauschen mit K-Means, beschädigte Rezepte – und der angezeigte Code rechnet **exakt** dasselbe (Score, Anomalien, Schwelle, k-Distanz, eps-Raster, Profile, Export, Schritt 10); das exportierte Skript läuft; Diagramme in Grenzfällen |
+| `tests/test_autoencoder.py` | Autoencoder: Schichten (Vorschlag, Prüfung), Schwelle = Quantil der Rekonstruktionsfehler, contamination 1 % ohne Angabe, findet die eingebauten Betrugsfälle, Engpass = Ausgabe des Encoders (tanh, relu), 2D-Karte, am schlechtesten nachgebaute Features, Speichern/Laden ohne pickle, unvollständige Modelle, Lernkurve, Konfiguration, Schritt 6 prüft die Schichten |
 | `tests/test_bybit_features.py` | Bybit-Skript mit simulierter API (kein Netz): Blättern nach den Grenzen der API, Wiederholen/403/Cache, kein Blick in die Zukunft, laufende Kerze fehlt, Kennzahlen nachgerechnet, Querschnitt, Spot, unbekannte Symbole, Beispiel-Konfiguration passt zur CSV, der eingebaute Kurssturz ist die auffälligste Zeile |
 | `tests/test_pipeline.py` | ganzer Ablauf mit LendingClub-ähnlichen Daten, Speichern/Laden (.skops/.joblib, ZIP), neue Daten (unbekannte Kategorien, Ausreißer, fehlende Spalten), exportiertes Skript läuft |
 | `tests/test_new_features.py` | Jahr + Monat, neue Spalten, *Werte begrenzen*, neue Spalten für neue Daten, Daten speichern, Fazit |
@@ -410,7 +424,7 @@ python tests/synthetic.py                  # synthetische College-Daten (777 Zei
   `models/` ist für alle Nutzer der App gleich. Die App daher nicht ohne Anmeldung ins Netz stellen.
   Modelle nur aus vertrauenswürdigen Quellen laden (ein ZIP darf entpackt höchstens 2 GB groß sein). `.skops` wird
   ohne Code-Ausführung geladen; `.joblib` ist pickle und wird aus einem hochgeladenen ZIP nur nach ausdrücklicher
-  Bestätigung geladen. Geladen werden nur Modelle dieser App (K-Means, Isolation Forest, LOF, DBSCAN) – Modelle der Supervised- oder
+  Bestätigung geladen. Geladen werden nur Modelle dieser App (K-Means, Isolation Forest, LOF, DBSCAN, Autoencoder) – Modelle der Supervised- oder
   Deep-Learning-Version lehnt die App mit einer klaren Meldung ab, ebenso ein unvollständiges oder beschädigtes
   `preprocessing.json` und ein Rezept, das nicht zum Modell passt.
 * **K-Means hat Grenzen:** Es findet eher runde, ähnlich große Gruppen und ordnet jede Zeile einem Cluster zu – auch
@@ -420,6 +434,8 @@ python tests/synthetic.py                  # synthetische College-Daten (777 Zei
 * LOF und DBSCAN vergleichen jede Zeile mit ihren Nachbarn – bei sehr vielen Zeilen (ab etwa 50 000) dauert das und
   braucht Speicher; Isolation Forest bleibt schnell. Die k-Distanz für Schritt 7 nutzt ab 20 000 Zeilen eine
   Stichprobe, das eps-Raster gibt es nur bis 20 000 Zeilen.
+* Der Autoencoder lernt Epoche für Epoche über alle Zeilen – bei sehr vielen Zeilen (ab etwa 100 000) dauert das
+  einige Minuten. Tipp: Stichprobe in der Seitenleiste oder weniger Epochen.
 * **Speicherschutz:** DBSCAN (scikit-learn) hält alle Nachbarschaften gleichzeitig im Speicher – bei zu großem eps
   oder vielen genau gleichen Zeilen wächst das quadratisch mit der Zeilenzahl. Die App schätzt die Zahl der
   Nachbarpaare an 400 zufälligen Zeilen und lehnt das Training über 40 Mio. Paaren (etwa 1 GB) mit einem Hinweis ab;

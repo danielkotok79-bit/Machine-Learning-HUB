@@ -1,12 +1,12 @@
 """
-app.py – DATA-Analysis-Clustering: Cluster-Analyse mit K-Means und Anomalieerkennung mit Isolation Forest, LOF und
-DBSCAN (scikit-learn) für CSV-Daten
+app.py – DATA-Analysis-Clustering: Cluster-Analyse mit K-Means und Anomalieerkennung mit Isolation Forest, LOF,
+DBSCAN und Autoencoder (scikit-learn) für CSV-Daten
 ===========================================================================================================
 
 Start:   streamlit run app.py
 
 Schritte (Navigation links)
-    1  Daten laden & Bibliotheken           6  Modell & Training (K-Means, Isolation Forest, LOF, DBSCAN)
+    1  Daten laden & Bibliotheken           6  Modell & Training (K-Means, IF, LOF, DBSCAN, Autoencoder)
     2  Aufbereitung 1 – Spalten, neue Sp.   7  Wahl von K (Elbow & Silhouette) bzw. Schwelle / eps
     3  Analyse & Visualisierung             8  Auswertung (Cluster-Profile bzw. Anomalien, PCA, Vergleich)
     4  Aufbereitung 2 – Clustering-Daten    9  Modell speichern & laden
@@ -223,6 +223,7 @@ TABLE_HEADERS = (  # Spaltennamen der Anzeige-Tabellen – hier nur für den Üb
     # Anomalie-Modelle
     N_("Rang"), N_("Zeile"), N_("Bezeichnung"), N_("größte Abweichungen (z)"), N_("auffällig"), N_("Anteil auffällig"),
     N_("normal"), N_("Schwelle (Score)"), N_("Zeilen über der Schwelle"), N_("Rauschen"),
+    N_("am schlechtesten nachgebaut"),  # Autoencoder
 )
 
 
@@ -426,7 +427,7 @@ WIDGET_KEYS = [  # Einstellungen, die exportiert/importiert werden
     "w_viz_cols", "w_group", "w_name_col", "w_features", "w_scaler", "w_drop_first", "w_k", "w_init", "w_n_init",
     "w_max_iter", "w_algorithm", "w_seed", "w_curve", "w_k_max",
     "w_model", "w_contam_auto", "w_contam_pct", "w_n_estimators", "w_max_samples", "w_n_neighbors", "w_eps",
-    "w_min_samples", "w_metric",
+    "w_min_samples", "w_metric", "w_ae_layers", "w_ae_activation", "w_ae_epochs", "w_ae_alpha", "w_ae_lr", "w_ae_early",
 ]
 
 
@@ -1244,9 +1245,10 @@ def page_prep2():
     lin = ss.get("lineage", {})
     nun = cached("_nunique", ss.viz_token, df.nunique)
     st.markdown(tx("**Unsupervised Learning:** Die Modelle bekommen keine Antwort – kein Label, kein y. K-Means sucht "
-                   "Gruppen von Zeilen, die sich in den Features ähneln; Isolation Forest, LOF und DBSCAN suchen Zeilen, "
-                   "die zu keiner Gruppe passen (Anomalien). Eine bekannte Einteilung (im Kurs die Spalte *Private*, bei "
-                   "Betrugsdaten z. B. *Class*) geht nicht ins Modell; sie dient nur dem Vergleich in Schritt 8."))
+                   "Gruppen von Zeilen, die sich in den Features ähneln; Isolation Forest, LOF, DBSCAN und der "
+                   "Autoencoder (ein neuronales Netz) suchen Zeilen, die zu keiner Gruppe passen (Anomalien). Eine "
+                   "bekannte Einteilung (im Kurs die Spalte *Private*, bei Betrugsdaten z. B. *Class*) geht nicht ins "
+                   "Modell; sie dient nur dem Vergleich in Schritt 8."))
 
     st.subheader(tx("Vergleichsgruppe & Bezeichnung (optional)"))
     groups = group_candidates(df, nun)
@@ -1562,7 +1564,7 @@ def page_export():
 
 
 # ===========================================================================
-# Seite 6 – Modell & Training (K-Means, Isolation Forest, LOF, DBSCAN)
+# Seite 6 – Modell & Training (K-Means, Isolation Forest, LOF, DBSCAN, Autoencoder)
 # ===========================================================================
 HOW_KMEANS = N_("""**So arbeitet K-Means**
 
@@ -1605,6 +1607,21 @@ Isolation Forest schneidet je Feature und braucht deshalb keine Skalierung – s
    bekommen den Cluster des nächsten Kernpunkts – oder −1.
 
 eps hängt von der Skalierung und der Zahl der Features ab – welches eps passt, zeigt Schritt 7 (k-Distanz)."""),
+    pl.MODEL_AUTOENCODER: N_("""**So arbeitet ein Autoencoder** (neuronales Netz, unsupervised)
+
+1. Das Netz bekommt jede Zeile als **Eingabe** und soll **dieselbe Zeile als Ausgabe** liefern – ein Label braucht es
+   nicht.
+2. Dazwischen liegt ein **Engpass** (z. B. 16 → 3 → 16 Neuronen): Der *Encoder* verdichtet die Features auf wenige
+   Zahlen, der *Decoder* baut daraus die Zeile wieder auf. Dabei lernt das Netz die typischen Zusammenhänge der Daten.
+3. **Training:** Epoche für Epoche (Optimierer Adam) wird der Fehler zwischen Eingabe und Nachbau kleiner. *Early
+   Stopping* hält 10 % der Zeilen zurück und behält die Gewichte der Epoche, in der das Netz diese Zeilen am besten
+   nachbaut.
+4. **Score = Rekonstruktionsfehler** (RMSE je Zeile, in den skalierten Features): Normale Zeilen baut das Netz gut nach,
+   ungewöhnliche nicht – auch wenn jedes Feature für sich normal ist, die Kombination aber nicht passt.
+5. **Schwelle:** ein fester Anteil (*contamination*, Standard 1 %) – ein Autoencoder hat keine eingebaute Schwelle.
+
+Wichtig: Skalierung in Schritt 4 (StandardScaler) und ein echter Engpass – weniger Neuronen in der Mitte als Features,
+sonst kann das Netz die Zeilen einfach durchreichen."""),
 }
 
 
@@ -1618,10 +1635,17 @@ def model_config() -> pl.ClusterConfig:
         n_clusters=int(g("w_k", d.n_clusters)), init=g("w_init", d.init), n_init=int(g("w_n_init", d.n_init)),
         max_iter=int(g("w_max_iter", d.max_iter)), algorithm=g("w_algorithm", d.algorithm), seed=int(g("w_seed", d.seed)),
         curve=bool(g("w_curve", d.curve)), k_max=int(g("w_k_max", d.k_max)),
-        contamination=0.0 if g("w_contam_auto", True) else float(g("w_contam_pct", 1.0)) / 100,
+        contamination=(float(g("w_contam_pct", 1.0)) / 100 if model == pl.MODEL_AUTOENCODER  # Autoencoder: ohne 'auto'
+                       else 0.0 if g("w_contam_auto", True) else float(g("w_contam_pct", 1.0)) / 100),
         n_estimators=int(g("w_n_estimators", d.n_estimators)), max_samples=int(g("w_max_samples", d.max_samples)),
         n_neighbors=int(g("w_n_neighbors", d.n_neighbors)), eps=float(g("w_eps", d.eps)),
-        min_samples=int(g("w_min_samples", d.min_samples)), metric=metric if metric in pl.METRICS else d.metric)
+        min_samples=int(g("w_min_samples", d.min_samples)), metric=metric if metric in pl.METRICS else d.metric,
+        ae_layers=str(g("w_ae_layers", "") or "").strip() or (
+            pl.layers_text(pl.default_ae_layers(ss.prep.X.shape[1])) if "prep" in ss else ""),
+        ae_activation=g("w_ae_activation", d.ae_activation) if g("w_ae_activation") in pl.AE_ACTIVATIONS
+        else d.ae_activation,
+        ae_epochs=int(g("w_ae_epochs", d.ae_epochs)), ae_alpha=float(g("w_ae_alpha", d.ae_alpha)),
+        ae_learning_rate=float(g("w_ae_lr", d.ae_learning_rate)), ae_early_stopping=bool(g("w_ae_early", True)))
 
 
 def fmt_score(v, digits=3) -> str:
@@ -1672,14 +1696,19 @@ def kmeans_params_ui(n):
         st.number_input("k_max", 3, 30, step=1, key="w_k_max", disabled=not curve_on)
 
 
-def contamination_ui():
-    """Schritt 6 (Isolation Forest, LOF): Schwelle – 'auto' oder fester Anteil auffälliger Zeilen."""
+def contamination_ui(with_auto: bool = True):
+    """Schritt 6 (Isolation Forest, LOF, Autoencoder): Schwelle – 'auto' oder fester Anteil auffälliger Zeilen. Der
+    Autoencoder hat keine eingebaute Schwelle: nur der Anteil (with_auto=False)."""
     c1, c2, _ = st.columns([1.6, 1.4, 3])
+    auto = False
     with c1:
-        init("w_contam_auto", True)
-        auto = st.checkbox(tx("contamination = auto"), key="w_contam_auto",
-                           help=tx("auto: Schwelle aus dem Verfahren selbst (Isolation Forest: Score 0.5, LOF: 1.5). "
-                                   "Aus: ein fester Anteil auffälliger Zeilen."))
+        if with_auto:
+            init("w_contam_auto", True)
+            auto = st.checkbox(tx("contamination = auto"), key="w_contam_auto",
+                               help=tx("auto: Schwelle aus dem Verfahren selbst (Isolation Forest: Score 0.5, LOF: 1.5). "
+                                       "Aus: ein fester Anteil auffälliger Zeilen."))
+        else:
+            st.markdown(tx("**Schwelle:** fester Anteil auffälliger Zeilen"))
     with c2:
         init("w_contam_pct", 1.0)
         st.number_input(tx("Anteil auffällig in %"), 0.1, 50.0, step=0.1, format="%.2f", key="w_contam_pct",
@@ -1688,8 +1717,63 @@ def contamination_ui():
                                 "Anomalien. Einen Vorschlag zeigt Schritt 7 (Knick der Score-Kurve)."))
 
 
+def autoencoder_params_ui(n_feat):
+    """Schritt 6, Autoencoder: Schichten (Neuronen je Schicht), Aktivierung, Epochen, Seed, L2-Strafe, Lernrate, Early
+    Stopping und der Anteil auffälliger Zeilen. Zeigt Fehler in den Schichten und einen fehlenden Engpass sofort."""
+    default = pl.layers_text(pl.default_ae_layers(n_feat))
+    c1, c2, c3, c4 = st.columns([1.6, 1.1, 1.2, 1.3])
+    with c1:
+        init("w_ae_layers", default)
+        st.text_input(tx("Schichten (Neuronen je Schicht)"), key="w_ae_layers",
+                      help=tx("Verborgene Schichten mit Komma getrennt – symmetrisch mit dem Engpass in der Mitte, "
+                              "z. B. 16,3,16 oder 32,8,32 oder tiefer 32,16,4,16,32. Leer = Vorschlag für {p} Features "
+                              "({d}).", p=n_feat, d=default))
+    with c2:
+        sb(tx("Aktivierung"), pl.AE_ACTIVATIONS, "w_ae_activation", default="tanh",
+           help=tx("tanh (Standard) bildet weich auf −1 … 1 ab und klappt bei wenigen Neuronen meist besser; relu = "
+                   "max(0, x), der Standard großer Netze."))
+    with c3:
+        init("w_ae_epochs", 300)
+        st.number_input(tx("Epochen (max_iter)"), 10, 5000, step=50, key="w_ae_epochs",
+                        help=tx("Höchstens so viele Durchläufe durch die Trainingsdaten – mit Early Stopping endet das "
+                                "Training früher, wenn das Netz nicht mehr besser wird."))
+    with c4:
+        init("w_seed", pl.RANDOM_STATE)
+        st.number_input(tx("Seed (random_state)"), 0, 1_000_000, step=1, key="w_seed",
+                        help=tx("Gleicher Seed = gleiche Startgewichte = gleiches Ergebnis."))
+    c1, c2, c3, _ = st.columns([1.2, 1.3, 2.2, 1.5])
+    with c1:
+        init("w_ae_alpha", 1e-4)
+        st.number_input("alpha (L2)", 0.0, 10.0, step=1e-4, format="%.5f", key="w_ae_alpha",
+                        help=tx("Strafe auf große Gewichte (L2) – größer = glatteres Netz, das Einzelheiten weniger "
+                                "auswendig lernt (Standard 0.0001)."))
+    with c2:
+        init("w_ae_lr", 1e-3)
+        st.number_input("learning_rate_init", 1e-5, 1.0, step=5e-4, format="%.5f", key="w_ae_lr",
+                        help=tx("Schrittweite des Optimierers Adam (Standard 0.001)."))
+    with c3:
+        init("w_ae_early", True)
+        st.checkbox(tx("Early Stopping (10 % der Zeilen zur Validierung)"), key="w_ae_early",
+                    help=tx("Hält 10 % der Zeilen zurück und beendet das Training, wenn das Netz sie 10 Epochen lang "
+                            "nicht besser nachbaut – die Gewichte der besten Epoche bleiben. Schützt davor, dass das Netz "
+                            "auch Ausreißer auswendig lernt."))
+    try:
+        layers = pl.parse_layers(ss.get("w_ae_layers"), n_feat)
+    except ValueError as exc:
+        st.error(md_text(exc))
+    else:
+        if min(layers) >= n_feat > 1:
+            st.warning(tx("Kein echter Engpass: Die engste Schicht hat {b} Neuronen bei {p} Features – das Netz kann die "
+                          "Zeilen fast unverändert durchreichen, ungewöhnliche Zeilen fallen dann kaum auf. In der Mitte "
+                          "weniger Neuronen wählen (z. B. {d}).", b=min(layers), p=n_feat, d=default))
+        else:
+            st.caption(tx("Netz: {p} Features → {layers} → {p} Features · Engpass {b} Neuronen.",
+                          p=n_feat, layers=" → ".join(str(v) for v in layers), b=min(layers)))
+    contamination_ui(with_auto=False)
+
+
 def anomaly_params_ui(key, p, n, n_feat):
-    """Schritt 6: Parameter von Isolation Forest, LOF oder DBSCAN."""
+    """Schritt 6: Parameter von Isolation Forest, LOF, DBSCAN oder Autoencoder."""
     with st.expander(tx("So arbeitet {name}", name=pl.model_name(key)), icon=":material/info:"):
         st.markdown(tx(HOW_ANOMALY[key]))
     st.subheader(tx("Parameter"))
@@ -1722,6 +1806,8 @@ def anomaly_params_ui(key, p, n, n_feat):
             sb("metric", pl.METRICS, "w_metric", default="euclidean",
                help=tx("Abstandsmaß: euclidean = Luftlinie (Standard) · manhattan = Summe der Abstände je Feature"))
         contamination_ui()
+    elif key == pl.MODEL_AUTOENCODER:
+        autoencoder_params_ui(n_feat)
     else:
         init("w_min_samples", int(min(max(5, 2 * n_feat), 50)))
         # Startwert aus der k-Distanz einer Stichprobe – genauer misst Schritt 7. Neu berechnet, wenn sich Daten (neue
@@ -1772,6 +1858,12 @@ def page_train():
     else:
         anomaly_params_ui(key, p, n, n_feat)
     cfg = model_config()
+    layer_error = None  # Autoencoder: Schichten unbrauchbar → Fehler steht schon bei den Parametern
+    if key == pl.MODEL_AUTOENCODER:
+        try:
+            pl.parse_layers(cfg.ae_layers, n_feat)
+        except ValueError as exc:
+            layer_error = str(exc)
     too_big = key == pl.MODEL_KMEANS and cfg.n_clusters >= n
     if too_big:
         st.error(tx("K = {k} ist zu groß für {n} Zeilen.", k=cfg.n_clusters, n=n))
@@ -1781,6 +1873,10 @@ def page_train():
     elif r["scaler"]["type"] == "keiner" and key in (pl.MODEL_LOF, pl.MODEL_DBSCAN):
         st.warning(tx("Ohne Skalierung (Schritt 4) bestimmen Features mit großen Zahlen fast allein die Abstände – LOF "
                       "und DBSCAN rechnen mit Abständen. In Schritt 4 StandardScaler wählen."))
+    elif r["scaler"]["type"] == "keiner" and key == pl.MODEL_AUTOENCODER:
+        st.warning(tx("Ohne Skalierung (Schritt 4) bestimmen Features mit großen Zahlen fast allein den "
+                      "Rekonstruktionsfehler – und neuronale Netze lernen mit großen Zahlen schlecht. In Schritt 4 "
+                      "StandardScaler wählen."))
     if key == pl.MODEL_KMEANS and n > 100_000 and (cfg.n_init >= 10 or cfg.curve):
         st.info(tx("{n} Zeilen: K-Means mit n_init = {i} kann einige Minuten dauern (die Kurve für Schritt 7 nutzt eine "
                    "Stichprobe von {s} Zeilen). Tipp: n_init senken oder Stichprobe in der Seitenleiste.",
@@ -1788,9 +1884,13 @@ def page_train():
     if key in (pl.MODEL_LOF, pl.MODEL_DBSCAN) and n > 50_000:
         st.info(tx("{n} Zeilen: LOF und DBSCAN vergleichen jede Zeile mit ihren Nachbarn – das kann lange dauern und viel "
                    "Speicher brauchen. Tipp: Stichprobe in der Seitenleiste oder Isolation Forest.", n=fmt_int(n)))
+    if key == pl.MODEL_AUTOENCODER and n > 100_000:
+        st.info(tx("{n} Zeilen: Der Autoencoder lernt Epoche für Epoche über alle Zeilen – das kann einige Minuten dauern. "
+                   "Tipp: Stichprobe in der Seitenleiste oder weniger Epochen.", n=fmt_int(n)))
 
-    st.subheader(tx("scikit-learn-Code mit diesen Einstellungen"))
-    st.code(cg.model_code(cfg, n), language="python")
+    if layer_error is None:
+        st.subheader(tx("scikit-learn-Code mit diesen Einstellungen"))
+        st.code(cg.model_code(cfg, n), language="python")
 
     if "model" in ss:
         ti, mc = ss.train_info, ss.model_cfg
@@ -1801,7 +1901,8 @@ def page_train():
             st.info(tx("Aktuelles Modell: K-Means mit K = {k} · trainiert {v} · {seconds} s. Neues Training ersetzt es.",
                        k=ti["k"], v=ti["trained_at"][11:], seconds=ti["seconds"]))
     st.caption(tx("Während des Trainings nichts anklicken – jede Eingabe bricht das Training ab."))
-    if st.button(tx("Training starten"), type="primary", icon=":material/rocket_launch:", disabled=too_big):
+    if st.button(tx("Training starten"), type="primary", icon=":material/rocket_launch:",
+                 disabled=too_big or layer_error is not None):
         bar = st.progress(0.0, text=tx("Starte Training …"))
         live = st.empty()
         last = [0.0]
@@ -1851,6 +1952,12 @@ def page_train():
             st.warning(tx("K-Means hat max_iter erreicht, ohne stabil zu werden – max_iter erhöhen."))
         for w in info.get("warnings", []):
             st.warning(tx("Hinweis von scikit-learn: {w}", w=w))
+        if ss.model_cfg.model == pl.MODEL_AUTOENCODER:
+            st.subheader(tx("Lernkurve des Autoencoders"))
+            c1, c2 = st.columns([3, 2])
+            with c1, chart_guard():
+                show(plots.fig_learning_curve(ss.model))
+            c2.markdown("\n\n".join(pl.autoencoder_notes(info)))
         with st.expander(tx("Modell (scikit-learn)")):
             st.code(repr(ss.model), language="text")
 
@@ -2077,9 +2184,14 @@ def page_anomalies():
     with c1:
         init("w_top_n", 20)
         n_top = st.number_input(tx("Anzahl"), 5, 500, step=5, key="w_top_n")
+    recon = cached("_recon", token, lambda: pl.reconstruction(model, p.X)) if key == pl.MODEL_AUTOENCODER else None
     top = cached("_top", (token, int(n_top)), lambda: pl.top_anomalies(
-        p, score, flag, int(n_top), labels if key == pl.MODEL_DBSCAN else None))
+        p, score, flag, int(n_top), labels if key == pl.MODEL_DBSCAN else None, recon=recon))
     st.dataframe(trc(top), hide_index=True)
+    if recon is not None:
+        st.caption(tx("'am schlechtesten nachgebaut' = Eingabe minus Nachbau des Netzes in den skalierten Features – ein "
+                      "Blick ins Modell: Dort steht auch ein Feature mit normalem Wert, wenn es nicht zu den übrigen "
+                      "Features der Zeile passt."))
 
     st.subheader(tx("Profil – was unterscheidet auffällige von normalen Zeilen?"))
     if not info["n_anomalies"]:
@@ -2117,6 +2229,20 @@ def page_anomalies():
                    "mitten in der Wolke liegen und trotzdem in einer anderen Richtung ungewöhnlich sein. Auffällige "
                    "Zeilen sind im Bild immer dabei.", p=len(r["feature_columns"]), pct=f"{sum(proj['explained']):.0%}"))
 
+    if key == pl.MODEL_AUTOENCODER:
+        cproj = cached("_acode", token, lambda: pl.code_projection(p, model, seed=cfg.seed, priority=flag))
+        if cproj is None:
+            st.caption(tx("Engpass mit 1 Neuron – keine 2D-Karte des Netzes."))
+        else:
+            c1, c2 = st.columns([3, 2])
+            with c1, chart_guard():
+                show(plots.fig_anomaly_pca(cproj, flag[cproj["rows"]]))
+            c2.markdown(tx("**Was das Netz gelernt hat:** jede Zeile so, wie der Encoder sie im Engpass verdichtet "
+                           "({b} Neuronen{how}) – eine nichtlineare Verdichtung, anders als PCA. Ähnliche Zeilen liegen "
+                           "beieinander. Auffällige Zeilen liegen oft am Rand – oder mitten in der Wolke: Dann hat der "
+                           "Decoder sie schlecht nachgebaut, obwohl ihr Code normal aussieht.",
+                           b=cproj["code_size"], how="" if cproj["code_size"] == 2 else tx(", per PCA auf 2 Achsen")))
+
     if p.groups is not None:
         anomaly_group_comparison(p, flag, score)
 
@@ -2145,6 +2271,10 @@ def page_anomalies():
             devs = pl.row_deviations(p, [i], top=10)[0]
             show(plots.fig_bars([f for f, _ in devs], [z for _, z in devs], tx("Stärkste Abweichungen dieser Zeile"),
                                 tx("z = Abweichung vom Durchschnitt in Standardabweichungen"), signed=True))
+            if recon is not None:
+                bad = pl.recon_deviations(p, recon, [i], top=10)[0]
+                show(plots.fig_bars([f for f, _ in bad], [v for _, v in bad], tx("Am schlechtesten nachgebaut"),
+                                    tx("Eingabe minus Nachbau des Netzes (skaliert)"), signed=True))
     code(cg.eval_code(r, cfg))
 
 
@@ -2428,8 +2558,8 @@ def session_recipe():
 def page_save():
     st.header(tx("9 · Modell speichern & laden"))
     st.markdown(tx("Gespeichert werden **zwei Dateien** in `models/<name>/`: das Modell (`model.skops` oder "
-                   "`model.joblib` – K-Means mit den Cluster-Zentren, Isolation Forest, LOF oder DBSCAN) und "
-                   "`preprocessing.json` – das Rezept aus Schritt 2 und 4 (Spalten-Aktionen, Füllwerte, "
+                   "`model.joblib` – K-Means mit den Cluster-Zentren, Isolation Forest, LOF, DBSCAN oder "
+                   "Autoencoder) und `preprocessing.json` – das Rezept aus Schritt 2 und 4 (Spalten-Aktionen, Füllwerte, "
                    "Kategorien/Dummy-Spalten, Scaler) mit den Einstellungen aus Schritt 6, den Cluster-Namen aus "
                    "Schritt 8, der Schwelle und den Kennzahlen. Ohne das Rezept lassen sich neue Daten nicht korrekt "
                    "zuordnen oder bewerten."))
